@@ -26,7 +26,21 @@ const SKILLS = [
   { id: 5, name: 'Щит',     emoji: '🛡️', damage: 0,  healSelf: 0,  maxCd: 35 },
 ];
 
-const INITIAL_PLAYER_HP = 100;
+const INITIAL_PLAYER_HP  = 100; // starting max HP
+const INITIAL_PLAYER_LVL = 1;
+const BASE_XP_PER_LEVEL  = 100; // XP needed for Lv1 → Lv2
+
+// XP required to go from `level` → `level + 1`
+function xpRequired(level: number): number {
+  return Math.floor(BASE_XP_PER_LEVEL * Math.pow(1.25, level - 1));
+}
+
+// Per-enemy rewards keyed by name
+const ENEMY_REWARDS: Record<string, { xp: number; goldMin: number; goldMax: number }> = {
+  'Гоблин': { xp: 25, goldMin: 5,  goldMax: 10 },
+  'Волк':   { xp: 20, goldMin: 3,  goldMax: 7  },
+  'Орк':    { xp: 60, goldMin: 15, goldMax: 25 },
+};
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +54,7 @@ interface Enemy {
   y: number;
   hp: number;
   maxHp: number;
-  attackInterval: number; // ms between enemy attacks
+  attackInterval: number;
   dmgMin: number;
   dmgMax: number;
   dead: boolean;
@@ -57,9 +71,16 @@ type FloatingNum = {
 
 type LogEntry = { id: number; msg: string };
 
+// Reward info shown in the per-kill overlay
+interface KillReward {
+  xp: number;
+  gold: number;
+  leveledUp: boolean;
+  newLevel: number;
+}
+
 // ─── INITIAL ENEMY FACTORY ────────────────────────────────────────────────────
 
-// All positions verified as MAP value 0 (walkable grass).
 const makeEnemies = (): Enemy[] => [
   { id: 1, name: 'Гоблин', emoji: '👺', x: 8, y: 0, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
   { id: 2, name: 'Гоблин', emoji: '👺', x: 5, y: 3, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
@@ -74,33 +95,55 @@ export default function App() {
 
   // ── State ──────────────────────────────────────────────────────────────────
 
-  const [phase, setPhase]               = useState<Phase>('explore');
-  const [playerPos, setPlayerPos]       = useState({ x: 1, y: 8 });
-  const [playerHp, setPlayerHp]         = useState(INITIAL_PLAYER_HP);
-  const [enemies, setEnemies]           = useState<Enemy[]>(makeEnemies);
+  const [phase, setPhase]                 = useState<Phase>('explore');
+  const [playerPos, setPlayerPos]         = useState({ x: 1, y: 8 });
+  const [playerHp, setPlayerHp]           = useState(INITIAL_PLAYER_HP);
+  const [playerMaxHp, setPlayerMaxHp]     = useState(INITIAL_PLAYER_HP);
+  const [enemies, setEnemies]             = useState<Enemy[]>(makeEnemies);
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
-  const [shieldActive, setShieldActive] = useState(false);
-  const [skillsCd, setSkillsCd]         = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-  const [logs, setLogs]                 = useState<LogEntry[]>([{ id: 0, msg: 'Тёмные подземелья ждут...' }]);
-  const [floatingNums, setFloatingNums] = useState<FloatingNum[]>([]);
+  const [shieldActive, setShieldActive]   = useState(false);
+  const [skillsCd, setSkillsCd]           = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+  const [logs, setLogs]                   = useState<LogEntry[]>([{ id: 0, msg: 'Тёмные подземелья ждут...' }]);
+  const [floatingNums, setFloatingNums]   = useState<FloatingNum[]>([]);
+
+  // ── Progression state ──────────────────────────────────────────────────────
+
+  const [playerLevel, setPlayerLevel]       = useState(INITIAL_PLAYER_LVL);
+  const [playerXp, setPlayerXp]             = useState(0);
+  const [xpToNext, setXpToNext]             = useState(xpRequired(INITIAL_PLAYER_LVL));
+  const [playerGold, setPlayerGold]         = useState(0);
+  const [playerBonusDmg, setPlayerBonusDmg] = useState(0); // +2 per level-up
+  const [lastKillReward, setLastKillReward] = useState<KillReward | null>(null);
 
   // ── Refs (stale-closure-safe reads inside intervals) ───────────────────────
 
-  const playerHpRef       = useRef(INITIAL_PLAYER_HP);
-  const shieldRef         = useRef(false);
-  const phaseRef          = useRef<Phase>('explore');
-  const playerPosRef      = useRef({ x: 1, y: 8 });
-  const enemiesRef        = useRef<Enemy[]>(makeEnemies());
-  const activeEnemyIdRef  = useRef<number | null>(null);
+  const playerHpRef        = useRef(INITIAL_PLAYER_HP);
+  const playerMaxHpRef     = useRef(INITIAL_PLAYER_HP);
+  const shieldRef          = useRef(false);
+  const phaseRef           = useRef<Phase>('explore');
+  const playerPosRef       = useRef({ x: 1, y: 8 });
+  const enemiesRef         = useRef<Enemy[]>(makeEnemies());
+  const activeEnemyIdRef   = useRef<number | null>(null);
   const enemyAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep refs in sync with state after every render
-  useEffect(() => { playerHpRef.current     = playerHp;      }, [playerHp]);
-  useEffect(() => { shieldRef.current       = shieldActive;  }, [shieldActive]);
-  useEffect(() => { phaseRef.current        = phase;         }, [phase]);
-  useEffect(() => { playerPosRef.current    = playerPos;     }, [playerPos]);
-  useEffect(() => { enemiesRef.current      = enemies;       }, [enemies]);
-  useEffect(() => { activeEnemyIdRef.current = activeEnemyId; }, [activeEnemyId]);
+  // Progression refs
+  const playerLevelRef    = useRef(INITIAL_PLAYER_LVL);
+  const playerXpRef       = useRef(0);
+  const playerBonusDmgRef = useRef(0);
+  const playerGoldRef     = useRef(0);
+
+  // Keep refs in sync with state
+  useEffect(() => { playerHpRef.current        = playerHp;       }, [playerHp]);
+  useEffect(() => { playerMaxHpRef.current     = playerMaxHp;    }, [playerMaxHp]);
+  useEffect(() => { shieldRef.current          = shieldActive;   }, [shieldActive]);
+  useEffect(() => { phaseRef.current           = phase;          }, [phase]);
+  useEffect(() => { playerPosRef.current       = playerPos;      }, [playerPos]);
+  useEffect(() => { enemiesRef.current         = enemies;        }, [enemies]);
+  useEffect(() => { activeEnemyIdRef.current   = activeEnemyId;  }, [activeEnemyId]);
+  useEffect(() => { playerLevelRef.current     = playerLevel;    }, [playerLevel]);
+  useEffect(() => { playerXpRef.current        = playerXp;       }, [playerXp]);
+  useEffect(() => { playerBonusDmgRef.current  = playerBonusDmg; }, [playerBonusDmg]);
+  useEffect(() => { playerGoldRef.current      = playerGold;     }, [playerGold]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -112,27 +155,83 @@ export default function App() {
     setFloatingNums(prev => [...prev, { id: Date.now() + Math.random(), value, col, row, type, timestamp: Date.now() }]);
   }, []);
 
+  // ── Progression: apply XP / gold rewards on kill ──────────────────────────
+
+  const applyRewards = useCallback((enemyName: string): KillReward => {
+    const reward = ENEMY_REWARDS[enemyName] ?? { xp: 10, goldMin: 1, goldMax: 3 };
+
+    // Gold
+    const goldGained = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
+    const newGold = playerGoldRef.current + goldGained;
+    playerGoldRef.current = newGold;
+    setPlayerGold(newGold);
+    addLog(`💰 Получено ${goldGained} золота!`);
+
+    // XP + level-up chain
+    const xpGained = reward.xp;
+    addLog(`✨ Получено ${xpGained} опыта!`);
+
+    let newXp       = playerXpRef.current + xpGained;
+    let newLevel    = playerLevelRef.current;
+    let newMaxHp    = playerMaxHpRef.current;
+    let newBonusDmg = playerBonusDmgRef.current;
+    let leveledUp   = false;
+    let needed      = xpRequired(newLevel);
+
+    while (newXp >= needed) {
+      newXp      -= needed;
+      newLevel   += 1;
+      newMaxHp   += 20;
+      newBonusDmg += 2;
+      needed      = xpRequired(newLevel);
+      leveledUp   = true;
+    }
+
+    // Commit progression refs
+    playerLevelRef.current    = newLevel;
+    playerMaxHpRef.current    = newMaxHp;
+    playerBonusDmgRef.current = newBonusDmg;
+    playerXpRef.current       = newXp;
+
+    setPlayerXp(newXp);
+    setXpToNext(needed);
+    setPlayerLevel(newLevel);
+    setPlayerMaxHp(newMaxHp);
+    setPlayerBonusDmg(newBonusDmg);
+
+    if (leveledUp) {
+      // Full HP restore on level-up
+      playerHpRef.current = newMaxHp;
+      setPlayerHp(newMaxHp);
+      addLog(`🌟 Новый уровень ${newLevel}! HP восстановлено!`);
+    }
+
+    return { xp: xpGained, gold: goldGained, leveledUp, newLevel };
+  }, [addLog]);
+
   // ── Enemy death handler ────────────────────────────────────────────────────
 
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string) => {
-    // Stop combat immediately via ref so in-flight intervals bail out
+    // Halt combat immediately
     phaseRef.current = 'victory';
     if (enemyAttackTimeout.current) {
       clearTimeout(enemyAttackTimeout.current);
       enemyAttackTimeout.current = null;
     }
 
-    // Mark enemy dead in ref first, then sync to state
-    enemiesRef.current = enemiesRef.current.map(e =>
-      e.id === id ? { ...e, dead: true, hp: 0 } : e
-    );
+    // Mark enemy dead
+    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e);
     setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e));
 
-    // Move player onto the defeated enemy's tile
+    // Move player onto the defeated tile
     playerPosRef.current = { x: ex, y: ey };
     setPlayerPos({ x: ex, y: ey });
 
     addLog(`💀 ${name} повержен!`);
+
+    // Apply XP / gold and record for the overlay
+    const reward = applyRewards(name);
+    setLastKillReward(reward);
 
     const allDead = enemiesRef.current.every(e => e.dead);
     if (allDead) {
@@ -143,7 +242,6 @@ export default function App() {
       addLog('🏆 Все враги побеждены!');
     } else {
       setPhase('victory');
-      // Auto-dismiss the per-kill overlay and resume exploration
       setTimeout(() => {
         if (phaseRef.current === 'victory') {
           phaseRef.current = 'explore';
@@ -153,7 +251,7 @@ export default function App() {
         }
       }, 1500);
     }
-  }, [addLog]);
+  }, [addLog, applyRewards]);
 
   // ── Movement ──────────────────────────────────────────────────────────────
 
@@ -169,7 +267,7 @@ export default function App() {
       return;
     }
 
-    // Enemy-tile check BEFORE obstacle check — enemies are not obstacles
+    // Enemy-tile check BEFORE obstacle check
     const hitEnemy = enemiesRef.current.find(e => !e.dead && e.x === nx && e.y === ny);
     if (hitEnemy) {
       phaseRef.current = 'combat';
@@ -180,7 +278,6 @@ export default function App() {
       return;
     }
 
-    // Terrain obstacle check (tree / rock / water)
     if (MAP[ny][nx] !== 0) {
       addLog('Путь заблокирован!');
       return;
@@ -195,7 +292,7 @@ export default function App() {
   useEffect(() => {
     if (phase !== 'combat') return;
 
-    // Player attacks every 1500 ms (fixed)
+    // Player auto-attacks every 1500 ms; damage scales with bonus from levels
     const playerAttackInterval = setInterval(() => {
       if (phaseRef.current !== 'combat') return;
 
@@ -204,10 +301,9 @@ export default function App() {
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
 
-      const dmg = Math.floor(Math.random() * 9) + 8; // 8–16
+      const dmg = Math.floor(Math.random() * 9) + 8 + playerBonusDmgRef.current; // 8–16 + level bonus
       const newHp = Math.max(0, enemy.hp - dmg);
 
-      // Update ref before state so subsequent reads are consistent
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
       setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
       spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
@@ -216,7 +312,7 @@ export default function App() {
       if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name);
     }, 1500);
 
-    // Enemy attacks on its own attackInterval (different per type) — use recursive setTimeout
+    // Enemy attacks at its own interval via recursive setTimeout
     const doEnemyAttack = () => {
       if (phaseRef.current !== 'combat') return;
 
@@ -231,7 +327,6 @@ export default function App() {
       spawnFloat(dmg.toString(), pp.x, pp.y, 'player-dmg');
       addLog(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!`);
 
-      // Avoid side effects inside the React updater — compute outside
       const prevHp = playerHpRef.current;
       const newHp  = Math.max(0, prevHp - dmg);
       playerHpRef.current = newHp;
@@ -241,16 +336,14 @@ export default function App() {
         phaseRef.current = 'defeat';
         setPhase('defeat');
         addLog('☠️ Вы погибли...');
-        return; // don't reschedule
+        return;
       }
 
-      // Reschedule next attack only if still in combat
       if (phaseRef.current === 'combat') {
         enemyAttackTimeout.current = setTimeout(doEnemyAttack, enemy.attackInterval);
       }
     };
 
-    // Schedule first enemy attack after its own interval
     const startEnemy = enemiesRef.current.find(e => e.id === activeEnemyIdRef.current);
     if (startEnemy) {
       enemyAttackTimeout.current = setTimeout(doEnemyAttack, startEnemy.attackInterval);
@@ -318,14 +411,15 @@ export default function App() {
 
     if (skill.healSelf > 0) {
       const pp = playerPosRef.current;
-      const newHp = Math.min(INITIAL_PLAYER_HP, playerHpRef.current + skill.healSelf);
+      // Cap at current playerMaxHp (grows with level-ups)
+      const newHp = Math.min(playerMaxHpRef.current, playerHpRef.current + skill.healSelf);
       playerHpRef.current = newHp;
       setPlayerHp(newHp);
       spawnFloat(`+${skill.healSelf}`, pp.x, pp.y, 'heal');
       addLog(`💚 Воин лечится на ${skill.healSelf} HP!`);
     }
 
-    if (skill.id === 5) { // Shield
+    if (skill.id === 5) {
       setShieldActive(true);
       shieldRef.current = true;
       addLog('🛡️ Щит активирован!');
@@ -340,33 +434,49 @@ export default function App() {
   // ── Restart ───────────────────────────────────────────────────────────────
 
   const handleRestart = useCallback(() => {
-    // Clear any pending combat timers
     if (enemyAttackTimeout.current) {
       clearTimeout(enemyAttackTimeout.current);
       enemyAttackTimeout.current = null;
     }
     const fresh = makeEnemies();
-    phaseRef.current        = 'explore';
-    playerHpRef.current     = INITIAL_PLAYER_HP;
-    shieldRef.current       = false;
-    playerPosRef.current    = { x: 1, y: 8 };
-    enemiesRef.current      = fresh;
-    activeEnemyIdRef.current = null;
+
+    // Reset all refs
+    phaseRef.current          = 'explore';
+    playerHpRef.current       = INITIAL_PLAYER_HP;
+    playerMaxHpRef.current    = INITIAL_PLAYER_HP;
+    shieldRef.current         = false;
+    playerPosRef.current      = { x: 1, y: 8 };
+    enemiesRef.current        = fresh;
+    activeEnemyIdRef.current  = null;
+    playerLevelRef.current    = INITIAL_PLAYER_LVL;
+    playerXpRef.current       = 0;
+    playerBonusDmgRef.current = 0;
+    playerGoldRef.current     = 0;
+
+    // Reset all state
     setPhase('explore');
     setPlayerPos({ x: 1, y: 8 });
     setPlayerHp(INITIAL_PLAYER_HP);
+    setPlayerMaxHp(INITIAL_PLAYER_HP);
     setEnemies(fresh);
     setActiveEnemyId(null);
     setShieldActive(false);
     setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setLogs([{ id: Date.now(), msg: 'Вы возродились. Тёмные подземелья ждут...' }]);
     setFloatingNums([]);
+    setPlayerLevel(INITIAL_PLAYER_LVL);
+    setPlayerXp(0);
+    setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
+    setPlayerGold(0);
+    setPlayerBonusDmg(0);
+    setLastKillReward(null);
   }, []);
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
   const activeEnemy   = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
   const livingEnemies = enemies.filter(e => !e.dead);
+  const xpPct         = Math.min(100, Math.round((playerXp / xpToNext) * 100));
 
   // ── Tile renderer ──────────────────────────────────────────────────────────
 
@@ -394,42 +504,64 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] w-full max-w-[420px] mx-auto bg-background text-foreground flex flex-col relative select-none">
 
-      {/* ── 1. Status Header ── */}
-      <div className="h-[55px] shrink-0 border-b border-tile-border flex items-center px-4 justify-between bg-[#111116]">
+      {/* ── 1. Status Header (two rows) ── */}
+      <div className="shrink-0 border-b border-tile-border bg-[#111116]">
 
-        {/* Player side */}
-        <div className="flex flex-col w-[45%]">
-          <div className="flex justify-between items-end mb-1">
-            <span className="text-sm font-bold text-white tracking-wide">Воин {shieldActive && '🛡️'}</span>
-            <span className="text-xs text-primary font-mono">{playerHp}/{INITIAL_PLAYER_HP}</span>
+        {/* Row 1: player HP | VS | enemy HP */}
+        <div className="flex items-center px-4 pt-2 pb-1 justify-between">
+
+          {/* Player side */}
+          <div className="flex flex-col w-[45%]">
+            <div className="flex justify-between items-end mb-1">
+              <span className="text-sm font-bold text-white tracking-wide">
+                Воин{shieldActive ? ' 🛡️' : ''}
+                <span className="text-primary text-xs font-mono ml-1">Lv.{playerLevel}</span>
+              </span>
+              <span className="text-xs text-primary font-mono">{playerHp}/{playerMaxHp}</span>
+            </div>
+            <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
+              <div className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
+            </div>
           </div>
-          <div className="h-2 w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${(playerHp / INITIAL_PLAYER_HP) * 100}%` }} />
+
+          <div className="text-sm font-bold text-[#444] text-center w-[10%]">VS</div>
+
+          {/* Enemy side */}
+          <div className="flex flex-col w-[45%]">
+            {activeEnemy ? (
+              <>
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-xs text-destructive font-mono">{activeEnemy.hp}/{activeEnemy.maxHp}</span>
+                  <span className="text-sm font-bold text-white tracking-wide">{activeEnemy.emoji} {activeEnemy.name}</span>
+                </div>
+                <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
+                  <div className="h-full bg-destructive transition-all duration-300"
+                    style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-end items-end mb-1">
+                  <span className="text-xs text-[#666] font-mono">Врагов: {livingEnemies.length} / 5</span>
+                </div>
+                <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full border border-tile-border" />
+              </>
+            )}
           </div>
         </div>
 
-        <div className="text-sm font-bold text-[#444] text-center w-[10%]">VS</div>
-
-        {/* Enemy side — shows active enemy during combat, remaining count otherwise */}
-        <div className="flex flex-col w-[45%]">
-          {activeEnemy ? (
-            <>
-              <div className="flex justify-between items-end mb-1">
-                <span className="text-xs text-destructive font-mono">{activeEnemy.hp}/{activeEnemy.maxHp}</span>
-                <span className="text-sm font-bold text-white tracking-wide">{activeEnemy.emoji} {activeEnemy.name}</span>
-              </div>
-              <div className="h-2 w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
-                <div className="h-full bg-destructive transition-all duration-300" style={{ width: `${(activeEnemy.hp / activeEnemy.maxHp) * 100}%` }} />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex justify-end items-end mb-1">
-                <span className="text-xs text-[#666] font-mono">Врагов: {livingEnemies.length} / 5</span>
-              </div>
-              <div className="h-2 w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border" />
-            </>
-          )}
+        {/* Row 2: XP bar + gold */}
+        <div className="flex items-center px-4 pb-2 gap-2">
+          <span className="text-[10px] text-[#555] font-bold uppercase tracking-wide shrink-0">Опыт</span>
+          {/* XP bar */}
+          <div className="flex-1 h-[5px] bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border relative">
+            <div className="h-full rounded-full transition-all duration-500 bg-[#3a8fc4]"
+              style={{ width: `${xpPct}%` }} />
+          </div>
+          <span className="text-[10px] font-mono text-[#666] shrink-0">{playerXp}/{xpToNext}</span>
+          {/* Gold */}
+          <span className="text-[11px] font-bold text-yellow-400 shrink-0 ml-1">💰 {playerGold}</span>
         </div>
       </div>
 
@@ -448,22 +580,24 @@ export default function App() {
             )}
           </div>
 
-          {/* HP bars on map — player bar */}
+          {/* HP bar on map — player */}
           {phase === 'combat' && playerHp > 0 && (
             <div className="absolute pointer-events-none z-20 flex justify-center"
               style={{ top: `${(playerPos.y / 10) * 100}%`, left: `${(playerPos.x / 10) * 100}%`, width: '10%', height: '10%', marginTop: '-6px' }}>
               <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
-                <div className="h-full bg-primary" style={{ width: `${(playerHp / INITIAL_PLAYER_HP) * 100}%` }} />
+                <div className="h-full bg-primary"
+                  style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
               </div>
             </div>
           )}
 
-          {/* HP bars on map — active enemy bar */}
+          {/* HP bar on map — active enemy */}
           {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 && (
             <div className="absolute pointer-events-none z-20 flex justify-center"
               style={{ top: `${(activeEnemy.y / 10) * 100}%`, left: `${(activeEnemy.x / 10) * 100}%`, width: '10%', height: '10%', marginTop: '-6px' }}>
               <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
-                <div className="h-full bg-destructive" style={{ width: `${(activeEnemy.hp / activeEnemy.maxHp) * 100}%` }} />
+                <div className="h-full bg-destructive"
+                  style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
               </div>
             </div>
           )}
@@ -481,20 +615,38 @@ export default function App() {
             </div>
           ))}
 
-          {/* Per-kill flash overlay — no button, auto-dismisses in 1.5 s */}
+          {/* Per-kill victory flash — shows rewards and level-up if applicable */}
           {phase === 'victory' && (
-            <div className="absolute inset-0 z-50 bg-black/70 flex flex-col items-center justify-center rounded backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="absolute inset-0 z-50 bg-black/75 flex flex-col items-center justify-center gap-1 rounded backdrop-blur-sm animate-in fade-in duration-300">
               <h2 className="text-2xl font-bold text-primary drop-shadow-lg">⚔️ ПОБЕДА!</h2>
-              <p className="text-white/70 mt-1 text-sm">Враг повержен!</p>
+              <p className="text-white/70 text-sm">Враг повержен!</p>
+              {lastKillReward && (
+                <div className="mt-1 flex flex-col items-center gap-[2px]">
+                  <span className="text-[13px] font-bold text-[#38bdf8]">+{lastKillReward.xp} опыта</span>
+                  <span className="text-[13px] font-bold text-yellow-400">+{lastKillReward.gold} золота</span>
+                </div>
+              )}
+              {lastKillReward?.leveledUp && (
+                <div className="mt-2 px-3 py-1 bg-primary/20 border border-primary rounded-md text-center">
+                  <p className="text-primary font-bold text-sm tracking-wide">НОВЫЙ УРОВЕНЬ!</p>
+                  <p className="text-white text-xs">Уровень {lastKillReward.newLevel}</p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Final victory overlay */}
+          {/* Final victory */}
           {phase === 'final-victory' && (
             <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
               <h2 className="text-3xl font-bold text-primary mb-2 drop-shadow-lg">🏆 ПОБЕДА!</h2>
               <p className="text-white/80 mb-1 font-medium">Все враги повержены!</p>
-              <p className="text-[#666] text-sm mb-6">Вы — герой подземелья</p>
+              <p className="text-[#666] text-sm mb-3">Уровень {playerLevel} · 💰 {playerGold} золота</p>
+              {lastKillReward && (
+                <div className="mb-4 flex gap-3 text-sm">
+                  <span className="text-[#38bdf8] font-bold">+{lastKillReward.xp} опыта</span>
+                  <span className="text-yellow-400 font-bold">+{lastKillReward.gold} золота</span>
+                </div>
+              )}
               <button onClick={handleRestart}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
@@ -502,11 +654,12 @@ export default function App() {
             </div>
           )}
 
-          {/* Defeat overlay */}
+          {/* Defeat */}
           {phase === 'defeat' && (
             <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
               <h2 className="text-3xl font-bold text-destructive mb-2 drop-shadow-lg">☠️ ПОРАЖЕНИЕ</h2>
-              <p className="text-white/80 mb-6 font-medium">Вы пали в бою...</p>
+              <p className="text-white/80 mb-2 font-medium">Вы пали в бою...</p>
+              <p className="text-[#666] text-sm mb-5">Уровень {playerLevel} · 💰 {playerGold} золота</p>
               <button onClick={handleRestart}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
