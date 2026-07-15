@@ -67,11 +67,15 @@ export default function App() {
   const enemyHpRef = useRef(enemyHp);
   const shieldRef = useRef(shieldActive);
   const phaseRef = useRef(phase);
+  const playerPosRef = useRef(playerPos);
+  const enemyPosRef = useRef(enemyPos);
 
   useEffect(() => { playerHpRef.current = playerHp; }, [playerHp]);
   useEffect(() => { enemyHpRef.current = enemyHp; }, [enemyHp]);
   useEffect(() => { shieldRef.current = shieldActive; }, [shieldActive]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { playerPosRef.current = playerPos; }, [playerPos]);
+  useEffect(() => { enemyPosRef.current = enemyPos; }, [enemyPos]);
 
   // --- HELPERS ---
   const addLog = useCallback((msg: string) => {
@@ -93,23 +97,28 @@ export default function App() {
     const nx = playerPos.x + dx;
     const ny = playerPos.y + dy;
 
+    // Out-of-bounds check
     if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) {
       addLog("Путь заблокирован!");
       return;
     }
 
+    // Check enemy tile BEFORE obstacle check — enemy tiles are not obstacles
+    if (nx === enemyPos.x && ny === enemyPos.y) {
+      // Player stays on their current tile; combat starts immediately
+      setPhase('combat');
+      addLog("⚔️ Бой начался!");
+      return;
+    }
+
+    // Obstacle check (tree / rock / water)
     const tile = MAP[ny][nx];
-    if (tile !== 0) { // 1=Tree, 2=Rock, 3=Water
+    if (tile !== 0) {
       addLog("Путь заблокирован!");
       return;
     }
 
     setPlayerPos({ x: nx, y: ny });
-
-    if (nx === enemyPos.x && ny === enemyPos.y) {
-      setPhase('combat');
-      addLog("⚔️ Бой начался!");
-    }
   };
 
   // --- COMBAT SYSTEM ---
@@ -119,44 +128,54 @@ export default function App() {
     const playerAttackInterval = setInterval(() => {
       if (phaseRef.current !== 'combat') return;
       const dmg = Math.floor(Math.random() * (16 - 8 + 1)) + 8;
-      
+
+      // Read enemy position from ref to avoid stale closure
+      const ep = enemyPosRef.current;
+      spawnFloat(dmg.toString(), ep.x, ep.y, 'enemy-dmg');
+      addLog(`⚔️ Воин наносит ${dmg} урона!`);
+
       setEnemyHp(prev => {
         const newHp = Math.max(0, prev - dmg);
-        if (newHp === 0 && enemyHpRef.current > 0) {
+        if (prev > 0 && newHp === 0) {
+          phaseRef.current = 'victory';
           setPhase('victory');
+          // Move player onto the tile where the enemy stood
+          setPlayerPos({ x: ep.x, y: ep.y });
           addLog("💀 Гоблин повержен!");
         }
         return newHp;
       });
-      spawnFloat(dmg.toString(), enemyPos.x, enemyPos.y, 'enemy-dmg');
-      addLog(`⚔️ Воин наносит ${dmg} урона!`);
     }, 1500);
 
     const enemyAttackInterval = setInterval(() => {
       if (phaseRef.current !== 'combat') return;
       let dmg = Math.floor(Math.random() * (12 - 5 + 1)) + 5;
-      
+
       if (shieldRef.current) {
         dmg = Math.ceil(dmg / 2);
       }
 
+      // Read player position from ref to avoid stale closure
+      const pp = playerPosRef.current;
+      spawnFloat(dmg.toString(), pp.x, pp.y, 'player-dmg');
+      addLog(`👺 Гоблин атакует на ${dmg} урона!`);
+
       setPlayerHp(prev => {
         const newHp = Math.max(0, prev - dmg);
-        if (newHp === 0 && playerHpRef.current > 0) {
+        if (prev > 0 && newHp === 0) {
+          phaseRef.current = 'defeat';
           setPhase('defeat');
           addLog("☠️ Вы погибли...");
         }
         return newHp;
       });
-      spawnFloat(dmg.toString(), playerPos.x, playerPos.y, 'player-dmg');
-      addLog(`👺 Гоблин атакует на ${dmg} урона!`);
     }, 2200);
 
     return () => {
       clearInterval(playerAttackInterval);
       clearInterval(enemyAttackInterval);
     };
-  }, [phase, enemyPos.x, enemyPos.y, playerPos.x, playerPos.y, addLog, spawnFloat]);
+  }, [phase, addLog, spawnFloat]);
 
   // Cooldown ticking
   useEffect(() => {
@@ -195,21 +214,25 @@ export default function App() {
     setSkillsCd(prev => ({ ...prev, [skill.id]: skill.maxCd }));
 
     if (skill.damage > 0) {
+      const ep = enemyPosRef.current;
+      spawnFloat(skill.damage.toString(), ep.x, ep.y, 'enemy-dmg');
+      addLog(`✨ Воин использует ${skill.name} на ${skill.damage} урона!`);
       setEnemyHp(prev => {
         const newHp = Math.max(0, prev - skill.damage);
-        if (newHp === 0 && enemyHpRef.current > 0) {
+        if (prev > 0 && newHp === 0) {
+          phaseRef.current = 'victory';
           setPhase('victory');
+          setPlayerPos({ x: ep.x, y: ep.y });
           addLog("💀 Гоблин повержен!");
         }
         return newHp;
       });
-      spawnFloat(skill.damage.toString(), enemyPos.x, enemyPos.y, 'enemy-dmg');
-      addLog(`✨ Воин использует ${skill.name} на ${skill.damage} урона!`);
     }
 
     if (skill.healSelf > 0) {
+      const pp = playerPosRef.current;
       setPlayerHp(prev => Math.min(INITIAL_PLAYER_HP, prev + skill.healSelf));
-      spawnFloat(`+${skill.healSelf}`, playerPos.x, playerPos.y, 'heal');
+      spawnFloat(`+${skill.healSelf}`, pp.x, pp.y, 'heal');
       addLog(`💚 Воин лечится на ${skill.healSelf} HP!`);
     }
 
@@ -225,6 +248,12 @@ export default function App() {
 
   // --- RESTART ---
   const handleRestart = () => {
+    phaseRef.current = 'explore';
+    playerHpRef.current = INITIAL_PLAYER_HP;
+    enemyHpRef.current = INITIAL_ENEMY_HP;
+    shieldRef.current = false;
+    playerPosRef.current = { x: 1, y: 8 };
+    enemyPosRef.current = { x: 7, y: 1 };
     setPhase('explore');
     setPlayerPos({ x: 1, y: 8 });
     setEnemyPos({ x: 7, y: 1 });
@@ -241,7 +270,8 @@ export default function App() {
     if (x === playerPos.x && y === playerPos.y) {
       return <div className="w-full h-full tile-player rounded flex items-center justify-center text-lg z-10 relative">🧝</div>;
     }
-    if (x === enemyPos.x && y === enemyPos.y) {
+    // Only render enemy while it is alive
+    if (enemyHp > 0 && x === enemyPos.x && y === enemyPos.y) {
       return <div className="w-full h-full tile-enemy rounded flex items-center justify-center text-lg z-10 relative">👺</div>;
     }
     if (tileType === 1) return <div className="w-full h-full tile-tree flex items-center justify-center text-sm">🌲</div>;
