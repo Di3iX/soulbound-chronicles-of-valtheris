@@ -26,16 +26,29 @@ const SKILLS = [
   { id: 5, name: 'Щит',     emoji: '🛡️', damage: 0,  healSelf: 0,  maxCd: 35 },
 ];
 
-const INITIAL_PLAYER_HP  = 100; // starting max HP
+const INITIAL_PLAYER_HP  = 100;
 const INITIAL_PLAYER_LVL = 1;
-const BASE_XP_PER_LEVEL  = 100; // XP needed for Lv1 → Lv2
+const BASE_XP_PER_LEVEL  = 100;
+const BASE_ATTACK_INTERVAL = 1500; // ms before agility scaling
+const MIN_ATTACK_INTERVAL  = 500;  // ms floor
+const STAT_POINTS_PER_LEVEL = 3;
 
-// XP required to go from `level` → `level + 1`
+const INITIAL_STATS = { strength: 5, agility: 5, endurance: 5 };
+
 function xpRequired(level: number): number {
   return Math.floor(BASE_XP_PER_LEVEL * Math.pow(1.25, level - 1));
 }
 
-// Per-enemy rewards keyed by name
+/** Player auto-attack interval after agility scaling. */
+function calcAttackInterval(agility: number): number {
+  return Math.max(MIN_ATTACK_INTERVAL, Math.floor(BASE_ATTACK_INTERVAL * (1 - 0.03 * agility)));
+}
+
+/** Full max HP from base + level bonuses + endurance. */
+function calcMaxHp(levelHpBonus: number, endurance: number): number {
+  return INITIAL_PLAYER_HP + levelHpBonus + endurance * 10;
+}
+
 const ENEMY_REWARDS: Record<string, { xp: number; goldMin: number; goldMax: number }> = {
   'Гоблин': { xp: 25, goldMin: 5,  goldMax: 10 },
   'Волк':   { xp: 20, goldMin: 3,  goldMax: 7  },
@@ -46,40 +59,27 @@ const ENEMY_REWARDS: Record<string, { xp: number; goldMin: number; goldMax: numb
 
 type Phase = 'explore' | 'combat' | 'victory' | 'final-victory' | 'defeat';
 
+interface Stats { strength: number; agility: number; endurance: number; }
+
 interface Enemy {
-  id: number;
-  name: string;
-  emoji: string;
-  x: number;
-  y: number;
-  hp: number;
-  maxHp: number;
-  attackInterval: number;
-  dmgMin: number;
-  dmgMax: number;
+  id: number; name: string; emoji: string;
+  x: number; y: number;
+  hp: number; maxHp: number;
+  attackInterval: number; dmgMin: number; dmgMax: number;
   dead: boolean;
 }
 
 type FloatingNum = {
-  id: number;
-  value: string;
-  col: number;
-  row: number;
+  id: number; value: string; col: number; row: number;
   type: 'player-dmg' | 'enemy-dmg' | 'heal';
   timestamp: number;
 };
 
 type LogEntry = { id: number; msg: string };
 
-// Reward info shown in the per-kill overlay
-interface KillReward {
-  xp: number;
-  gold: number;
-  leveledUp: boolean;
-  newLevel: number;
-}
+interface KillReward { xp: number; gold: number; leveledUp: boolean; newLevel: number; statPtsGained: number; }
 
-// ─── INITIAL ENEMY FACTORY ────────────────────────────────────────────────────
+// ─── ENEMY FACTORY ────────────────────────────────────────────────────────────
 
 const makeEnemies = (): Enemy[] => [
   { id: 1, name: 'Гоблин', emoji: '👺', x: 8, y: 0, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
@@ -93,12 +93,12 @@ const makeEnemies = (): Enemy[] => [
 
 export default function App() {
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // ── Core state ─────────────────────────────────────────────────────────────
 
   const [phase, setPhase]                 = useState<Phase>('explore');
   const [playerPos, setPlayerPos]         = useState({ x: 1, y: 8 });
   const [playerHp, setPlayerHp]           = useState(INITIAL_PLAYER_HP);
-  const [playerMaxHp, setPlayerMaxHp]     = useState(INITIAL_PLAYER_HP);
+  const [playerMaxHp, setPlayerMaxHp]     = useState(calcMaxHp(0, INITIAL_STATS.endurance));
   const [enemies, setEnemies]             = useState<Enemy[]>(makeEnemies);
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
   const [shieldActive, setShieldActive]   = useState(false);
@@ -112,25 +112,34 @@ export default function App() {
   const [playerXp, setPlayerXp]             = useState(0);
   const [xpToNext, setXpToNext]             = useState(xpRequired(INITIAL_PLAYER_LVL));
   const [playerGold, setPlayerGold]         = useState(0);
-  const [playerBonusDmg, setPlayerBonusDmg] = useState(0); // +2 per level-up
+  const [playerBonusDmg, setPlayerBonusDmg] = useState(0); // +2 per level
+  const [levelHpBonus, setLevelHpBonus]     = useState(0); // +20 per level (separate from endurance)
   const [lastKillReward, setLastKillReward] = useState<KillReward | null>(null);
 
-  // ── Refs (stale-closure-safe reads inside intervals) ───────────────────────
+  // ── Stats state ────────────────────────────────────────────────────────────
 
-  const playerHpRef        = useRef(INITIAL_PLAYER_HP);
-  const playerMaxHpRef     = useRef(INITIAL_PLAYER_HP);
-  const shieldRef          = useRef(false);
-  const phaseRef           = useRef<Phase>('explore');
-  const playerPosRef       = useRef({ x: 1, y: 8 });
-  const enemiesRef         = useRef<Enemy[]>(makeEnemies());
-  const activeEnemyIdRef   = useRef<number | null>(null);
-  const enemyAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [stats, setStats]           = useState<Stats>({ ...INITIAL_STATS });
+  const [statPoints, setStatPoints] = useState(0);
+  const [showCharPanel, setShowCharPanel] = useState(false);
 
-  // Progression refs
-  const playerLevelRef    = useRef(INITIAL_PLAYER_LVL);
-  const playerXpRef       = useRef(0);
-  const playerBonusDmgRef = useRef(0);
-  const playerGoldRef     = useRef(0);
+  // ── Refs ───────────────────────────────────────────────────────────────────
+
+  const playerHpRef         = useRef(calcMaxHp(0, INITIAL_STATS.endurance));
+  const playerMaxHpRef      = useRef(calcMaxHp(0, INITIAL_STATS.endurance));
+  const shieldRef           = useRef(false);
+  const phaseRef            = useRef<Phase>('explore');
+  const playerPosRef        = useRef({ x: 1, y: 8 });
+  const enemiesRef          = useRef<Enemy[]>(makeEnemies());
+  const activeEnemyIdRef    = useRef<number | null>(null);
+  const statsRef            = useRef<Stats>({ ...INITIAL_STATS });
+  const playerBonusDmgRef   = useRef(0);
+  const levelHpBonusRef     = useRef(0);
+  const playerLevelRef      = useRef(INITIAL_PLAYER_LVL);
+  const playerXpRef         = useRef(0);
+  const playerGoldRef       = useRef(0);
+  const statPointsRef       = useRef(0);
+  const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => { playerHpRef.current        = playerHp;       }, [playerHp]);
@@ -140,10 +149,13 @@ export default function App() {
   useEffect(() => { playerPosRef.current       = playerPos;      }, [playerPos]);
   useEffect(() => { enemiesRef.current         = enemies;        }, [enemies]);
   useEffect(() => { activeEnemyIdRef.current   = activeEnemyId;  }, [activeEnemyId]);
+  useEffect(() => { statsRef.current           = stats;          }, [stats]);
+  useEffect(() => { playerBonusDmgRef.current  = playerBonusDmg; }, [playerBonusDmg]);
+  useEffect(() => { levelHpBonusRef.current    = levelHpBonus;   }, [levelHpBonus]);
   useEffect(() => { playerLevelRef.current     = playerLevel;    }, [playerLevel]);
   useEffect(() => { playerXpRef.current        = playerXp;       }, [playerXp]);
-  useEffect(() => { playerBonusDmgRef.current  = playerBonusDmg; }, [playerBonusDmg]);
   useEffect(() => { playerGoldRef.current      = playerGold;     }, [playerGold]);
+  useEffect(() => { statPointsRef.current      = statPoints;     }, [statPoints]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -155,81 +167,105 @@ export default function App() {
     setFloatingNums(prev => [...prev, { id: Date.now() + Math.random(), value, col, row, type, timestamp: Date.now() }]);
   }, []);
 
-  // ── Progression: apply XP / gold rewards on kill ──────────────────────────
+  // ── Stat spending ──────────────────────────────────────────────────────────
+
+  const spendStat = useCallback((stat: keyof Stats) => {
+    if (statPointsRef.current <= 0) return;
+
+    const newStats = { ...statsRef.current, [stat]: statsRef.current[stat] + 1 };
+    statsRef.current = newStats;
+    setStats(newStats);
+    statPointsRef.current -= 1;
+    setStatPoints(p => p - 1);
+
+    if (stat === 'endurance') {
+      // Recompute max HP from all sources
+      const newMaxHp = calcMaxHp(levelHpBonusRef.current, newStats.endurance);
+      playerMaxHpRef.current = newMaxHp;
+      setPlayerMaxHp(newMaxHp);
+      // Note: current HP is NOT automatically filled when endurance increases
+    }
+    // Strength effect: statsRef.current is read in the next attack tick — immediate
+    // Agility effect: statsRef.current is read in the next attack schedule — immediate
+  }, []);
+
+  // ── Progression: XP / gold / level-up ─────────────────────────────────────
 
   const applyRewards = useCallback((enemyName: string): KillReward => {
     const reward = ENEMY_REWARDS[enemyName] ?? { xp: 10, goldMin: 1, goldMax: 3 };
 
-    // Gold
     const goldGained = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
-    const newGold = playerGoldRef.current + goldGained;
-    playerGoldRef.current = newGold;
-    setPlayerGold(newGold);
+    playerGoldRef.current += goldGained;
+    setPlayerGold(playerGoldRef.current);
     addLog(`💰 Получено ${goldGained} золота!`);
 
-    // XP + level-up chain
     const xpGained = reward.xp;
     addLog(`✨ Получено ${xpGained} опыта!`);
 
-    let newXp       = playerXpRef.current + xpGained;
-    let newLevel    = playerLevelRef.current;
-    let newMaxHp    = playerMaxHpRef.current;
-    let newBonusDmg = playerBonusDmgRef.current;
-    let leveledUp   = false;
-    let needed      = xpRequired(newLevel);
+    let newXp          = playerXpRef.current + xpGained;
+    let newLevel       = playerLevelRef.current;
+    let newBonusDmg    = playerBonusDmgRef.current;
+    let hpBonusDelta   = 0; // HP bonus accumulated in this call
+    let newStatPts     = 0;
+    let leveledUp      = false;
+    let needed         = xpRequired(newLevel);
 
     while (newXp >= needed) {
-      newXp      -= needed;
-      newLevel   += 1;
-      newMaxHp   += 20;
-      newBonusDmg += 2;
-      needed      = xpRequired(newLevel);
-      leveledUp   = true;
+      newXp        -= needed;
+      newLevel     += 1;
+      newBonusDmg  += 2;
+      hpBonusDelta += 20;
+      newStatPts   += STAT_POINTS_PER_LEVEL;
+      needed        = xpRequired(newLevel);
+      leveledUp     = true;
     }
 
-    // Commit progression refs
-    playerLevelRef.current    = newLevel;
-    playerMaxHpRef.current    = newMaxHp;
+    const newLevelHpBonus = levelHpBonusRef.current + hpBonusDelta;
+    const newMaxHp        = calcMaxHp(newLevelHpBonus, statsRef.current.endurance);
+
+    // Commit refs
+    playerLevelRef.current   = newLevel;
     playerBonusDmgRef.current = newBonusDmg;
-    playerXpRef.current       = newXp;
+    levelHpBonusRef.current  = newLevelHpBonus;
+    playerMaxHpRef.current   = newMaxHp;
+    playerXpRef.current      = newXp;
 
     setPlayerXp(newXp);
     setXpToNext(needed);
     setPlayerLevel(newLevel);
-    setPlayerMaxHp(newMaxHp);
     setPlayerBonusDmg(newBonusDmg);
+    setLevelHpBonus(newLevelHpBonus);
+    setPlayerMaxHp(newMaxHp);
+
+    if (newStatPts > 0) {
+      statPointsRef.current += newStatPts;
+      setStatPoints(p => p + newStatPts);
+      addLog(`🎯 +${newStatPts} очка характеристик!`);
+    }
 
     if (leveledUp) {
-      // Full HP restore on level-up
       playerHpRef.current = newMaxHp;
       setPlayerHp(newMaxHp);
       addLog(`🌟 Новый уровень ${newLevel}! HP восстановлено!`);
     }
 
-    return { xp: xpGained, gold: goldGained, leveledUp, newLevel };
+    return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: newStatPts };
   }, [addLog]);
 
-  // ── Enemy death handler ────────────────────────────────────────────────────
+  // ── Enemy death ────────────────────────────────────────────────────────────
 
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string) => {
-    // Halt combat immediately
     phaseRef.current = 'victory';
-    if (enemyAttackTimeout.current) {
-      clearTimeout(enemyAttackTimeout.current);
-      enemyAttackTimeout.current = null;
-    }
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
-    // Mark enemy dead
     enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e);
     setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e));
 
-    // Move player onto the defeated tile
     playerPosRef.current = { x: ex, y: ey };
     setPlayerPos({ x: ex, y: ey });
 
     addLog(`💀 ${name} повержен!`);
-
-    // Apply XP / gold and record for the overlay
     const reward = applyRewards(name);
     setLastKillReward(reward);
 
@@ -237,8 +273,7 @@ export default function App() {
     if (allDead) {
       phaseRef.current = 'final-victory';
       setPhase('final-victory');
-      setActiveEnemyId(null);
-      activeEnemyIdRef.current = null;
+      setActiveEnemyId(null); activeEnemyIdRef.current = null;
       addLog('🏆 Все враги побеждены!');
     } else {
       setPhase('victory');
@@ -246,8 +281,7 @@ export default function App() {
         if (phaseRef.current === 'victory') {
           phaseRef.current = 'explore';
           setPhase('explore');
-          setActiveEnemyId(null);
-          activeEnemyIdRef.current = null;
+          setActiveEnemyId(null); activeEnemyIdRef.current = null;
         }
       }, 1500);
     }
@@ -257,17 +291,9 @@ export default function App() {
 
   const movePlayer = useCallback((dx: number, dy: number) => {
     if (phaseRef.current !== 'explore') return;
-
     const { x, y } = playerPosRef.current;
-    const nx = x + dx;
-    const ny = y + dy;
-
-    if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) {
-      addLog('Путь заблокирован!');
-      return;
-    }
-
-    // Enemy-tile check BEFORE obstacle check
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) { addLog('Путь заблокирован!'); return; }
     const hitEnemy = enemiesRef.current.find(e => !e.dead && e.x === nx && e.y === ny);
     if (hitEnemy) {
       phaseRef.current = 'combat';
@@ -277,31 +303,28 @@ export default function App() {
       addLog(`⚔️ Бой с ${hitEnemy.name}!`);
       return;
     }
-
-    if (MAP[ny][nx] !== 0) {
-      addLog('Путь заблокирован!');
-      return;
-    }
-
+    if (MAP[ny][nx] !== 0) { addLog('Путь заблокирован!'); return; }
     playerPosRef.current = { x: nx, y: ny };
     setPlayerPos({ x: nx, y: ny });
   }, [addLog]);
 
-  // ── Combat intervals ──────────────────────────────────────────────────────
+  // ── Combat ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (phase !== 'combat') return;
 
-    // Player auto-attacks every 1500 ms; damage scales with bonus from levels
-    const playerAttackInterval = setInterval(() => {
+    // ── Player attack loop (setTimeout so agility takes effect each tick) ──
+    const doPlayerAttack = () => {
       if (phaseRef.current !== 'combat') return;
-
       const id = activeEnemyIdRef.current;
       if (id === null) return;
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
 
-      const dmg = Math.floor(Math.random() * 9) + 8 + playerBonusDmgRef.current; // 8–16 + level bonus
+      // Damage = base roll + level bonus + strength bonus
+      const dmg = Math.floor(Math.random() * 9) + 8
+                + playerBonusDmgRef.current
+                + statsRef.current.strength * 2;
       const newHp = Math.max(0, enemy.hp - dmg);
 
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
@@ -309,13 +332,22 @@ export default function App() {
       spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
       addLog(`⚔️ Воин наносит ${dmg} урона!`);
 
-      if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name);
-    }, 1500);
+      if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name); return; }
 
-    // Enemy attacks at its own interval via recursive setTimeout
+      // Schedule next attack using current agility
+      if (phaseRef.current === 'combat') {
+        const interval = calcAttackInterval(statsRef.current.agility);
+        playerAttackTimeout.current = setTimeout(doPlayerAttack, interval);
+      }
+    };
+
+    // First player attack
+    const firstInterval = calcAttackInterval(statsRef.current.agility);
+    playerAttackTimeout.current = setTimeout(doPlayerAttack, firstInterval);
+
+    // ── Enemy attack loop ──
     const doEnemyAttack = () => {
       if (phaseRef.current !== 'combat') return;
-
       const id = activeEnemyIdRef.current;
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
@@ -338,7 +370,6 @@ export default function App() {
         addLog('☠️ Вы погибли...');
         return;
       }
-
       if (phaseRef.current === 'combat') {
         enemyAttackTimeout.current = setTimeout(doEnemyAttack, enemy.attackInterval);
       }
@@ -350,25 +381,19 @@ export default function App() {
     }
 
     return () => {
-      clearInterval(playerAttackInterval);
-      if (enemyAttackTimeout.current) {
-        clearTimeout(enemyAttackTimeout.current);
-        enemyAttackTimeout.current = null;
-      }
+      if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+      if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
     };
   }, [phase, addLog, spawnFloat, handleEnemyDeath]);
 
-  // ── Skill cooldown ticking ─────────────────────────────────────────────────
+  // ── Skill cooldowns ───────────────────────────────────────────────────────
 
   useEffect(() => {
     if (phase !== 'combat') return;
     const t = setInterval(() => {
       setSkillsCd(prev => {
-        const next = { ...prev };
-        let changed = false;
-        for (const k in next) {
-          if (next[k] > 0) { next[k] = Math.max(0, next[k] - 1); changed = true; }
-        }
+        const next = { ...prev }; let changed = false;
+        for (const k in next) { if (next[k] > 0) { next[k] = Math.max(0, next[k] - 1); changed = true; } }
         return changed ? next : prev;
       });
     }, 100);
@@ -391,7 +416,6 @@ export default function App() {
   const useSkill = useCallback((skill: typeof SKILLS[0]) => {
     if (phaseRef.current !== 'combat') return;
     if (skillsCd[skill.id] > 0) return;
-
     setSkillsCd(prev => ({ ...prev, [skill.id]: skill.maxCd }));
 
     if (skill.damage > 0) {
@@ -399,65 +423,58 @@ export default function App() {
       if (id === null) return;
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
-
       const newHp = Math.max(0, enemy.hp - skill.damage);
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
       setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
       spawnFloat(skill.damage.toString(), enemy.x, enemy.y, 'enemy-dmg');
       addLog(`✨ Воин использует ${skill.name} на ${skill.damage} урона!`);
-
       if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name);
     }
 
     if (skill.healSelf > 0) {
       const pp = playerPosRef.current;
-      // Cap at current playerMaxHp (grows with level-ups)
       const newHp = Math.min(playerMaxHpRef.current, playerHpRef.current + skill.healSelf);
-      playerHpRef.current = newHp;
-      setPlayerHp(newHp);
+      playerHpRef.current = newHp; setPlayerHp(newHp);
       spawnFloat(`+${skill.healSelf}`, pp.x, pp.y, 'heal');
       addLog(`💚 Воин лечится на ${skill.healSelf} HP!`);
     }
 
     if (skill.id === 5) {
-      setShieldActive(true);
-      shieldRef.current = true;
+      setShieldActive(true); shieldRef.current = true;
       addLog('🛡️ Щит активирован!');
-      setTimeout(() => {
-        setShieldActive(false);
-        shieldRef.current = false;
-        addLog('🛡️ Действие щита закончилось.');
-      }, 5000);
+      setTimeout(() => { setShieldActive(false); shieldRef.current = false; addLog('🛡️ Действие щита закончилось.'); }, 5000);
     }
   }, [skillsCd, addLog, spawnFloat, handleEnemyDeath]);
 
   // ── Restart ───────────────────────────────────────────────────────────────
 
   const handleRestart = useCallback(() => {
-    if (enemyAttackTimeout.current) {
-      clearTimeout(enemyAttackTimeout.current);
-      enemyAttackTimeout.current = null;
-    }
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
     const fresh = makeEnemies();
+    const initMaxHp = calcMaxHp(0, INITIAL_STATS.endurance);
 
-    // Reset all refs
+    // Reset refs
     phaseRef.current          = 'explore';
-    playerHpRef.current       = INITIAL_PLAYER_HP;
-    playerMaxHpRef.current    = INITIAL_PLAYER_HP;
+    playerHpRef.current       = initMaxHp;
+    playerMaxHpRef.current    = initMaxHp;
     shieldRef.current         = false;
     playerPosRef.current      = { x: 1, y: 8 };
     enemiesRef.current        = fresh;
     activeEnemyIdRef.current  = null;
+    statsRef.current          = { ...INITIAL_STATS };
+    playerBonusDmgRef.current = 0;
+    levelHpBonusRef.current   = 0;
     playerLevelRef.current    = INITIAL_PLAYER_LVL;
     playerXpRef.current       = 0;
-    playerBonusDmgRef.current = 0;
     playerGoldRef.current     = 0;
+    statPointsRef.current     = 0;
 
-    // Reset all state
+    // Reset state
     setPhase('explore');
     setPlayerPos({ x: 1, y: 8 });
-    setPlayerHp(INITIAL_PLAYER_HP);
-    setPlayerMaxHp(INITIAL_PLAYER_HP);
+    setPlayerHp(initMaxHp);
+    setPlayerMaxHp(initMaxHp);
     setEnemies(fresh);
     setActiveEnemyId(null);
     setShieldActive(false);
@@ -469,30 +486,31 @@ export default function App() {
     setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
     setPlayerGold(0);
     setPlayerBonusDmg(0);
+    setLevelHpBonus(0);
     setLastKillReward(null);
+    setStats({ ...INITIAL_STATS });
+    setStatPoints(0);
+    setShowCharPanel(false);
   }, []);
 
-  // ── Derived values ─────────────────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-  const activeEnemy   = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
-  const livingEnemies = enemies.filter(e => !e.dead);
-  const xpPct         = Math.min(100, Math.round((playerXp / xpToNext) * 100));
+  const activeEnemy    = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
+  const livingEnemies  = enemies.filter(e => !e.dead);
+  const xpPct          = Math.min(100, Math.round((playerXp / xpToNext) * 100));
+  // Displayed stats in character panel
+  const dmgMin         = 8  + playerBonusDmg + stats.strength * 2;
+  const dmgMax         = 16 + playerBonusDmg + stats.strength * 2;
+  const atkIntervalSec = (calcAttackInterval(stats.agility) / 1000).toFixed(1);
 
   // ── Tile renderer ──────────────────────────────────────────────────────────
 
   const renderTileContent = (x: number, y: number, tileType: number) => {
-    if (x === playerPos.x && y === playerPos.y) {
+    if (x === playerPos.x && y === playerPos.y)
       return <div className="w-full h-full tile-player rounded flex items-center justify-center text-lg z-10 relative">🧝</div>;
-    }
     const enemy = livingEnemies.find(e => e.x === x && e.y === y);
-    if (enemy) {
-      const isActive = enemy.id === activeEnemyId;
-      return (
-        <div className={`w-full h-full rounded flex items-center justify-center text-lg z-10 relative ${isActive ? 'tile-enemy' : 'tile-enemy-idle'}`}>
-          {enemy.emoji}
-        </div>
-      );
-    }
+    if (enemy)
+      return <div className={`w-full h-full rounded flex items-center justify-center text-lg z-10 relative ${enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle'}`}>{enemy.emoji}</div>;
     if (tileType === 1) return <div className="w-full h-full tile-tree  flex items-center justify-center text-sm">🌲</div>;
     if (tileType === 2) return <div className="w-full h-full tile-rock  flex items-center justify-center text-sm">🪨</div>;
     if (tileType === 3) return <div className="w-full h-full tile-water flex items-center justify-center text-blue-400 text-xs font-bold tracking-tighter opacity-80">〰</div>;
@@ -504,13 +522,13 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] w-full max-w-[420px] mx-auto bg-background text-foreground flex flex-col relative select-none">
 
-      {/* ── 1. Status Header (two rows) ── */}
+      {/* ══════════════════════════════════════════════════════════
+          1. STATUS HEADER
+      ══════════════════════════════════════════════════════════ */}
       <div className="shrink-0 border-b border-tile-border bg-[#111116]">
 
-        {/* Row 1: player HP | VS | enemy HP */}
+        {/* Row 1 — HP bars */}
         <div className="flex items-center px-4 pt-2 pb-1 justify-between">
-
-          {/* Player side */}
           <div className="flex flex-col w-[45%]">
             <div className="flex justify-between items-end mb-1">
               <span className="text-sm font-bold text-white tracking-wide">
@@ -527,7 +545,6 @@ export default function App() {
 
           <div className="text-sm font-bold text-[#444] text-center w-[10%]">VS</div>
 
-          {/* Enemy side */}
           <div className="flex flex-col w-[45%]">
             {activeEnemy ? (
               <>
@@ -551,71 +568,79 @@ export default function App() {
           </div>
         </div>
 
-        {/* Row 2: XP bar + gold */}
+        {/* Row 2 — XP bar + gold + character button */}
         <div className="flex items-center px-4 pb-2 gap-2">
           <span className="text-[10px] text-[#555] font-bold uppercase tracking-wide shrink-0">Опыт</span>
-          {/* XP bar */}
-          <div className="flex-1 h-[5px] bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border relative">
+          <div className="flex-1 h-[5px] bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
             <div className="h-full rounded-full transition-all duration-500 bg-[#3a8fc4]"
               style={{ width: `${xpPct}%` }} />
           </div>
           <span className="text-[10px] font-mono text-[#666] shrink-0">{playerXp}/{xpToNext}</span>
-          {/* Gold */}
-          <span className="text-[11px] font-bold text-yellow-400 shrink-0 ml-1">💰 {playerGold}</span>
+          <span className="text-[11px] font-bold text-yellow-400 shrink-0">💰{playerGold}</span>
+          {/* Stat-point badge + character button */}
+          <button
+            onClick={() => setShowCharPanel(v => !v)}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showCharPanel
+                ? 'bg-primary/20 border-primary text-primary'
+                : 'bg-[#1e1e28] border-tile-border text-[#aaa] hover:border-primary hover:text-primary'}`}
+          >
+            {statPoints > 0 && (
+              <span className="w-[14px] h-[14px] rounded-full bg-primary text-[#111] text-[9px] font-black flex items-center justify-center leading-none">
+                {statPoints}
+              </span>
+            )}
+            👤
+          </button>
         </div>
       </div>
 
-      {/* ── 2. Map Grid ── */}
+      {/* ══════════════════════════════════════════════════════════
+          2. MAP
+      ══════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] p-2">
         <div className="relative" style={{ width: 'min(90vw, 360px)', height: 'min(90vw, 360px)' }}>
 
           {/* Tile grid */}
           <div className="absolute inset-0 grid grid-cols-10 grid-rows-10 gap-[1px] bg-tile-border p-[1px] border border-tile-border rounded shadow-lg shadow-black/50 overflow-hidden">
-            {MAP.map((row, y) =>
-              row.map((tileType, x) => (
-                <div key={`${x}-${y}`} className="relative bg-map-bg">
-                  {renderTileContent(x, y, tileType)}
-                </div>
-              ))
-            )}
+            {MAP.map((row, y) => row.map((tileType, x) => (
+              <div key={`${x}-${y}`} className="relative bg-map-bg">
+                {renderTileContent(x, y, tileType)}
+              </div>
+            )))}
           </div>
 
-          {/* HP bar on map — player */}
+          {/* Map HP bars */}
           {phase === 'combat' && playerHp > 0 && (
             <div className="absolute pointer-events-none z-20 flex justify-center"
               style={{ top: `${(playerPos.y / 10) * 100}%`, left: `${(playerPos.x / 10) * 100}%`, width: '10%', height: '10%', marginTop: '-6px' }}>
               <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
-                <div className="h-full bg-primary"
-                  style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
+                <div className="h-full bg-primary" style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
               </div>
             </div>
           )}
-
-          {/* HP bar on map — active enemy */}
           {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 && (
             <div className="absolute pointer-events-none z-20 flex justify-center"
               style={{ top: `${(activeEnemy.y / 10) * 100}%`, left: `${(activeEnemy.x / 10) * 100}%`, width: '10%', height: '10%', marginTop: '-6px' }}>
               <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
-                <div className="h-full bg-destructive"
-                  style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                <div className="h-full bg-destructive" style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
               </div>
             </div>
           )}
 
-          {/* Floating damage / heal numbers */}
+          {/* Floating numbers */}
           {floatingNums.map(num => (
             <div key={num.id}
               className="absolute pointer-events-none z-30 font-bold text-base text-center animate-float w-[10%] h-[10%] flex items-center justify-center drop-shadow-md"
               style={{
-                top:   `${(num.row / 10) * 100}%`,
-                left:  `${(num.col / 10) * 100}%`,
+                top: `${(num.row / 10) * 100}%`, left: `${(num.col / 10) * 100}%`,
                 color: num.type === 'player-dmg' ? 'hsl(var(--destructive))' : num.type === 'heal' ? 'hsl(var(--success))' : 'hsl(var(--primary))',
               }}>
               {num.value}
             </div>
           ))}
 
-          {/* Per-kill victory flash — shows rewards and level-up if applicable */}
+          {/* Per-kill victory flash */}
           {phase === 'victory' && (
             <div className="absolute inset-0 z-50 bg-black/75 flex flex-col items-center justify-center gap-1 rounded backdrop-blur-sm animate-in fade-in duration-300">
               <h2 className="text-2xl font-bold text-primary drop-shadow-lg">⚔️ ПОБЕДА!</h2>
@@ -629,7 +654,9 @@ export default function App() {
               {lastKillReward?.leveledUp && (
                 <div className="mt-2 px-3 py-1 bg-primary/20 border border-primary rounded-md text-center">
                   <p className="text-primary font-bold text-sm tracking-wide">НОВЫЙ УРОВЕНЬ!</p>
-                  <p className="text-white text-xs">Уровень {lastKillReward.newLevel}</p>
+                  <p className="text-white text-xs">Уровень {lastKillReward.newLevel}
+                    {lastKillReward.statPtsGained > 0 && ` · +${lastKillReward.statPtsGained} очка`}
+                  </p>
                 </div>
               )}
             </div>
@@ -640,7 +667,7 @@ export default function App() {
             <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
               <h2 className="text-3xl font-bold text-primary mb-2 drop-shadow-lg">🏆 ПОБЕДА!</h2>
               <p className="text-white/80 mb-1 font-medium">Все враги повержены!</p>
-              <p className="text-[#666] text-sm mb-3">Уровень {playerLevel} · 💰 {playerGold} золота</p>
+              <p className="text-[#666] text-sm mb-3">Уровень {playerLevel} · 💰 {playerGold}</p>
               {lastKillReward && (
                 <div className="mb-4 flex gap-3 text-sm">
                   <span className="text-[#38bdf8] font-bold">+{lastKillReward.xp} опыта</span>
@@ -659,7 +686,7 @@ export default function App() {
             <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
               <h2 className="text-3xl font-bold text-destructive mb-2 drop-shadow-lg">☠️ ПОРАЖЕНИЕ</h2>
               <p className="text-white/80 mb-2 font-medium">Вы пали в бою...</p>
-              <p className="text-[#666] text-sm mb-5">Уровень {playerLevel} · 💰 {playerGold} золота</p>
+              <p className="text-[#666] text-sm mb-5">Уровень {playerLevel} · 💰 {playerGold}</p>
               <button onClick={handleRestart}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
@@ -667,10 +694,128 @@ export default function App() {
             </div>
           )}
 
+          {/* ── Character panel overlay (z-60 so it sits above combat overlays) ── */}
+          {showCharPanel && (
+            <div className="absolute inset-0 z-[60] bg-[#0d0d0f]/95 flex flex-col rounded backdrop-blur-md">
+
+              {/* Panel header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-tile-border shrink-0">
+                <h2 className="text-base font-bold text-primary tracking-wide">⚔️ Персонаж</h2>
+                {statPoints > 0 && (
+                  <span className="text-xs text-primary font-bold animate-pulse">
+                    {statPoints} очко{statPoints === 1 ? '' : statPoints < 5 ? 'а' : 'в'} не потрачено
+                  </span>
+                )}
+                <button onClick={() => setShowCharPanel(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-tile-border text-[#888] hover:text-white hover:border-primary transition-colors text-sm font-bold">
+                  ✕
+                </button>
+              </div>
+
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1">
+
+                {/* ── Info rows ── */}
+                {/* Уровень */}
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Уровень</span>
+                  <span className="text-[13px] font-bold text-primary font-mono">{playerLevel}</span>
+                </div>
+
+                {/* Divider */}
+                <p className="text-[10px] uppercase tracking-widest text-[#444] pt-2 pb-1 font-bold">Характеристики</p>
+
+                {/* Сила */}
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <div className="flex flex-col">
+                    <span className="text-[13px] text-white font-medium">Сила</span>
+                    <span className="text-[10px] text-[#555]">+2 урона за очко</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-bold text-white font-mono w-8 text-right">{stats.strength}</span>
+                    <button
+                      disabled={statPoints === 0}
+                      onClick={() => spendStat('strength')}
+                      className="w-7 h-7 rounded border text-sm font-black flex items-center justify-center transition-all
+                        disabled:opacity-25 disabled:cursor-not-allowed
+                        enabled:border-primary enabled:text-primary enabled:bg-primary/10 enabled:hover:bg-primary/25 enabled:active:scale-90">
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Ловкость */}
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <div className="flex flex-col">
+                    <span className="text-[13px] text-white font-medium">Ловкость</span>
+                    <span className="text-[10px] text-[#555]">–3% интервала атаки</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-bold text-white font-mono w-8 text-right">{stats.agility}</span>
+                    <button
+                      disabled={statPoints === 0}
+                      onClick={() => spendStat('agility')}
+                      className="w-7 h-7 rounded border text-sm font-black flex items-center justify-center transition-all
+                        disabled:opacity-25 disabled:cursor-not-allowed
+                        enabled:border-primary enabled:text-primary enabled:bg-primary/10 enabled:hover:bg-primary/25 enabled:active:scale-90">
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Выносливость */}
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <div className="flex flex-col">
+                    <span className="text-[13px] text-white font-medium">Выносливость</span>
+                    <span className="text-[10px] text-[#555]">+10 макс. HP за очко</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-bold text-white font-mono w-8 text-right">{stats.endurance}</span>
+                    <button
+                      disabled={statPoints === 0}
+                      onClick={() => spendStat('endurance')}
+                      className="w-7 h-7 rounded border text-sm font-black flex items-center justify-center transition-all
+                        disabled:opacity-25 disabled:cursor-not-allowed
+                        enabled:border-primary enabled:text-primary enabled:bg-primary/10 enabled:hover:bg-primary/25 enabled:active:scale-90">
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Derived stats ── */}
+                <p className="text-[10px] uppercase tracking-widest text-[#444] pt-3 pb-1 font-bold">Боевые показатели</p>
+
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Урон</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{dmgMin}–{dmgMax}</span>
+                </div>
+
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Скорость атаки</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{atkIntervalSec}с</span>
+                </div>
+
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Максимальное HP</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{playerMaxHp}</span>
+                </div>
+
+                {/* Free stat points */}
+                <div className={`flex items-center justify-between py-2 rounded px-2 mt-1 ${statPoints > 0 ? 'bg-primary/10 border border-primary/40' : ''}`}>
+                  <span className={`text-[13px] font-medium ${statPoints > 0 ? 'text-primary' : 'text-[#888]'}`}>Свободные очки</span>
+                  <span className={`text-[16px] font-black font-mono ${statPoints > 0 ? 'text-primary' : 'text-[#555]'}`}>{statPoints}</span>
+                </div>
+
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
-      {/* ── 3. D-Pad ── */}
+      {/* ══════════════════════════════════════════════════════════
+          3. D-PAD
+      ══════════════════════════════════════════════════════════ */}
       <div className="h-[140px] shrink-0 flex flex-col items-center justify-center border-t border-tile-border/50 bg-[#0c0c10]">
         <span className="text-[10px] uppercase tracking-widest text-[#666] mb-2 font-bold">Движение</span>
         <div className="grid grid-cols-3 gap-[6px]">
@@ -695,11 +840,13 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── 4. Skill Bar ── */}
+      {/* ══════════════════════════════════════════════════════════
+          4. SKILL BAR
+      ══════════════════════════════════════════════════════════ */}
       <div className="h-[80px] shrink-0 bg-[#111116] border-t border-tile-border p-2 flex justify-center gap-2 overflow-x-auto">
         {SKILLS.map(skill => {
-          const cd       = skillsCd[skill.id] || 0;
-          const isOnCd   = cd > 0;
+          const cd = skillsCd[skill.id] || 0;
+          const isOnCd = cd > 0;
           const isUsable = phase === 'combat' && !isOnCd;
           return (
             <button key={skill.id} disabled={!isUsable} onClick={() => useSkill(skill)}
@@ -717,7 +864,9 @@ export default function App() {
         })}
       </div>
 
-      {/* ── 5. Combat Log ── */}
+      {/* ══════════════════════════════════════════════════════════
+          5. COMBAT LOG
+      ══════════════════════════════════════════════════════════ */}
       <div className="h-[90px] shrink-0 bg-[#0a0a0f] border-t border-tile-border/80 overflow-y-auto p-2 combat-log-scroll">
         <div className="flex flex-col-reverse justify-end min-h-full">
           {logs.map((log, i) => (
