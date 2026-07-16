@@ -608,30 +608,63 @@ export default function App() {
     }
   }, [skillsCd, addLog, spawnFloat, handleEnemyDeath]);
 
-  // ── Restart ───────────────────────────────────────────────────────────────
-  const handleRestart = useCallback(() => {
+  // ── Reset run (new map + enemies, restore HP — keep all character progress) ─
+  const resetRun = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+
     const fresh = makeEnemies();
+
+    // Max HP is based on current level, stats and equipment — nothing changes here
+    const fullHp = playerMaxHpRef.current;
+
+    // Run-level state
+    phaseRef.current        = 'explore';
+    playerHpRef.current     = fullHp;
+    shieldRef.current       = false;
+    playerPosRef.current    = { x: 1, y: 8 };
+    enemiesRef.current      = fresh;
+    activeEnemyIdRef.current = null;
+
+    setPhase('explore');
+    setPlayerPos({ x: 1, y: 8 });
+    setPlayerHp(fullHp);
+    setEnemies(fresh);
+    setActiveEnemyId(null);
+    setShieldActive(false);
+    setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    setFloatingNums([]);
+    setLastKillReward(null);
+    setLootNotif(null);
+    setShowInventory(false);
+    setSelectedItem(null);
+    setShowCharPanel(false);
+    setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
+
+    // ── Character progress intentionally NOT reset: ──────────────────────────
+    // level, XP, statPoints, stats, playerBonusDmg, levelHpBonus,
+    // gold, inventory, equipment, equipBonuses, playerMaxHp
+  }, []);
+
+  // ── Full character reset (available for future use — not called anywhere) ──
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const resetCharacter = useCallback(() => {
+    resetRun();
     const initMaxHp = calcMaxHp(0, INITIAL_STATS.endurance);
 
-    phaseRef.current = 'explore'; playerHpRef.current = initMaxHp; playerMaxHpRef.current = initMaxHp;
-    shieldRef.current = false; playerPosRef.current = { x: 1, y: 8 }; enemiesRef.current = fresh;
-    activeEnemyIdRef.current = null; statsRef.current = { ...INITIAL_STATS };
+    playerHpRef.current      = initMaxHp; playerMaxHpRef.current = initMaxHp;
     playerBonusDmgRef.current = 0; levelHpBonusRef.current = 0; playerLevelRef.current = INITIAL_PLAYER_LVL;
-    playerXpRef.current = 0; playerGoldRef.current = 0; statPointsRef.current = 0;
-    equipmentRef.current = { ...EMPTY_EQUIPMENT }; equipBonusesRef.current = { ...ZERO_EQUIP_BONUSES };
+    playerXpRef.current      = 0; playerGoldRef.current = 0; statPointsRef.current = 0;
+    statsRef.current         = { ...INITIAL_STATS };
+    equipmentRef.current     = { ...EMPTY_EQUIPMENT }; equipBonusesRef.current = { ...ZERO_EQUIP_BONUSES };
 
-    setPhase('explore'); setPlayerPos({ x: 1, y: 8 }); setPlayerHp(initMaxHp); setPlayerMaxHp(initMaxHp);
-    setEnemies(fresh); setActiveEnemyId(null); setShieldActive(false);
-    setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-    setLogs([{ id: Date.now(), msg: 'Вы возродились. Тёмные подземелья ждут...' }]);
-    setFloatingNums([]); setPlayerLevel(INITIAL_PLAYER_LVL); setPlayerXp(0);
-    setXpToNext(xpRequired(INITIAL_PLAYER_LVL)); setPlayerGold(0); setPlayerBonusDmg(0);
-    setLevelHpBonus(0); setLastKillReward(null); setStats({ ...INITIAL_STATS }); setStatPoints(0);
+    setPlayerHp(initMaxHp); setPlayerMaxHp(initMaxHp);
+    setPlayerLevel(INITIAL_PLAYER_LVL); setPlayerXp(0); setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
+    setPlayerGold(0); setPlayerBonusDmg(0); setLevelHpBonus(0);
+    setStats({ ...INITIAL_STATS }); setStatPoints(0);
     setEquipment({ ...EMPTY_EQUIPMENT }); setInventory([]); setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
-    setShowInventory(false); setSelectedItem(null); setLootNotif(null); setShowCharPanel(false);
-  }, []);
+    setLogs([{ id: Date.now(), msg: 'Тёмные подземелья ждут...' }]);
+  }, [resetRun]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const activeEnemy   = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
@@ -827,7 +860,7 @@ export default function App() {
                   <span className="text-yellow-400 font-bold">+{lastKillReward.gold} золота</span>
                 </div>
               )}
-              <button onClick={handleRestart}
+              <button onClick={resetRun}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
               </button>
@@ -840,7 +873,7 @@ export default function App() {
               <h2 className="text-3xl font-bold text-destructive mb-2 drop-shadow-lg">☠️ ПОРАЖЕНИЕ</h2>
               <p className="text-white/80 mb-2 font-medium">Вы пали в бою...</p>
               <p className="text-[#666] text-sm mb-5">Уровень {playerLevel} · 💰 {playerGold}</p>
-              <button onClick={handleRestart}
+              <button onClick={resetRun}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
               </button>
