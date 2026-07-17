@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { saveGame, loadGame, clearSave, SaveData } from './save';
 
 // ─── WORLD CONSTANTS ──────────────────────────────────────────────────────────
 
@@ -371,67 +372,12 @@ const makeLocationEnemies = (loc: LocationId): Enemy[] => {
   return defs[loc].map((d, i) => ({ ...d, id: i + 1 }));
 };
 
-// ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
-
-const SAVE_KEY     = 'dungeon_rpg_v1';
-const SAVE_VERSION = 1;
-
-interface SaveData {
-  version:         number;
-  playerLevel:     number;
-  playerXp:        number;
-  xpToNext:        number;
-  playerGold:      number;
-  playerBonusDmg:  number;
-  levelHpBonus:    number;
-  playerHp:        number;
-  playerMaxHp:     number;
-  stats:           Stats;
-  statPoints:      number;
-  inventory:       Item[];
-  equipment:       Equipment;
-  equipBonuses:    EquipBonuses;
-  playerPos:       { x: number; y: number };
-  currentLocation: LocationId;
-  enemies:         Enemy[];
-}
-
-function saveGame(data: SaveData): void {
-  try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    console.debug('[Save] Written — Lv.%d  XP %d  Gold %d', data.playerLevel, data.playerXp, data.playerGold);
-  } catch (e) {
-    console.warn('[Save] localStorage write failed:', e);
-  }
-}
-
-function loadSave(): SaveData | null {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) { console.debug('[Save] No save found in localStorage'); return null; }
-    const data = JSON.parse(raw) as SaveData;
-    if (data.version !== SAVE_VERSION) {
-      console.warn('[Save] Incompatible save version (%d), starting fresh', data.version);
-      return null;
-    }
-    console.debug('[Save] Loaded — Lv.%d  XP %d  Gold %d', data.playerLevel, data.playerXp, data.playerGold);
-    return data;
-  } catch (e) {
-    console.warn('[Save] Failed to parse save:', e);
-    return null;
-  }
-}
-
-function deleteSave(): void {
-  localStorage.removeItem(SAVE_KEY);
-}
-
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
 export default function App() {
 
   // ── Load saved game exactly once on mount ──────────────────────────────────
-  const [sv] = useState<SaveData | null>(() => loadSave());
+  const [sv] = useState<SaveData | null>(() => loadGame());
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [phase, setPhase]                 = useState<Phase>('explore');
@@ -537,7 +483,6 @@ export default function App() {
       return; // first render — load path already handled by sv initializer
     }
     saveGame({
-      version: SAVE_VERSION,
       playerLevel, playerXp, xpToNext, playerGold,
       playerBonusDmg, levelHpBonus,
       playerHp, playerMaxHp,
@@ -983,7 +928,7 @@ export default function App() {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
-    deleteSave();
+    clearSave();
 
     const initMaxHp = calcMaxHp(0, INITIAL_STATS.endurance);
 
