@@ -20,6 +20,8 @@ import {
   LOCATION_META, LOCATION_SPAWN, LOCATION_EXITS, LOCATION_MAPS, LOCATION_NPCS,
   getLocation, moveToLocation, getAvailableExits, isConnected,
 } from './world/locations';
+import { QuestProgress, QUEST_DEFS, getQuestEntry } from './quests/quests';
+import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 
 const INITIAL_PLAYER_HP      = 100;
 const INITIAL_PLAYER_LVL     = 1;
@@ -86,6 +88,9 @@ export default function App() {
   const [currentLocation, setCurrentLocation] = useState<LocationId>(sv?.currentLocation ?? 'village');
   const [transitioning, setTransitioning]     = useState(false);
   const [npcDialog, setNpcDialog]             = useState<string | null>(null);
+  const [questProgress, setQuestProgress]     = useState<QuestProgress>(sv?.questProgress ?? {});
+  const [questDialogue, setQuestDialogue]     = useState<NpcDialogue | null>(null);
+  const [showQuestPanel, setShowQuestPanel]   = useState(false);
 
   // ── Refs (initialised from save so callbacks see correct values immediately) ─
   const playerHpRef        = useRef(sv?.playerHp         ?? calcMaxHp(0, INITIAL_STATS.endurance));
@@ -109,6 +114,7 @@ export default function App() {
   // These two have no paired state→ref sync in callbacks, so we track them explicitly:
   const inventoryRef       = useRef<Item[]>(sv?.inventory        ?? []);
   const xpToNextRef        = useRef(sv?.xpToNext                 ?? xpRequired(INITIAL_PLAYER_LVL));
+  const questProgressRef   = useRef<QuestProgress>(sv?.questProgress ?? {});
   // Prevents the auto-save from firing on the very first render (initial mount).
   // On mount the game either restores a save (sv != null) or starts fresh —
   // either way there is nothing new to persist yet.
@@ -137,6 +143,7 @@ export default function App() {
   useEffect(() => { equipBonusesRef.current    = equipBonuses;  }, [equipBonuses]);
   useEffect(() => { inventoryRef.current       = inventory;     }, [inventory]);
   useEffect(() => { xpToNextRef.current        = xpToNext;      }, [xpToNext]);
+  useEffect(() => { questProgressRef.current   = questProgress; }, [questProgress]);
 
   // ── Auto-save: immediate write on any meaningful state change ──────────────
   // Rules:
@@ -158,10 +165,11 @@ export default function App() {
       stats, statPoints,
       inventory, equipment, equipBonuses,
       playerPos, currentLocation, enemies,
+      questProgress,
     });
   }, [playerLevel, playerXp, xpToNext, playerGold, playerBonusDmg, levelHpBonus,
       playerHp, playerMaxHp, stats, statPoints, inventory, equipment, equipBonuses,
-      playerPos, currentLocation, enemies]);
+      playerPos, currentLocation, enemies, questProgress]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const addLog = useCallback((msg: string) => {
@@ -339,6 +347,25 @@ export default function App() {
     const reward = applyRewards(name);
     setLastKillReward(reward);
 
+    // ── Quest: track goblin kills ────────────────────────────────────────────
+    if (name === 'Гоблин') {
+      const qid   = 'quest_goblin_001';
+      const def   = QUEST_DEFS[qid];
+      const entry = questProgressRef.current[qid] ?? { status: 'inactive' as const, current: 0 };
+      if (entry.status === 'active' && entry.current < def.objective.required) {
+        const newCurrent = entry.current + 1;
+        const updated: QuestProgress = {
+          ...questProgressRef.current,
+          [qid]: { status: 'active' as const, current: newCurrent },
+        };
+        questProgressRef.current = updated;
+        setQuestProgress(updated);
+        addLog(`📜 Гоблины: ${newCurrent} / ${def.objective.required}`);
+        if (newCurrent >= def.objective.required)
+          addLog('✅ Цель выполнена! Вернитесь к Старейшине.');
+      }
+    }
+
     const allDead = enemiesRef.current.every(e => e.dead);
     if (allDead) {
       phaseRef.current = 'final-victory'; setPhase('final-victory');
@@ -401,7 +428,12 @@ export default function App() {
     const tileType = currentMap[ny]?.[nx] ?? 1;
     // NPC intercept
     const npc = (LOCATION_NPCS[currentLocationRef.current] ?? []).find(n => n.x === nx && n.y === ny);
-    if (npc) { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); return; }
+    if (npc) {
+      const dlg = getNpcDialogue(npc.id, questProgressRef.current);
+      if (dlg) { setQuestDialogue(dlg); }
+      else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
+      return;
+    }
     // Enemy intercept
     const hitEnemy = enemiesRef.current.find(e => !e.dead && e.x === nx && e.y === ny);
     if (hitEnemy) {
@@ -558,6 +590,90 @@ export default function App() {
     handleLocationTransition(to, LOCATION_SPAWN[to]);
   }, [handleLocationTransition]);
 
+  // ── Quest action handler ──────────────────────────────────────────────────
+  const handleQuestAction = useCallback((action: DialogAction) => {
+    if (action.kind === 'dismiss') { setQuestDialogue(null); return; }
+
+    if (action.kind === 'accept_quest') {
+      const updated: QuestProgress = {
+        ...questProgressRef.current,
+        [action.questId]: { status: 'active' as const, current: 0 },
+      };
+      questProgressRef.current = updated;
+      setQuestProgress(updated);
+      addLog(`📜 Задание принято: ${QUEST_DEFS[action.questId]?.title ?? action.questId}`);
+      setQuestDialogue(null);
+      return;
+    }
+
+    if (action.kind === 'complete_quest') {
+      const def = QUEST_DEFS[action.questId];
+      if (!def) { setQuestDialogue(null); return; }
+
+      // ── Gold reward ────────────────────────────────────────────────────────
+      playerGoldRef.current += def.reward.gold;
+      setPlayerGold(playerGoldRef.current);
+      addLog(`💰 Награда: ${def.reward.gold} золота!`);
+
+      // ── XP reward with level-up logic ──────────────────────────────────────
+      let newXp     = playerXpRef.current + def.reward.xp;
+      let newLevel  = playerLevelRef.current;
+      let newBonusDmg = playerBonusDmgRef.current;
+      let hpDelta = 0, newStatPts = 0, leveledUp = false;
+      let needed    = xpRequired(newLevel);
+      while (newXp >= needed) {
+        newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
+        newStatPts += STAT_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
+      }
+      const newLevelHpBonus = levelHpBonusRef.current + hpDelta;
+      const newMaxHp = calcMaxHp(newLevelHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp);
+      playerLevelRef.current    = newLevel;   playerBonusDmgRef.current = newBonusDmg;
+      levelHpBonusRef.current   = newLevelHpBonus; playerMaxHpRef.current = newMaxHp;
+      playerXpRef.current       = newXp;
+      setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
+      setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLevelHpBonus); setPlayerMaxHp(newMaxHp);
+      if (newStatPts > 0) {
+        statPointsRef.current += newStatPts;
+        setStatPoints(p => p + newStatPts);
+        addLog(`🎯 +${newStatPts} очка характеристик!`);
+      }
+      if (leveledUp) { playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp); addLog(`🌟 Новый уровень ${newLevel}! HP восстановлено!`); }
+      addLog(`✨ Награда: ${def.reward.xp} опыта!`);
+
+      // ── Item rewards (only if not already owned) ───────────────────────────
+      for (const itemKey of def.reward.items ?? []) {
+        if (!inventoryRef.current.some(i => i.key === itemKey)) {
+          const item = makeItem(itemKey);
+          inventoryRef.current = [...inventoryRef.current, item];
+          setInventory(prev => [...prev, item]);
+          addLog(`🎁 Получен предмет: ${item.name}!`);
+        } else {
+          addLog(`(У вас уже есть ${ITEM_CATALOG[itemKey]?.name ?? itemKey})`);
+        }
+      }
+
+      // ── Mark completed ─────────────────────────────────────────────────────
+      const updated: QuestProgress = {
+        ...questProgressRef.current,
+        [action.questId]: {
+          status:  'completed' as const,
+          current: questProgressRef.current[action.questId]?.current ?? 0,
+        },
+      };
+      questProgressRef.current = updated;
+      setQuestProgress(updated);
+      addLog('🏆 Задание завершено!');
+      setQuestDialogue(null);
+    }
+  }, [addLog]);
+
+  // ── NPC interact (called by the nearby-NPC Interact button) ──────────────
+  const handleNpcInteract = useCallback((npc: { id: string; name: string; emoji: string }) => {
+    const dlg = getNpcDialogue(npc.id, questProgressRef.current);
+    if (dlg) { setQuestDialogue(dlg); }
+    else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
+  }, []);
+
   // ── Reset current map (respawn in current location — keep all character progress) ──
   const resetCurrentMap = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
@@ -676,6 +792,15 @@ export default function App() {
   const currentMap = LOCATION_MAPS[currentLocation];
   const currentNpcs = LOCATION_NPCS[currentLocation] ?? [];
 
+  // Adjacent NPC — shows the Interact button when the player is 1 tile away
+  const nearbyNpc = (phase === 'explore' && !transitioning)
+    ? currentNpcs.find(n =>
+        Math.abs(n.x - playerPos.x) <= 1 &&
+        Math.abs(n.y - playerPos.y) <= 1 &&
+        !(n.x === playerPos.x && n.y === playerPos.y),
+      ) ?? null
+    : null;
+
   // ── Tile renderer ─────────────────────────────────────────────────────────
   const renderTileContent = (gx: number, gy: number, tileType: number) => {
     if (gx === playerPos.x && gy === playerPos.y)
@@ -787,7 +912,7 @@ export default function App() {
 
           {/* Персонаж button */}
           <button
-            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setSelectedItem(null); }}
+            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showCharPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {statPoints > 0 && (
@@ -798,7 +923,7 @@ export default function App() {
 
           {/* Инвентарь button */}
           <button
-            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setSelectedItem(null); }}
+            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showInventory ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {inventory.length > 0 && (
@@ -809,10 +934,21 @@ export default function App() {
 
           {/* Карта мира button */}
           <button
-            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setSelectedItem(null); }}
+            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showWorldMap ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             🗺
+          </button>
+
+          {/* Задания button */}
+          <button
+            onClick={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showQuestPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            {Object.values(questProgress).some(e => e.status === 'active') && (
+              <span className="w-[14px] h-[14px] rounded-full bg-[#c89628] text-[#111] text-[9px] font-black flex items-center justify-center leading-none">!</span>
+            )}
+            📜
           </button>
         </div>
       </div>
@@ -879,7 +1015,7 @@ export default function App() {
             </div>
           )}
 
-          {/* NPC dialog overlay */}
+          {/* Generic NPC dialog overlay (non-quest NPCs) */}
           {npcDialog && (
             <div className="absolute inset-0 z-[70] bg-black/80 flex flex-col items-center justify-center gap-3 rounded p-6">
               <p className="text-sm text-white text-center leading-relaxed">{npcDialog}</p>
@@ -888,6 +1024,43 @@ export default function App() {
                 className="px-4 py-1 rounded border border-primary text-primary text-sm font-bold">
                 Закрыть
               </button>
+            </div>
+          )}
+
+          {/* ══ NPC QUEST DIALOGUE OVERLAY (z-70) ══════════════════════════════
+              Rich modal: NPC lines + action buttons (Accept / Complete / Dismiss)
+          ═══════════════════════════════════════════════════════════════════ */}
+          {questDialogue && (
+            <div className="absolute inset-0 z-[70] bg-black/85 flex flex-col justify-end rounded px-3 pb-4 pt-14 backdrop-blur-[2px]">
+              <div className="w-full bg-[#0d0d16] border border-tile-border/80 rounded-xl shadow-2xl overflow-hidden">
+                {/* NPC name row */}
+                <div className="flex items-center gap-2 px-4 py-3 bg-[#111118] border-b border-tile-border/60">
+                  <span className="text-xl leading-none">{questDialogue.emoji}</span>
+                  <span className="text-sm font-bold text-primary tracking-wide">{questDialogue.name}</span>
+                </div>
+                {/* Dialogue lines */}
+                <div className="px-4 py-3 space-y-1">
+                  {questDialogue.lines.map((line, i) => (
+                    <p key={i} className="text-[12px] text-[#ccc] leading-relaxed italic">
+                      {i === 0 && '«'}{line}{i === questDialogue.lines.length - 1 && '»'}
+                    </p>
+                  ))}
+                </div>
+                {/* Action buttons */}
+                <div className="px-4 pb-4 pt-1 flex flex-col gap-[6px]">
+                  {questDialogue.buttons.map((btn, i) => (
+                    <button key={i}
+                      onClick={() => handleQuestAction(btn.action)}
+                      className={`w-full py-2 rounded-lg border font-bold text-[12px] active:scale-95 transition-transform ${
+                        btn.primary
+                          ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_rgba(200,150,42,0.2)]'
+                          : 'border-tile-border bg-[#111118] text-[#777]'
+                      }`}>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1178,6 +1351,91 @@ export default function App() {
             </div>
           )}
 
+          {/* ══ QUEST PANEL OVERLAY (z-60) ══════════════════════════════════════
+              Lists all quests, objectives, progress, rewards, and status.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showQuestPanel && (
+            <div className="absolute inset-0 z-[60] bg-[#08080d]/97 flex flex-col rounded backdrop-blur-md">
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-tile-border shrink-0">
+                <h2 className="text-base font-bold text-primary tracking-wide">📜 Задания</h2>
+                <button onClick={() => setShowQuestPanel(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-tile-border text-[#888] hover:text-white hover:border-primary transition-colors text-sm font-bold">✕</button>
+              </div>
+
+              {/* Quest list */}
+              <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+                {Object.values(QUEST_DEFS).map(def => {
+                  const entry    = getQuestEntry(questProgress, def.id);
+                  const pct      = Math.min(100, Math.round((entry.current / def.objective.required) * 100));
+                  const isDone   = entry.status === 'completed';
+                  const isActive = entry.status === 'active';
+                  return (
+                    <div key={def.id}
+                      className={`rounded-lg border px-3 py-3 ${
+                        isDone   ? 'border-green-800/50 bg-green-950/20' :
+                        isActive ? 'border-primary/40 bg-primary/5' :
+                                   'border-tile-border bg-[#111118]'
+                      }`}>
+
+                      {/* Title + status badge */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className={`text-[13px] font-bold leading-tight ${isDone ? 'text-green-400' : isActive ? 'text-primary' : 'text-[#aaa]'}`}>
+                          {def.title}
+                        </span>
+                        <span className={`shrink-0 text-[9px] font-bold uppercase px-[5px] py-[2px] rounded ${
+                          isDone   ? 'bg-green-900/50 text-green-400' :
+                          isActive ? 'bg-primary/20 text-primary' :
+                                     'bg-[#222] text-[#555]'
+                        }`}>
+                          {isDone ? '✓ Выполнено' : isActive ? 'Активно' : 'Неактивно'}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-[11px] text-[#555] mb-2 leading-snug">{def.description}</p>
+
+                      {/* Objective + progress bar */}
+                      {entry.status !== 'inactive' && (
+                        <div className="mb-2">
+                          <div className="flex justify-between text-[10px] mb-1">
+                            <span className="text-[#666]">{def.objective.description}</span>
+                            <span className={`font-mono font-bold ${isDone ? 'text-green-400' : 'text-[#aaa]'}`}>
+                              {entry.current} / {def.objective.required}
+                            </span>
+                          </div>
+                          <div className="h-[4px] bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${isDone ? 'bg-green-600' : 'bg-primary'}`}
+                              style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Rewards */}
+                      <div className="flex items-center flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-tile-border/30">
+                        <span className="text-[9px] text-[#444] font-bold uppercase tracking-wide">Награда:</span>
+                        <span className="text-[10px] text-yellow-400 font-bold">💰 {def.reward.gold}</span>
+                        <span className="text-[10px] text-[#38bdf8] font-bold">✨ {def.reward.xp} опыта</span>
+                        {(def.reward.items ?? []).map(key => (
+                          <span key={key} className="text-[10px] text-[#aaa] font-bold">
+                            🗡️ {ITEM_CATALOG[key]?.name ?? key}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {Object.keys(QUEST_DEFS).length === 0 && (
+                  <p className="text-center text-[#444] text-sm py-8">Заданий пока нет</p>
+                )}
+              </div>
+
+            </div>
+          )}
+
           {/* ══ WORLD MAP OVERLAY  (z-60) ══════════════════════════════════════
               Shows all 5 locations as a visual graph.
               Connected locations are clickable; unreachable ones are dimmed.
@@ -1288,6 +1546,17 @@ export default function App() {
 
         </div>
       </div>
+
+      {/* ══ INTERACT BUTTON — shown when adjacent to an NPC in explore mode ══ */}
+      {nearbyNpc && (
+        <div className="shrink-0 flex items-center justify-center py-[5px] border-t border-tile-border/30 bg-[#09090e] animate-in fade-in duration-150">
+          <button
+            onClick={() => handleNpcInteract(nearbyNpc)}
+            className="flex items-center gap-2 px-5 py-[5px] rounded-lg border border-primary/50 bg-primary/10 text-primary font-bold text-[12px] active:scale-95 transition-all shadow-[0_0_8px_rgba(200,150,42,0.12)]">
+            💬 Говорить · {nearbyNpc.emoji} {nearbyNpc.name}
+          </button>
+        </div>
+      )}
 
       {/* ══ 3. D-PAD ══ */}
       <div className="h-[140px] shrink-0 flex flex-col items-center justify-center border-t border-tile-border/50 bg-[#0c0c10]">
