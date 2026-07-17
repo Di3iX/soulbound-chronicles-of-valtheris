@@ -494,6 +494,10 @@ export default function App() {
   // These two have no paired state→ref sync in callbacks, so we track them explicitly:
   const inventoryRef       = useRef<Item[]>(sv?.inventory        ?? []);
   const xpToNextRef        = useRef(sv?.xpToNext                 ?? xpRequired(INITIAL_PLAYER_LVL));
+  // Prevents the auto-save from firing on the very first render (initial mount).
+  // On mount the game either restores a save (sv != null) or starts fresh —
+  // either way there is nothing new to persist yet.
+  const hasMountedRef      = useRef(false);
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -519,55 +523,31 @@ export default function App() {
   useEffect(() => { inventoryRef.current       = inventory;     }, [inventory]);
   useEffect(() => { xpToNextRef.current        = xpToNext;      }, [xpToNext]);
 
-  // ── Auto-save (debounced 400 ms after any saveable state change) ───────────
-  // NOTE: this is complemented by the beforeunload handler below so that
-  // refreshing the page never cancels a pending save.
+  // ── Auto-save: immediate write on any meaningful state change ──────────────
+  // Rules:
+  //   1. Skip the very first render — nothing has changed yet, and we must not
+  //      write an empty/default player over a just-loaded save.
+  //   2. After mount, every dependency change (XP, gold, HP, position, level,
+  //      inventory, equipment …) triggers an immediate localStorage write so the
+  //      save is always current.  No debounce means no pending timeout that a
+  //      page refresh could cancel.
   useEffect(() => {
-    const t = setTimeout(() => {
-      saveGame({
-        version: SAVE_VERSION,
-        playerLevel, playerXp, xpToNext, playerGold,
-        playerBonusDmg, levelHpBonus,
-        playerHp, playerMaxHp,
-        stats, statPoints,
-        inventory, equipment, equipBonuses,
-        playerPos, currentLocation, enemies,
-      });
-    }, 400);
-    return () => clearTimeout(t);
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return; // first render — load path already handled by sv initializer
+    }
+    saveGame({
+      version: SAVE_VERSION,
+      playerLevel, playerXp, xpToNext, playerGold,
+      playerBonusDmg, levelHpBonus,
+      playerHp, playerMaxHp,
+      stats, statPoints,
+      inventory, equipment, equipBonuses,
+      playerPos, currentLocation, enemies,
+    });
   }, [playerLevel, playerXp, xpToNext, playerGold, playerBonusDmg, levelHpBonus,
       playerHp, playerMaxHp, stats, statPoints, inventory, equipment, equipBonuses,
       playerPos, currentLocation, enemies]);
-
-  // ── Synchronous save on page close / refresh ──────────────────────────────
-  // The debounced effect above is cancelled by React's cleanup when the page
-  // unloads.  This handler fires BEFORE the page disappears and writes the
-  // most current state from refs (which are always up-to-date).
-  useEffect(() => {
-    const onUnload = () => {
-      saveGame({
-        version:         SAVE_VERSION,
-        playerLevel:     playerLevelRef.current,
-        playerXp:        playerXpRef.current,
-        xpToNext:        xpToNextRef.current,
-        playerGold:      playerGoldRef.current,
-        playerBonusDmg:  playerBonusDmgRef.current,
-        levelHpBonus:    levelHpBonusRef.current,
-        playerHp:        playerHpRef.current,
-        playerMaxHp:     playerMaxHpRef.current,
-        stats:           statsRef.current,
-        statPoints:      statPointsRef.current,
-        inventory:       inventoryRef.current,
-        equipment:       equipmentRef.current,
-        equipBonuses:    equipBonusesRef.current,
-        playerPos:       playerPosRef.current,
-        currentLocation: currentLocationRef.current,
-        enemies:         enemiesRef.current,
-      });
-    };
-    window.addEventListener('beforeunload', onUnload);
-    return () => window.removeEventListener('beforeunload', onUnload);
-  }, []); // empty deps — uses refs, always current
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const addLog = useCallback((msg: string) => {
