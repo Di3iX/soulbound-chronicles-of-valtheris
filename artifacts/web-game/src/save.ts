@@ -4,6 +4,7 @@ import type { Equipment, EquipBonuses } from './equipment';
 import type { LocationId, Enemy } from './combat';
 import type { QuestProgress } from './quests/quests';
 import type { SkillProgress } from './skills/skillTree';
+import type { BossState } from './boss/boss';
 interface Stats  { strength: number; agility: number; endurance: number; }
 
 export interface SaveData {
@@ -30,6 +31,8 @@ export interface SaveData {
   skillProgress?:  SkillProgress;
   /** Optional — missing in old saves; defaults to 0 on load. */
   skillPoints?:    number;
+  /** Optional — missing in old saves; defaults to INITIAL_BOSS_STATE on load. */
+  bossState?:      BossState;
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';

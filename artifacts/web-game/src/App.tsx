@@ -27,6 +27,11 @@ import ShopPanel from './shop/ShopPanel';
 import { ALL_SKILLS_MAP, SKILL_POINTS_PER_LEVEL } from './skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
+import {
+  BOSS_ID, CAVE_BOSS_DEF, BOSS_REWARD, BOSS_RARE_CHANCE, BOSS_RARE_LOOT, BOSS_COMMON_LOOT,
+  BossState, BossRewardInfo, INITIAL_BOSS_STATE, makeBossTrophy,
+} from './boss/boss';
+import BossVictoryPanel from './boss/BossVictoryPanel';
 
 const INITIAL_PLAYER_HP      = 100;
 const INITIAL_PLAYER_LVL     = 1;
@@ -100,6 +105,12 @@ export default function App() {
   const [skillProgress, setSkillProgress]     = useState<SkillProgress>(sv?.skillProgress ?? {});
   const [skillPoints, setSkillPoints]         = useState(sv?.skillPoints ?? 0);
   const [showSkillPanel, setShowSkillPanel]   = useState(false);
+  const [bossState, setBossState]             = useState<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
+  const [bossSpawnedThisVisit, setBossSpawnedThisVisit]   = useState<boolean>(() => (sv?.enemies ?? []).some(e => e.id === BOSS_ID));
+  const [bossDefeatedThisVisit, setBossDefeatedThisVisit] = useState<boolean>(() => (sv?.enemies ?? []).find(e => e.id === BOSS_ID)?.dead === true);
+  const [bossAppearNotif, setBossAppearNotif] = useState(false);
+  const [showBossVictory, setShowBossVictory] = useState(false);
+  const [bossRewardInfo, setBossRewardInfo]   = useState<BossRewardInfo | null>(null);
 
   // ── Refs (initialised from save so callbacks see correct values immediately) ─
   const playerHpRef        = useRef(sv?.playerHp         ?? calcMaxHp(0, INITIAL_STATS.endurance));
@@ -127,6 +138,9 @@ export default function App() {
   const skillProgressRef   = useRef<SkillProgress>(sv?.skillProgress ?? {});
   const skillPointsRef     = useRef(sv?.skillPoints ?? 0);
   const skillBonusesRef    = useRef<SkillBonuses>(calcSkillBonuses(sv?.skillProgress ?? {}));
+  const bossStateRef              = useRef<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
+  const bossSpawnedThisVisitRef   = useRef<boolean>((sv?.enemies ?? []).some(e => e.id === BOSS_ID));
+  const bossDefeatedThisVisitRef  = useRef<boolean>((sv?.enemies ?? []).find(e => e.id === BOSS_ID)?.dead === true);
   // Prevents the auto-save from firing on the very first render (initial mount).
   // On mount the game either restores a save (sv != null) or starts fresh —
   // either way there is nothing new to persist yet.
@@ -159,6 +173,9 @@ export default function App() {
   useEffect(() => { skillProgressRef.current   = skillProgress; }, [skillProgress]);
   useEffect(() => { skillPointsRef.current     = skillPoints;   }, [skillPoints]);
   useEffect(() => { skillBonusesRef.current    = calcSkillBonuses(skillProgress); }, [skillProgress]);
+  useEffect(() => { bossStateRef.current              = bossState;            }, [bossState]);
+  useEffect(() => { bossSpawnedThisVisitRef.current   = bossSpawnedThisVisit; }, [bossSpawnedThisVisit]);
+  useEffect(() => { bossDefeatedThisVisitRef.current  = bossDefeatedThisVisit;}, [bossDefeatedThisVisit]);
 
   // ── Auto-save: immediate write on any meaningful state change ──────────────
   // Rules:
@@ -182,6 +199,7 @@ export default function App() {
       playerPos, currentLocation, enemies,
       questProgress,
       skillProgress, skillPoints,
+      bossState,
     });
   }, [playerLevel, playerXp, xpToNext, playerGold, playerBonusDmg, levelHpBonus,
       playerHp, playerMaxHp, stats, statPoints, inventory, equipment, equipBonuses,
@@ -353,6 +371,97 @@ export default function App() {
     return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: newStatPts, droppedItem };
   }, [addLog, rollLoot]);
 
+  // ── Cave Boss: spawn after all normal enemies die ─────────────────────────
+  const spawnCaveBoss = useCallback(() => {
+    const bossEnemy: Enemy = { ...CAVE_BOSS_DEF, id: BOSS_ID };
+    bossSpawnedThisVisitRef.current = true;
+    setBossSpawnedThisVisit(true);
+    enemiesRef.current = [...enemiesRef.current, bossEnemy];
+    setEnemies(prev => [...prev, bossEnemy]);
+    phaseRef.current = 'explore';
+    setPhase('explore');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossAppearNotif(true);
+    setTimeout(() => setBossAppearNotif(false), 3500);
+    addLog('⚔️ Появился Босс: Главарь гоблинов!');
+  }, [addLog]);
+
+  // ── Cave Boss: handle kill + rewards ──────────────────────────────────────
+  const handleBossDeath = useCallback(() => {
+    // Enemy already marked dead + player position already set by handleEnemyDeath
+    addLog('👑 Главарь гоблинов повержен!');
+
+    // Gold
+    playerGoldRef.current += BOSS_REWARD.gold;
+    setPlayerGold(playerGoldRef.current);
+    addLog(`💰 Получено ${BOSS_REWARD.gold} золота!`);
+
+    // XP with Wisdom bonus
+    const xpGained = Math.floor(BOSS_REWARD.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    addLog(`✨ Получено ${xpGained} опыта!`);
+
+    // Level-up logic (mirrors applyRewards)
+    let newXp       = playerXpRef.current + xpGained;
+    let newLevel    = playerLevelRef.current;
+    let newBonusDmg = playerBonusDmgRef.current;
+    let hpDelta     = 0, newStatPts = 0, newSkillPts = 0, leveledUp = false;
+    let needed      = xpRequired(newLevel);
+    while (newXp >= needed) {
+      newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
+      newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL;
+      needed = xpRequired(newLevel); leveledUp = true;
+    }
+    const newLvHpBonus = levelHpBonusRef.current + hpDelta;
+    const newMaxHp = calcMaxHp(newLvHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp)
+                   + skillBonusesRef.current.bonusHp;
+    playerLevelRef.current  = newLevel;  playerBonusDmgRef.current = newBonusDmg;
+    levelHpBonusRef.current = newLvHpBonus; playerMaxHpRef.current = newMaxHp;
+    playerXpRef.current     = newXp;
+    setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
+    setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLvHpBonus); setPlayerMaxHp(newMaxHp);
+    if (newStatPts > 0) { statPointsRef.current += newStatPts; setStatPoints(p => p + newStatPts); addLog(`🎯 +${newStatPts} очка характеристик!`); }
+    if (newSkillPts > 0) { skillPointsRef.current += newSkillPts; setSkillPoints(p => p + newSkillPts); addLog(`⭐ +${newSkillPts} очко умений!`); }
+    if (leveledUp) { playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp); addLog(`🌟 Новый уровень ${newLevel}! HP восстановлено!`); }
+
+    // Guaranteed item drop (25% rare, 75% common/uncommon pool)
+    const isRare    = Math.random() < BOSS_RARE_CHANCE;
+    const dropPool  = isRare ? [...BOSS_RARE_LOOT] : [...BOSS_COMMON_LOOT];
+    const dropKey   = dropPool[Math.floor(Math.random() * dropPool.length)];
+    const dropItem  = makeItem(dropKey);
+    inventoryRef.current = [...inventoryRef.current, dropItem];
+    setInventory(prev => [...prev, dropItem]);
+    setLootNotif(dropItem.name);
+    setTimeout(() => setLootNotif(null), 2500);
+    addLog(`📦 Получен лут: ${dropItem.name}!`);
+
+    // Trophy — first kill only
+    const wasFirstKill = !bossStateRef.current.caveChief.firstKillDone;
+    let trophyItem: Item | undefined;
+    if (wasFirstKill) {
+      trophyItem = makeBossTrophy();
+      inventoryRef.current = [...inventoryRef.current, trophyItem];
+      setInventory(prev => [...prev, trophyItem!]);
+      addLog('🏆 Получен трофей: Трофей главаря гоблинов!');
+      const newBS: BossState = { caveChief: { firstKillDone: true } };
+      bossStateRef.current = newBS;
+      setBossState(newBS);
+      addLog('🏛️ Руины разблокированы! Путь на восток открыт.');
+    }
+
+    // Flags
+    bossDefeatedThisVisitRef.current = true;
+    setBossDefeatedThisVisit(true);
+
+    // Show boss victory overlay
+    phaseRef.current = 'final-victory';
+    setPhase('final-victory');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossRewardInfo({ xp: xpGained, gold: BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
+    setShowBossVictory(true);
+  }, [addLog]);
+
   // ── Enemy death ──────────────────────────────────────────────────────────
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string) => {
     phaseRef.current = 'victory';
@@ -364,6 +473,9 @@ export default function App() {
     playerPosRef.current = { x: ex, y: ey };
     setPlayerPos({ x: ex, y: ey });
     addLog(`💀 ${name} повержен!`);
+
+    // Boss intercept — rewards and victory handled separately
+    if (id === BOSS_ID) { handleBossDeath(); return; }
 
     const reward = applyRewards(name);
     setLastKillReward(reward);
@@ -389,9 +501,14 @@ export default function App() {
 
     const allDead = enemiesRef.current.every(e => e.dead);
     if (allDead) {
-      phaseRef.current = 'final-victory'; setPhase('final-victory');
-      setActiveEnemyId(null); activeEnemyIdRef.current = null;
-      addLog('🏆 Все враги побеждены!');
+      // Cave: spawn the boss after all normal enemies die (once per visit)
+      if (currentLocationRef.current === 'cave' && !bossSpawnedThisVisitRef.current) {
+        spawnCaveBoss();
+      } else {
+        phaseRef.current = 'final-victory'; setPhase('final-victory');
+        setActiveEnemyId(null); activeEnemyIdRef.current = null;
+        addLog('🏆 Все враги побеждены!');
+      }
     } else {
       setPhase('victory');
       setTimeout(() => {
@@ -401,7 +518,7 @@ export default function App() {
         }
       }, 1500);
     }
-  }, [addLog, applyRewards]);
+  }, [addLog, applyRewards, handleBossDeath, spawnCaveBoss]);
 
   // ── Location transition ───────────────────────────────────────────────────
   const handleLocationTransition = useCallback((to: LocationId, spawnAt: { x: number; y: number }) => {
@@ -428,6 +545,13 @@ export default function App() {
       setFloatingNums([]);
       setTransitioning(false);
       addLog(`📍 Вы прибыли: ${LOCATION_META[to].label}`);
+      // Cave: reset boss visit flags on (re-)entry so the boss can spawn again
+      if (to === 'cave') {
+        bossSpawnedThisVisitRef.current = false;
+        setBossSpawnedThisVisit(false);
+        bossDefeatedThisVisitRef.current = false;
+        setBossDefeatedThisVisit(false);
+      }
       // Restore full HP when entering a safe zone
       if (getLocation(to).isSafeZone) {
         const fullHp = playerMaxHpRef.current;
@@ -466,7 +590,15 @@ export default function App() {
     if (tileType === 4) {
       const exits = LOCATION_EXITS[currentLocationRef.current];
       const exit = exits?.get(`${nx},${ny}`);
-      if (exit) { handleLocationTransition(exit.to, exit.spawnAt); return; }
+      if (exit) {
+        // Block Cave → Ruins until Goblin Chief has been defeated for the first time
+        if (currentLocationRef.current === 'cave' && exit.to === 'ruins' && !bossStateRef.current.caveChief.firstKillDone) {
+          addLog('⚠️ Путь заблокирован! Победите Главаря гоблинов, чтобы пройти в Руины.');
+          return;
+        }
+        handleLocationTransition(exit.to, exit.spawnAt);
+        return;
+      }
     }
     if (tileType !== 0) { addLog('Путь заблокирован!'); return; }
     playerPosRef.current = { x: nx, y: ny }; setPlayerPos({ x: nx, y: ny });
@@ -825,6 +957,7 @@ export default function App() {
     setShowCharPanel(false);
     setShowShop(false);
     setShowSkillPanel(false);
+    setShowBossVictory(false);
     setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
 
     // ── Character progress intentionally NOT reset: ──────────────────────────
@@ -860,7 +993,10 @@ export default function App() {
     equipmentRef.current       = { ...EMPTY_EQUIPMENT };
     equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
     inventoryRef.current       = [];
-    currentLocationRef.current = 'village';
+    currentLocationRef.current           = 'village';
+    bossStateRef.current                  = INITIAL_BOSS_STATE;
+    bossSpawnedThisVisitRef.current       = false;
+    bossDefeatedThisVisitRef.current      = false;
 
     // Reset state
     setPhase('explore');
@@ -883,6 +1019,10 @@ export default function App() {
     setStatPoints(0);
     setSkillProgress({});
     setSkillPoints(0);
+    setBossState(INITIAL_BOSS_STATE);
+    setBossSpawnedThisVisit(false);
+    setBossDefeatedThisVisit(false);
+    setShowBossVictory(false);
     setEquipment({ ...EMPTY_EQUIPMENT });
     setInventory([]);
     setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
@@ -929,8 +1069,24 @@ export default function App() {
     if (gx === playerPos.x && gy === playerPos.y)
       return <div className="w-full h-full tile-player rounded flex items-center justify-center text-lg z-10 relative">🧝</div>;
     const enemy = livingEnemies.find(e => e.x === gx && e.y === gy);
-    if (enemy)
-      return <div className={`w-full h-full rounded flex items-center justify-center text-lg z-10 relative ${enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle'}`}>{enemy.emoji}</div>;
+    if (enemy) {
+      const isBoss = enemy.id === BOSS_ID;
+      return (
+        <div className={[
+          'w-full h-full rounded flex items-center justify-center z-10 relative',
+          isBoss ? 'text-2xl' : 'text-lg',
+          enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle',
+          isBoss ? 'ring-2 ring-red-600/60 ring-inset' : '',
+        ].join(' ')}>
+          {enemy.emoji}
+          {isBoss && (
+            <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[7px] font-black text-red-400 whitespace-nowrap uppercase tracking-wider leading-none pointer-events-none drop-shadow">
+              БОСС
+            </span>
+          )}
+        </div>
+      );
+    }
     const npc = currentNpcs.find(n => n.x === gx && n.y === gy);
     if (npc) return <div className="w-full h-full tile-npc flex items-center justify-center text-sm">{npc.emoji}</div>;
     if (tileType === 4) {
@@ -991,12 +1147,17 @@ export default function App() {
           <div className="flex flex-col w-[45%]">
             {activeEnemy ? (
               <>
+                {activeEnemy.id === BOSS_ID && (
+                  <div className="flex justify-center mb-[2px]">
+                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest animate-pulse">👑 БОСС</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-end mb-1">
-                  <span className="text-xs text-destructive font-mono">{activeEnemy.hp}/{activeEnemy.maxHp}</span>
+                  <span className={`text-xs font-mono ${activeEnemy.id === BOSS_ID ? 'text-red-400' : 'text-destructive'}`}>{activeEnemy.hp}/{activeEnemy.maxHp}</span>
                   <span className="text-sm font-bold text-white tracking-wide">{activeEnemy.emoji} {activeEnemy.name}</span>
                 </div>
                 <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
-                  <div className="h-full bg-destructive transition-all duration-300"
+                  <div className={`h-full transition-all duration-300 ${activeEnemy.id === BOSS_ID ? 'bg-red-600' : 'bg-destructive'}`}
                     style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
                 </div>
               </>
@@ -1121,12 +1282,30 @@ export default function App() {
           {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 &&
             activeEnemy.x >= camCol && activeEnemy.x < camCol + VP_COLS &&
             activeEnemy.y >= camRow && activeEnemy.y < camRow + VP_ROWS && (
-            <div className="absolute pointer-events-none z-20 flex justify-center"
-              style={{ top: `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`, left: `${((activeEnemy.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
-              <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
-                <div className="h-full bg-destructive" style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+            activeEnemy.id === BOSS_ID ? (
+              // Boss HP bar — wider, red gradient, name above
+              <div className="absolute pointer-events-none z-20 flex flex-col items-center"
+                style={{
+                  top:        `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`,
+                  left:       `${Math.max(0, (activeEnemy.x - camCol - 1) / VP_COLS) * 100}%`,
+                  width:      `${(3 / VP_COLS) * 100}%`,
+                  marginTop:  '-20px',
+                }}>
+                <span className="text-[7px] font-black text-red-400 uppercase tracking-wide mb-[2px] leading-none drop-shadow-md">{activeEnemy.name}</span>
+                <div className="w-full h-[5px] bg-[#1a1a1f] border border-red-900/60 rounded-full overflow-hidden shadow-[0_0_4px_rgba(220,38,38,0.5)]">
+                  <div className="h-full bg-red-600 transition-all duration-300"
+                    style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                </div>
               </div>
-            </div>
+            ) : (
+              // Normal enemy HP bar
+              <div className="absolute pointer-events-none z-20 flex justify-center"
+                style={{ top: `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`, left: `${((activeEnemy.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
+                <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
+                  <div className="h-full bg-destructive" style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                </div>
+              </div>
+            )
           )}
 
           {/* Floating numbers — camera-relative, only in viewport */}
@@ -1142,6 +1321,17 @@ export default function App() {
               {num.value}
             </div>
           ))}
+
+          {/* Boss appear notification */}
+          {bossAppearNotif && (
+            <div className="absolute inset-x-0 z-[55] flex justify-center pointer-events-none" style={{ top: '28%' }}>
+              <div className="bg-black/90 border-2 border-red-600 rounded-xl px-6 py-4 mx-4 text-center shadow-[0_0_30px_rgba(220,38,38,0.5)] animate-in fade-in duration-300">
+                <p className="text-red-500 text-[10px] font-bold uppercase tracking-widest mb-1">⚔️ Появился Босс</p>
+                <p className="text-white text-lg font-black tracking-wide">👑 Главарь гоблинов</p>
+                <p className="text-red-400/70 text-[10px] mt-1 font-mono">750 HP · Урон ×2 · Скорость +20%</p>
+              </div>
+            </div>
+          )}
 
           {/* Transition overlay */}
           {transitioning && (
@@ -1233,8 +1423,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Final victory */}
-          {phase === 'final-victory' && (
+          {/* Final victory (normal — boss victory handled by BossVictoryPanel below) */}
+          {phase === 'final-victory' && !showBossVictory && (
             <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
               <h2 className="text-3xl font-bold text-primary mb-2 drop-shadow-lg">🏆 ПОБЕДА!</h2>
               <p className="text-white/80 mb-1 font-medium">Все враги повержены!</p>
@@ -1250,6 +1440,18 @@ export default function App() {
                 Играть снова
               </button>
             </div>
+          )}
+
+          {/* Boss Victory Panel — shown instead of regular final-victory after boss kill */}
+          {showBossVictory && bossRewardInfo && (
+            <BossVictoryPanel
+              reward={bossRewardInfo}
+              onContinue={() => {
+                setShowBossVictory(false);
+                phaseRef.current = 'explore';
+                setPhase('explore');
+              }}
+            />
           )}
 
           {/* Defeat */}
