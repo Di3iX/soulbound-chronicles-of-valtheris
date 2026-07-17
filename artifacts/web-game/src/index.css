@@ -80,7 +80,7 @@
   background-color: #221818;
   border: 1px solid #4a2020;
 }
-/* Exit tile — blue glow pulse */
+/* Exit tile — generic fallback (blue glow) */
 .tile-exit {
   background-color: #0d1a2e;
   border: 1px solid #2563eb;
@@ -90,6 +90,74 @@
 @keyframes exitPulse {
   0%, 100% { box-shadow: inset 0 0 6px rgba(37, 99, 235, 0.4); }
   50%       { box-shadow: inset 0 0 14px rgba(37, 99, 235, 0.85), 0 0 6px rgba(37, 99, 235, 0.3); }
+}
+
+/* ── Themed exit tiles ───────────────────────────────────────────────────── */
+
+/* Dirt road: Village ↔ Forest — warm earthy amber pulse */
+.tile-exit-road {
+  background-color: #2d1e0d;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 3px,
+    rgba(90,60,20,0.25) 3px,
+    rgba(90,60,20,0.25) 4px
+  );
+  border: 1px solid #7a5228;
+  animation: roadPulse 2.4s ease-in-out infinite;
+}
+@keyframes roadPulse {
+  0%, 100% { box-shadow: inset 0 0 6px rgba(140, 90, 30, 0.4); }
+  50%       { box-shadow: inset 0 0 14px rgba(180,120, 40, 0.7), 0 0 5px rgba(160,100,30,0.3); }
+}
+
+/* Cave entrance/exit: Forest ↔ Cave — cold rocky dark pulse */
+.tile-exit-cave {
+  background-color: #0e0e14;
+  background-image: radial-gradient(ellipse at center, #1a1a24 30%, #0a0a10 100%);
+  border: 1px solid #3a3050;
+  animation: cavePulse 3s ease-in-out infinite;
+}
+@keyframes cavePulse {
+  0%, 100% { box-shadow: inset 0 0 8px rgba(60, 40, 100, 0.5); }
+  50%       { box-shadow: inset 0 0 18px rgba(80, 55, 130, 0.75), 0 0 6px rgba(60,40,100,0.25); }
+}
+
+/* Stone stairs/gate: Cave ↔ Ruins — ancient stone amber glow */
+.tile-exit-ruins {
+  background-color: #1c1810;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 4px,
+    rgba(100,80,40,0.2) 4px,
+    rgba(100,80,40,0.2) 5px
+  );
+  border: 1px solid #6b5230;
+  animation: ruinsPulse 2.8s ease-in-out infinite;
+}
+@keyframes ruinsPulse {
+  0%, 100% { box-shadow: inset 0 0 6px rgba(130, 95, 40, 0.4); }
+  50%       { box-shadow: inset 0 0 16px rgba(160,115,50,0.65), 0 0 5px rgba(130,95,40,0.25); }
+}
+
+/* Wooden bridge/muddy path: Forest ↔ Swamp — murky swamp green pulse */
+.tile-exit-bridge {
+  background-color: #141d0e;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(50,80,20,0.2) 3px,
+    rgba(50,80,20,0.2) 4px
+  );
+  border: 1px solid #3a5c20;
+  animation: bridgePulse 2.6s ease-in-out infinite;
+}
+@keyframes bridgePulse {
+  0%, 100% { box-shadow: inset 0 0 7px rgba(50, 100, 25, 0.45); }
+  50%       { box-shadow: inset 0 0 16px rgba(65, 130, 30, 0.7), 0 0 5px rgba(50,100,25,0.25); }
 }
 /* NPC tile — amber border */
 .tile-npc {

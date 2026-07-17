@@ -685,7 +685,30 @@ export default function App() {
       return <div className={`w-full h-full rounded flex items-center justify-center text-lg z-10 relative ${enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle'}`}>{enemy.emoji}</div>;
     const npc = currentNpcs.find(n => n.x === gx && n.y === gy);
     if (npc) return <div className="w-full h-full tile-npc flex items-center justify-center text-sm">{npc.emoji}</div>;
-    if (tileType === 4) return <div className="w-full h-full tile-exit flex items-center justify-center text-sm">🚪</div>;
+    if (tileType === 4) {
+      // Look up which destination this exit leads to, then render themed tile.
+      const exitDef = LOCATION_EXITS[currentLocation]?.get(`${gx},${gy}`);
+      const dest    = exitDef?.to;
+      const src     = currentLocation;
+      // Dirt road: Village ↔ Forest
+      if ((src === 'village' && dest === 'forest') || (src === 'forest' && dest === 'village'))
+        return <div className="w-full h-full tile-exit-road  flex items-center justify-center text-sm" title="Дорога в лес">🛤️</div>;
+      // Cave entrance / exit: Forest ↔ Cave
+      if (src === 'forest' && dest === 'cave')
+        return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Вход в пещеру">🕳️</div>;
+      if (src === 'cave'   && dest === 'forest')
+        return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Выход из пещеры">⛰️</div>;
+      // Stone stairs / ruined gate: Cave ↔ Ruins
+      if (src === 'cave'  && dest === 'ruins')
+        return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Врата руин">🏛️</div>;
+      if (src === 'ruins' && dest === 'cave')
+        return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Разрушенная лестница">🪜</div>;
+      // Wooden bridge / muddy path: Forest ↔ Swamp
+      if ((src === 'forest' && dest === 'swamp') || (src === 'swamp' && dest === 'forest'))
+        return <div className="w-full h-full tile-exit-bridge flex items-center justify-center text-sm" title="Мост в болото">🌉</div>;
+      // Fallback — should never be reached with current map data
+      return <div className="w-full h-full tile-exit flex items-center justify-center text-sm">🚪</div>;
+    }
     if (tileType === 1) return <div className="w-full h-full tile-tree  flex items-center justify-center text-sm">🌲</div>;
     if (tileType === 2) return <div className="w-full h-full tile-rock  flex items-center justify-center text-sm">🪨</div>;
     if (tileType === 3) return <div className="w-full h-full tile-water flex items-center justify-center text-blue-400 text-xs font-bold tracking-tighter opacity-80">〰</div>;
