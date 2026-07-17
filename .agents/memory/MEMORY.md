@@ -1,1 +1,2 @@
 - [Boss system architecture](boss-system.md) — BOSS_ID=9999, boss defined in boss/boss.ts; never modify combat.ts/inventory.ts/skills/ for boss logic
+- [Stats architecture v0.1.4](stats-architecture.md) — computeStats() is single source of truth for all derived stats; BaseStats has vitality (not endurance)

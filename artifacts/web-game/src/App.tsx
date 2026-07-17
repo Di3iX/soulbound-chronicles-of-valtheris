@@ -13,8 +13,12 @@ import {
 import {
   LocationId, Phase, Enemy, KillReward,
   SKILLS, STAT_POINTS_PER_LEVEL, REWARD_TABLE,
-  xpRequired, calcAttackInterval, makeLocationEnemies,
+  xpRequired, makeLocationEnemies,
 } from './combat';
+import {
+  BaseStats, ComputedStats, INITIAL_BASE_STATS, INITIAL_HP,
+  computeStats, StatsInput,
+} from './stats';
 import {
   MAP_COLS, MAP_ROWS, VP_COLS, VP_ROWS,
   LOCATION_META, LOCATION_SPAWN, LOCATION_EXITS, LOCATION_MAPS, LOCATION_NPCS,
@@ -33,22 +37,10 @@ import {
 } from './boss/boss';
 import BossVictoryPanel from './boss/BossVictoryPanel';
 
-const INITIAL_PLAYER_HP      = 100;
-const INITIAL_PLAYER_LVL     = 1;
-const INITIAL_STATS          = { strength: 5, agility: 5, endurance: 5 };
-
-
-// ─── PURE HELPERS ─────────────────────────────────────────────────────────────
-
-/** Full player max HP. */
-function calcMaxHp(levelHpBonus: number, endurance: number, equipHp = 0): number {
-  return INITIAL_PLAYER_HP + levelHpBonus + endurance * 10 + equipHp;
-}
-
+const INITIAL_PLAYER_LVL = 1;
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
-
-interface Stats { strength: number; agility: number; endurance: number; }
+// BaseStats (strength / agility / vitality / intelligence) lives in ./stats
 type FloatingNum = { id: number; value: string; col: number; row: number; type: 'player-dmg' | 'enemy-dmg' | 'heal'; timestamp: number; };
 type LogEntry = { id: number; msg: string };
 
@@ -62,8 +54,8 @@ export default function App() {
   // ── Core state ─────────────────────────────────────────────────────────────
   const [phase, setPhase]                 = useState<Phase>('explore');
   const [playerPos, setPlayerPos]         = useState(sv?.playerPos        ?? LOCATION_SPAWN.village);
-  const [playerHp, setPlayerHp]           = useState(sv?.playerHp         ?? INITIAL_PLAYER_HP);
-  const [playerMaxHp, setPlayerMaxHp]     = useState(sv?.playerMaxHp      ?? calcMaxHp(0, INITIAL_STATS.endurance));
+  const [playerHp, setPlayerHp]           = useState(sv?.playerHp         ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
+  const [playerMaxHp, setPlayerMaxHp]     = useState(sv?.playerMaxHp      ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
   const [enemies, setEnemies]             = useState<Enemy[]>(sv?.enemies  ?? []);
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
   const [shieldActive, setShieldActive]   = useState(false);
@@ -81,7 +73,7 @@ export default function App() {
   const [lastKillReward, setLastKillReward] = useState<KillReward | null>(null);
 
   // ── Stats state ────────────────────────────────────────────────────────────
-  const [stats, setStats]               = useState<Stats>(sv?.stats         ?? { ...INITIAL_STATS });
+  const [stats, setStats]               = useState<BaseStats>(sv?.stats      ?? { ...INITIAL_BASE_STATS });
   const [statPoints, setStatPoints]     = useState(sv?.statPoints            ?? 0);
   const [showCharPanel, setShowCharPanel] = useState(false);
 
@@ -113,14 +105,14 @@ export default function App() {
   const [bossRewardInfo, setBossRewardInfo]   = useState<BossRewardInfo | null>(null);
 
   // ── Refs (initialised from save so callbacks see correct values immediately) ─
-  const playerHpRef        = useRef(sv?.playerHp         ?? calcMaxHp(0, INITIAL_STATS.endurance));
-  const playerMaxHpRef     = useRef(sv?.playerMaxHp      ?? calcMaxHp(0, INITIAL_STATS.endurance));
+  const playerHpRef        = useRef(sv?.playerHp    ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
+  const playerMaxHpRef     = useRef(sv?.playerMaxHp ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
   const shieldRef          = useRef(false);
   const phaseRef           = useRef<Phase>('explore');
   const playerPosRef       = useRef(sv?.playerPos         ?? LOCATION_SPAWN.village);
   const enemiesRef         = useRef<Enemy[]>(sv?.enemies  ?? []);
   const activeEnemyIdRef   = useRef<number | null>(null);
-  const statsRef           = useRef<Stats>(sv?.stats      ?? { ...INITIAL_STATS });
+  const statsRef           = useRef<BaseStats>(sv?.stats  ?? { ...INITIAL_BASE_STATS });
   const playerBonusDmgRef  = useRef(sv?.playerBonusDmg   ?? 0);
   const levelHpBonusRef    = useRef(sv?.levelHpBonus      ?? 0);
   const playerLevelRef     = useRef(sv?.playerLevel       ?? INITIAL_PLAYER_LVL);
@@ -215,15 +207,19 @@ export default function App() {
   }, []);
 
   // ── Stat spending ──────────────────────────────────────────────────────────
-  const spendStat = useCallback((stat: keyof Stats) => {
+  const spendStat = useCallback((stat: keyof BaseStats) => {
     if (statPointsRef.current <= 0) return;
     const newStats = { ...statsRef.current, [stat]: statsRef.current[stat] + 1 };
     statsRef.current = newStats;
     setStats(newStats);
     statPointsRef.current -= 1;
     setStatPoints(p => p - 1);
-    if (stat === 'endurance') {
-      const newMaxHp = calcMaxHp(levelHpBonusRef.current, newStats.endurance, equipBonusesRef.current.hp) + skillBonusesRef.current.bonusHp;
+    if (stat === 'vitality') {
+      const newMaxHp = computeStats({
+        base: newStats, levelHpBonus: levelHpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: skillBonusesRef.current,
+      }).maxHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
     }
@@ -251,8 +247,12 @@ export default function App() {
     equipBonusesRef.current = newBonuses;
     setEquipBonuses(newBonuses);
 
-    // Recalc max HP
-    const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, newBonuses.hp) + skillBonusesRef.current.bonusHp;
+    // Recalc max HP via central stats module
+    const newMaxHp = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
+      skills: skillBonusesRef.current,
+    }).maxHp;
     playerMaxHpRef.current = newMaxHp;
     setPlayerMaxHp(newMaxHp);
 
@@ -285,8 +285,12 @@ export default function App() {
     equipBonusesRef.current = newBonuses;
     setEquipBonuses(newBonuses);
 
-    // Recalc max HP
-    const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, newBonuses.hp) + skillBonusesRef.current.bonusHp;
+    // Recalc max HP via central stats module
+    const newMaxHp = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
+      skills: skillBonusesRef.current,
+    }).maxHp;
     playerMaxHpRef.current = newMaxHp;
     setPlayerMaxHp(newMaxHp);
 
@@ -341,7 +345,11 @@ export default function App() {
     }
 
     const newLevelHpBonus = levelHpBonusRef.current + hpBonusDelta;
-    const newMaxHp = calcMaxHp(newLevelHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp) + skillBonusesRef.current.bonusHp;
+    const newMaxHp = computeStats({
+      base: statsRef.current, levelHpBonus: newLevelHpBonus,
+      bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
+      skills: skillBonusesRef.current,
+    }).maxHp;
 
     playerLevelRef.current    = newLevel;
     playerBonusDmgRef.current = newBonusDmg;
@@ -413,8 +421,11 @@ export default function App() {
       needed = xpRequired(newLevel); leveledUp = true;
     }
     const newLvHpBonus = levelHpBonusRef.current + hpDelta;
-    const newMaxHp = calcMaxHp(newLvHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp)
-                   + skillBonusesRef.current.bonusHp;
+    const newMaxHp = computeStats({
+      base: statsRef.current, levelHpBonus: newLvHpBonus,
+      bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
+      skills: skillBonusesRef.current,
+    }).maxHp;
     playerLevelRef.current  = newLevel;  playerBonusDmgRef.current = newBonusDmg;
     levelHpBonusRef.current = newLvHpBonus; playerMaxHpRef.current = newMaxHp;
     playerXpRef.current     = newXp;
@@ -615,38 +626,40 @@ export default function App() {
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
 
-      // Damage includes level bonus, stat strength, equipment, and skill bonuses
-      const eb = equipBonusesRef.current;
-      const _base = Math.floor(Math.random() * 9) + 8
-                  + playerBonusDmgRef.current
-                  + (statsRef.current.strength + eb.strength) * 2
-                  + eb.damage;
-      const dmg = Math.floor(_base * (1 + skillBonusesRef.current.damagePct / 100));
+      // Compute all character stats from central module (pure, cheap)
+      const _cs = computeStats({
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: skillBonusesRef.current,
+      });
+      let dmg = Math.floor(Math.random() * (_cs.dmgMax - _cs.dmgMin + 1)) + _cs.dmgMin;
+      const isCrit = Math.random() * 100 < _cs.critChance;
+      if (isCrit) dmg = Math.floor(dmg * _cs.critDamageMult);
       const newHp = Math.max(0, enemy.hp - dmg);
 
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
       setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
-      spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
-      addLog(`⚔️ Воин наносит ${dmg} урона!`);
+      spawnFloat(isCrit ? `💥${dmg}` : dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
+      addLog(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона!`);
 
       if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name); return; }
 
       if (phaseRef.current === 'combat') {
-        const _baseI = calcAttackInterval(
-          statsRef.current.agility + equipBonusesRef.current.agility,
-          equipBonusesRef.current.atkSpeedPenalty
-        );
-        const interval = Math.max(500, Math.floor(_baseI * (1 - skillBonusesRef.current.attackSpeedPct / 100)));
-        playerAttackTimeout.current = setTimeout(doPlayerAttack, interval);
+        const _atkCs = computeStats({
+          base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+          bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+          skills: skillBonusesRef.current,
+        });
+        playerAttackTimeout.current = setTimeout(doPlayerAttack, _atkCs.attackInterval);
       }
     };
 
-    const _baseFirst = calcAttackInterval(
-      statsRef.current.agility + equipBonusesRef.current.agility,
-      equipBonusesRef.current.atkSpeedPenalty
-    );
-    const firstInterval = Math.max(500, Math.floor(_baseFirst * (1 - skillBonusesRef.current.attackSpeedPct / 100)));
-    playerAttackTimeout.current = setTimeout(doPlayerAttack, firstInterval);
+    const _firstCs = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+      bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+      skills: skillBonusesRef.current,
+    });
+    playerAttackTimeout.current = setTimeout(doPlayerAttack, _firstCs.attackInterval);
 
     const doEnemyAttack = () => {
       if (phaseRef.current !== 'combat') return;
@@ -654,10 +667,28 @@ export default function App() {
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
 
+      // Compute defensive stats
+      const _defCs = computeStats({
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: skillBonusesRef.current,
+      });
+      const pp = playerPosRef.current;
+
+      // Dodge check
+      if (Math.random() * 100 < _defCs.dodgeChance) {
+        spawnFloat('УКЛОН', pp.x, pp.y, 'heal');
+        addLog(`💨 Вы уклонились от атаки ${enemy.name}!`);
+        if (phaseRef.current === 'combat')
+          enemyAttackTimeout.current = setTimeout(doEnemyAttack, enemy.attackInterval);
+        return;
+      }
+
       let dmg = Math.floor(Math.random() * (enemy.dmgMax - enemy.dmgMin + 1)) + enemy.dmgMin;
       if (shieldRef.current) dmg = Math.ceil(dmg / 2);
+      // Defense mitigation: dmg × 100/(100+defense)
+      if (_defCs.defense > 0) dmg = Math.max(1, Math.floor(dmg * 100 / (100 + _defCs.defense)));
 
-      const pp = playerPosRef.current;
       spawnFloat(dmg.toString(), pp.x, pp.y, 'player-dmg');
       addLog(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!`);
 
@@ -783,7 +814,11 @@ export default function App() {
         newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
       }
       const newLevelHpBonus = levelHpBonusRef.current + hpDelta;
-      const newMaxHp = calcMaxHp(newLevelHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp) + skillBonusesRef.current.bonusHp;
+      const newMaxHp = computeStats({
+        base: statsRef.current, levelHpBonus: newLevelHpBonus,
+        bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
+        skills: skillBonusesRef.current,
+      }).maxHp;
       playerLevelRef.current    = newLevel;   playerBonusDmgRef.current = newBonusDmg;
       levelHpBonusRef.current   = newLevelHpBonus; playerMaxHpRef.current = newMaxHp;
       playerXpRef.current       = newXp;
@@ -914,7 +949,11 @@ export default function App() {
 
     // Iron Skin — recalculate max HP immediately
     if (skillId === 'iron_skin') {
-      const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, equipBonusesRef.current.hp) + newBonuses.bonusHp;
+      const newMaxHp = computeStats({
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: newBonuses,
+      }).maxHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
     }
@@ -972,7 +1011,7 @@ export default function App() {
 
     clearSave();
 
-    const initMaxHp = calcMaxHp(0, INITIAL_STATS.endurance);
+    const initMaxHp = INITIAL_HP + INITIAL_BASE_STATS.vitality * 10;
 
     // Reset refs immediately so any in-flight callbacks see correct values
     playerHpRef.current        = initMaxHp;
@@ -989,7 +1028,7 @@ export default function App() {
     xpToNextRef.current        = xpRequired(INITIAL_PLAYER_LVL);
     playerGoldRef.current      = 0;
     statPointsRef.current      = 0;
-    statsRef.current           = { ...INITIAL_STATS };
+    statsRef.current           = { ...INITIAL_BASE_STATS };
     equipmentRef.current       = { ...EMPTY_EQUIPMENT };
     equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
     inventoryRef.current       = [];
@@ -1015,7 +1054,7 @@ export default function App() {
     setPlayerGold(0);
     setPlayerBonusDmg(0);
     setLevelHpBonus(0);
-    setStats({ ...INITIAL_STATS });
+    setStats({ ...INITIAL_BASE_STATS });
     setStatPoints(0);
     setSkillProgress({});
     setSkillPoints(0);
@@ -1039,15 +1078,12 @@ export default function App() {
   const livingEnemies = enemies.filter(e => !e.dead);
   const xpPct         = Math.min(100, Math.round((playerXp / xpToNext) * 100));
 
-  // Character panel + inventory derived stats (include equipment)
-  const totalStr      = stats.strength + equipBonuses.strength;
-  const totalAgi      = stats.agility  + equipBonuses.agility;
-  const skillBonuses    = calcSkillBonuses(skillProgress);
-  const _dmgMult        = 1 + skillBonuses.damagePct / 100;
-  const dmgMin          = Math.floor((8  + playerBonusDmg + totalStr * 2 + equipBonuses.damage) * _dmgMult);
-  const dmgMax          = Math.floor((16 + playerBonusDmg + totalStr * 2 + equipBonuses.damage) * _dmgMult);
-  const _baseInterval   = calcAttackInterval(totalAgi, equipBonuses.atkSpeedPenalty);
-  const atkIntervalSec  = (Math.max(500, _baseInterval * (1 - skillBonuses.attackSpeedPct / 100)) / 1000).toFixed(1);
+  // All derived character stats — single source of truth from stats.ts
+  const skillBonuses = calcSkillBonuses(skillProgress);
+  const cs: ComputedStats = computeStats({
+    base: stats, levelHpBonus, bonusDmg: playerBonusDmg,
+    equip: equipBonuses, skills: skillBonuses,
+  });
 
   // ── Camera / viewport ─────────────────────────────────────────────────────
   const camCol    = Math.max(0, Math.min(MAP_COLS - VP_COLS, playerPos.x - Math.floor(VP_COLS / 2)));
@@ -1484,21 +1520,28 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1">
+
+                {/* Level + current HP */}
                 <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
                   <span className="text-[13px] text-[#888]">Уровень</span>
                   <span className="text-[13px] font-bold text-primary font-mono">{playerLevel}</span>
                 </div>
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">HP</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{Math.round(playerHp)} / {cs.maxHp}</span>
+                </div>
 
-                <p className="text-[10px] uppercase tracking-widest text-[#444] pt-2 pb-1 font-bold">Характеристики</p>
+                {/* ── Allocatable stats ── */}
+                <p className="text-[10px] uppercase tracking-widest text-[#444] pt-3 pb-1 font-bold">Характеристики</p>
 
-                {/* Сила */}
+                {/* Strength */}
                 <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
                   <div className="flex flex-col">
                     <span className="text-[13px] text-white font-medium">Сила</span>
-                    <span className="text-[10px] text-[#555]">+2 урона за очко{equipBonuses.strength > 0 ? ` (+${equipBonuses.strength} от брони)` : ''}</span>
+                    <span className="text-[10px] text-[#555]">+2 урона · +0.5 защита · +0.2% крит{equipBonuses.strength > 0 ? ` (+${equipBonuses.strength} экип.)` : ''}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-bold text-white font-mono w-10 text-right">
+                    <span className="text-[14px] font-bold text-white font-mono w-12 text-right">
                       {stats.strength}{equipBonuses.strength > 0 ? <span className="text-green-400 text-[11px]">+{equipBonuses.strength}</span> : ''}
                     </span>
                     <button disabled={statPoints === 0} onClick={() => spendStat('strength')}
@@ -1506,14 +1549,14 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Ловкость */}
+                {/* Agility */}
                 <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
                   <div className="flex flex-col">
                     <span className="text-[13px] text-white font-medium">Ловкость</span>
-                    <span className="text-[10px] text-[#555]">–3% интервала атаки{equipBonuses.agility > 0 ? ` (+${equipBonuses.agility} от брони)` : ''}</span>
+                    <span className="text-[10px] text-[#555]">−3% скор.атаки · +0.5% уклон{equipBonuses.agility > 0 ? ` (+${equipBonuses.agility} экип.)` : ''}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-bold text-white font-mono w-10 text-right">
+                    <span className="text-[14px] font-bold text-white font-mono w-12 text-right">
                       {stats.agility}{equipBonuses.agility > 0 ? <span className="text-green-400 text-[11px]">+{equipBonuses.agility}</span> : ''}
                     </span>
                     <button disabled={statPoints === 0} onClick={() => spendStat('agility')}
@@ -1521,35 +1564,74 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Выносливость */}
+                {/* Intelligence */}
                 <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
                   <div className="flex flex-col">
-                    <span className="text-[13px] text-white font-medium">Выносливость</span>
-                    <span className="text-[10px] text-[#555]">+10 макс. HP за очко</span>
+                    <span className="text-[13px] text-white font-medium">Интеллект</span>
+                    <span className="text-[10px] text-[#555]">+0.5% урона/очко{equipBonuses.intelligence > 0 ? ` (+${equipBonuses.intelligence} экип.)` : ''}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-bold text-white font-mono w-10 text-right">{stats.endurance}</span>
-                    <button disabled={statPoints === 0} onClick={() => spendStat('endurance')}
+                    <span className="text-[14px] font-bold text-white font-mono w-12 text-right">
+                      {stats.intelligence}{equipBonuses.intelligence > 0 ? <span className="text-green-400 text-[11px]">+{equipBonuses.intelligence}</span> : ''}
+                    </span>
+                    <button disabled={statPoints === 0} onClick={() => spendStat('intelligence')}
                       className="w-7 h-7 rounded border text-sm font-black flex items-center justify-center transition-all disabled:opacity-25 disabled:cursor-not-allowed enabled:border-primary enabled:text-primary enabled:bg-primary/10 enabled:hover:bg-primary/25 enabled:active:scale-90">+</button>
                   </div>
                 </div>
 
+                {/* Vitality */}
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <div className="flex flex-col">
+                    <span className="text-[13px] text-white font-medium">Живучесть</span>
+                    <span className="text-[10px] text-[#555]">+10 макс. HP/очко{equipBonuses.vitality > 0 ? ` (+${equipBonuses.vitality} экип.)` : ''}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-bold text-white font-mono w-12 text-right">
+                      {stats.vitality}{equipBonuses.vitality > 0 ? <span className="text-green-400 text-[11px]">+{equipBonuses.vitality}</span> : ''}
+                    </span>
+                    <button disabled={statPoints === 0} onClick={() => spendStat('vitality')}
+                      className="w-7 h-7 rounded border text-sm font-black flex items-center justify-center transition-all disabled:opacity-25 disabled:cursor-not-allowed enabled:border-primary enabled:text-primary enabled:bg-primary/10 enabled:hover:bg-primary/25 enabled:active:scale-90">+</button>
+                  </div>
+                </div>
+
+                {/* ── Combat stats ── */}
                 <p className="text-[10px] uppercase tracking-widest text-[#444] pt-3 pb-1 font-bold">Боевые показатели</p>
 
                 <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
                   <span className="text-[13px] text-[#888]">Урон</span>
-                  <span className="text-[13px] font-bold text-white font-mono">{dmgMin}–{dmgMax}</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{cs.dmgMin}–{cs.dmgMax}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Защита</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{cs.defense}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Крит. шанс</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{cs.critChance.toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Крит. урон</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{cs.critDamagePct}%</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+                  <span className="text-[13px] text-[#888]">Уклонение</span>
+                  <span className="text-[13px] font-bold text-white font-mono">{cs.dodgeChance.toFixed(1)}%</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
                   <span className="text-[13px] text-[#888]">Скорость атаки</span>
-                  <span className="text-[13px] font-bold text-white font-mono">{atkIntervalSec}с{equipBonuses.atkSpeedPenalty > 0 ? <span className="text-destructive text-[10px] ml-1">−{equipBonuses.atkSpeedPenalty}%</span> : ''}</span>
+                  <span className="text-[13px] font-bold text-white font-mono">
+                    {cs.attackIntervalSec}с{equipBonuses.atkSpeedPenalty > 0 ? <span className="text-destructive text-[10px] ml-1">−{equipBonuses.atkSpeedPenalty}%</span> : ''}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
                   <span className="text-[13px] text-[#888]">Максимальное HP</span>
-                  <span className="text-[13px] font-bold text-white font-mono">{playerMaxHp}{equipBonuses.hp > 0 ? <span className="text-green-400 text-[10px] ml-1">+{equipBonuses.hp}</span> : ''}</span>
+                  <span className="text-[13px] font-bold text-white font-mono">
+                    {cs.maxHp}{equipBonuses.hp > 0 ? <span className="text-green-400 text-[10px] ml-1">+{equipBonuses.hp} экип.</span> : ''}
+                  </span>
                 </div>
 
-                <div className={`flex items-center justify-between py-2 rounded px-2 mt-1 ${statPoints > 0 ? 'bg-primary/10 border border-primary/40' : ''}`}>
+                {/* Free points */}
+                <div className={`flex items-center justify-between py-2 rounded px-2 mt-2 ${statPoints > 0 ? 'bg-primary/10 border border-primary/40' : ''}`}>
                   <span className={`text-[13px] font-medium ${statPoints > 0 ? 'text-primary' : 'text-[#888]'}`}>Свободные очки</span>
                   <span className={`text-[16px] font-black font-mono ${statPoints > 0 ? 'text-primary' : 'text-[#555]'}`}>{statPoints}</span>
                 </div>

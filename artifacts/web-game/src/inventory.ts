@@ -9,6 +9,13 @@ export interface ItemBonuses {
   strength?:        number;
   agility?:         number;
   atkSpeedPenalty?: number; // % increase to attack interval (slower)
+  // v0.1.4 extended stats
+  vitality?:        number;
+  intelligence?:    number;
+  defense?:         number;
+  critChance?:      number; // flat % added to crit chance
+  critDamage?:      number; // flat % added to crit damage bonus
+  dodgeChance?:     number; // flat % added to dodge chance
 }
 
 export interface Item {
@@ -162,6 +169,12 @@ export function formatBonuses(b: ItemBonuses): string[] {
   if (b.hp)              lines.push(`+${b.hp} HP`);
   if (b.strength)        lines.push(`+${b.strength} Сила`);
   if (b.agility)         lines.push(`+${b.agility} Ловкость`);
+  if (b.vitality)        lines.push(`+${b.vitality} Живучесть`);
+  if (b.intelligence)    lines.push(`+${b.intelligence} Интел.`);
+  if (b.defense)         lines.push(`+${b.defense} Защита`);
+  if (b.critChance)      lines.push(`+${b.critChance}% крит.`);
+  if (b.critDamage)      lines.push(`+${b.critDamage}% крит.урон`);
+  if (b.dodgeChance)     lines.push(`+${b.dodgeChance}% уклон.`);
   if (b.atkSpeedPenalty) lines.push(`−${b.atkSpeedPenalty}% скор.`);
   return lines;
 }
