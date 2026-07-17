@@ -1,47 +1,10 @@
 // ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
-// All types below are local to this module.
-// Structural compatibility with the matching types in App.tsx is enforced by
-// TypeScript's structural type system — no circular imports needed.
+import type { Item, Equipment, EquipBonuses } from './inventory';
 
+// Types used only here — no circular dependency since inventory.ts has no imports.
 type LocationId = 'city' | 'forest' | 'cave' | 'fields' | 'graveyard';
-
-type ItemType = 'weapon' | 'helmet' | 'armor' | 'gloves' | 'boots';
-type Rarity   = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
-
-interface ItemBonuses {
-  damage?:          number;
-  hp?:              number;
-  strength?:        number;
-  agility?:         number;
-  atkSpeedPenalty?: number;
-}
-
-interface Item {
-  id:      string;
-  key:     string;
-  name:    string;
-  type:    ItemType;
-  rarity:  Rarity;
-  bonuses: ItemBonuses;
-}
-
-interface Equipment {
-  weapon:  Item | null;
-  helmet:  Item | null;
-  armor:   Item | null;
-  gloves:  Item | null;
-  boots:   Item | null;
-}
-
-interface EquipBonuses {
-  damage: number; hp: number; strength: number; agility: number; atkSpeedPenalty: number;
-}
-
-interface Stats {
-  strength: number; agility: number; endurance: number;
-}
-
-interface Enemy {
+interface Stats  { strength: number; agility: number; endurance: number; }
+interface Enemy  {
   id: number; name: string; emoji: string;
   x: number; y: number;
   hp: number; maxHp: number;
