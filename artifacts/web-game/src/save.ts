@@ -1,17 +1,8 @@
 // ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
 import type { Item } from './inventory';
 import type { Equipment, EquipBonuses } from './equipment';
-
-// Types used only here — no circular dependency since inventory.ts has no imports.
-type LocationId = 'city' | 'forest' | 'cave' | 'fields' | 'graveyard';
+import type { LocationId, Enemy } from './combat';
 interface Stats  { strength: number; agility: number; endurance: number; }
-interface Enemy  {
-  id: number; name: string; emoji: string;
-  x: number; y: number;
-  hp: number; maxHp: number;
-  attackInterval: number; dmgMin: number; dmgMax: number;
-  dead: boolean;
-}
 
 export interface SaveData {
   version:         number;
