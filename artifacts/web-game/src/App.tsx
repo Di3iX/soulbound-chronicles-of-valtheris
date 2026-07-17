@@ -397,17 +397,29 @@ interface SaveData {
 }
 
 function saveGame(data: SaveData): void {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch { /* quota */ }
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    console.debug('[Save] Written — Lv.%d  XP %d  Gold %d', data.playerLevel, data.playerXp, data.playerGold);
+  } catch (e) {
+    console.warn('[Save] localStorage write failed:', e);
+  }
 }
 
 function loadSave(): SaveData | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
+    if (!raw) { console.debug('[Save] No save found in localStorage'); return null; }
     const data = JSON.parse(raw) as SaveData;
-    if (data.version !== SAVE_VERSION) return null;
+    if (data.version !== SAVE_VERSION) {
+      console.warn('[Save] Incompatible save version (%d), starting fresh', data.version);
+      return null;
+    }
+    console.debug('[Save] Loaded — Lv.%d  XP %d  Gold %d', data.playerLevel, data.playerXp, data.playerGold);
     return data;
-  } catch { return null; }
+  } catch (e) {
+    console.warn('[Save] Failed to parse save:', e);
+    return null;
+  }
 }
 
 function deleteSave(): void {
@@ -479,6 +491,9 @@ export default function App() {
   const equipBonusesRef    = useRef<EquipBonuses>(sv?.equipBonuses  ?? { ...ZERO_EQUIP_BONUSES });
   const currentLocationRef = useRef<LocationId>(sv?.currentLocation ?? 'city');
   const transitioningRef   = useRef(false);
+  // These two have no paired state→ref sync in callbacks, so we track them explicitly:
+  const inventoryRef       = useRef<Item[]>(sv?.inventory        ?? []);
+  const xpToNextRef        = useRef(sv?.xpToNext                 ?? xpRequired(INITIAL_PLAYER_LVL));
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -501,8 +516,12 @@ export default function App() {
   useEffect(() => { statPointsRef.current      = statPoints;    }, [statPoints]);
   useEffect(() => { equipmentRef.current       = equipment;     }, [equipment]);
   useEffect(() => { equipBonusesRef.current    = equipBonuses;  }, [equipBonuses]);
+  useEffect(() => { inventoryRef.current       = inventory;     }, [inventory]);
+  useEffect(() => { xpToNextRef.current        = xpToNext;      }, [xpToNext]);
 
   // ── Auto-save (debounced 400 ms after any saveable state change) ───────────
+  // NOTE: this is complemented by the beforeunload handler below so that
+  // refreshing the page never cancels a pending save.
   useEffect(() => {
     const t = setTimeout(() => {
       saveGame({
@@ -519,6 +538,36 @@ export default function App() {
   }, [playerLevel, playerXp, xpToNext, playerGold, playerBonusDmg, levelHpBonus,
       playerHp, playerMaxHp, stats, statPoints, inventory, equipment, equipBonuses,
       playerPos, currentLocation, enemies]);
+
+  // ── Synchronous save on page close / refresh ──────────────────────────────
+  // The debounced effect above is cancelled by React's cleanup when the page
+  // unloads.  This handler fires BEFORE the page disappears and writes the
+  // most current state from refs (which are always up-to-date).
+  useEffect(() => {
+    const onUnload = () => {
+      saveGame({
+        version:         SAVE_VERSION,
+        playerLevel:     playerLevelRef.current,
+        playerXp:        playerXpRef.current,
+        xpToNext:        xpToNextRef.current,
+        playerGold:      playerGoldRef.current,
+        playerBonusDmg:  playerBonusDmgRef.current,
+        levelHpBonus:    levelHpBonusRef.current,
+        playerHp:        playerHpRef.current,
+        playerMaxHp:     playerMaxHpRef.current,
+        stats:           statsRef.current,
+        statPoints:      statPointsRef.current,
+        inventory:       inventoryRef.current,
+        equipment:       equipmentRef.current,
+        equipBonuses:    equipBonusesRef.current,
+        playerPos:       playerPosRef.current,
+        currentLocation: currentLocationRef.current,
+        enemies:         enemiesRef.current,
+      });
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, []); // empty deps — uses refs, always current
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const addLog = useCallback((msg: string) => {
@@ -970,11 +1019,13 @@ export default function App() {
     levelHpBonusRef.current    = 0;
     playerLevelRef.current     = INITIAL_PLAYER_LVL;
     playerXpRef.current        = 0;
+    xpToNextRef.current        = xpRequired(INITIAL_PLAYER_LVL);
     playerGoldRef.current      = 0;
     statPointsRef.current      = 0;
     statsRef.current           = { ...INITIAL_STATS };
     equipmentRef.current       = { ...EMPTY_EQUIPMENT };
     equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
+    inventoryRef.current       = [];
     currentLocationRef.current = 'city';
 
     // Reset state
