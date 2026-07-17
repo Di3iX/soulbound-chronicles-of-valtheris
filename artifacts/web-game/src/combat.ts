@@ -1,8 +1,8 @@
 // ─── COMBAT SYSTEM ────────────────────────────────────────────────────────────
 import type { Item } from './inventory';
 
-// ── Shared world type (also used by save.ts and App.tsx map constants) ────────
-export type LocationId = 'city' | 'forest' | 'cave' | 'fields' | 'graveyard';
+// ── Shared world type (also used by save.ts and world/locations.ts) ───────────
+export type LocationId = 'village' | 'forest' | 'cave' | 'ruins' | 'swamp';
 
 // ── Combat-specific types ─────────────────────────────────────────────────────
 export type Phase = 'explore' | 'combat' | 'victory' | 'final-victory' | 'defeat';
@@ -46,6 +46,7 @@ export const REWARD_TABLE: Record<string, { xp: number; goldMin: number; goldMax
   'Гигантский паук': { xp: 45,  goldMin: 8,  goldMax: 15 },
   'Скелет':          { xp: 50,  goldMin: 10, goldMax: 18 },
   'Зомби':           { xp: 80,  goldMin: 20, goldMax: 35 },
+  'Тролль':          { xp: 90,  goldMin: 22, goldMax: 38 },
 };
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
@@ -66,32 +67,32 @@ export function calcAttackInterval(agility: number, atkSpeedPenalty = 0): number
 /** Instantiate fresh enemy instances for a given location. */
 export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
   const defs: Record<LocationId, Array<Omit<Enemy, 'id'>>> = {
-    city:      [],
-    forest:    [
-      { name: 'Гоблин',          emoji: '👺', x: 5,  y: 2,  hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
-      { name: 'Гоблин',          emoji: '👺', x: 14, y: 5,  hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
-      { name: 'Волк',            emoji: '🐺', x: 8,  y: 13, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
-      { name: 'Волк',            emoji: '🐺', x: 16, y: 14, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
-      { name: 'Гоблин',          emoji: '👺', x: 4,  y: 17, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
+    village: [],
+    forest: [
+      { name: 'Гоблин', emoji: '👺', x: 5,  y: 2,  hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
+      { name: 'Гоблин', emoji: '👺', x: 14, y: 5,  hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
+      { name: 'Волк',   emoji: '🐺', x: 8,  y: 13, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
+      { name: 'Волк',   emoji: '🐺', x: 16, y: 14, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
+      { name: 'Гоблин', emoji: '👺', x: 4,  y: 17, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
     ],
-    cave:      [
+    cave: [
       { name: 'Орк',             emoji: '👹', x: 8,  y: 4,  hp: 300, maxHp: 300, attackInterval: 3500, dmgMin: 15, dmgMax: 25, dead: false },
       { name: 'Орк',             emoji: '👹', x: 5,  y: 13, hp: 300, maxHp: 300, attackInterval: 3500, dmgMin: 15, dmgMax: 25, dead: false },
       { name: 'Гигантский паук', emoji: '🕷️', x: 15, y: 7,  hp: 180, maxHp: 180, attackInterval: 1400, dmgMin: 8,  dmgMax: 16, dead: false },
       { name: 'Гигантский паук', emoji: '🕷️', x: 12, y: 16, hp: 180, maxHp: 180, attackInterval: 1400, dmgMin: 8,  dmgMax: 16, dead: false },
     ],
-    fields:    [
-      { name: 'Волк',            emoji: '🐺', x: 4,  y: 5,  hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
-      { name: 'Кабан',           emoji: '🐗', x: 14, y: 6,  hp: 220, maxHp: 220, attackInterval: 2800, dmgMin: 10, dmgMax: 18, dead: false },
-      { name: 'Волк',            emoji: '🐺', x: 7,  y: 13, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
-      { name: 'Кабан',           emoji: '🐗', x: 14, y: 15, hp: 220, maxHp: 220, attackInterval: 2800, dmgMin: 10, dmgMax: 18, dead: false },
+    ruins: [
+      { name: 'Скелет', emoji: '💀', x: 4,  y: 6,  hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
+      { name: 'Зомби',  emoji: '🧟', x: 14, y: 5,  hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
+      { name: 'Скелет', emoji: '💀', x: 7,  y: 12, hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
+      { name: 'Зомби',  emoji: '🧟', x: 16, y: 14, hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
+      { name: 'Скелет', emoji: '💀', x: 4,  y: 17, hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
     ],
-    graveyard: [
-      { name: 'Скелет',          emoji: '💀', x: 4,  y: 6,  hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Зомби',           emoji: '🧟', x: 14, y: 5,  hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
-      { name: 'Скелет',          emoji: '💀', x: 7,  y: 12, hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Зомби',           emoji: '🧟', x: 16, y: 14, hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
-      { name: 'Скелет',          emoji: '💀', x: 4,  y: 17, hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
+    swamp: [
+      { name: 'Кабан',  emoji: '🐗', x: 4,  y: 5,  hp: 220, maxHp: 220, attackInterval: 2800, dmgMin: 10, dmgMax: 18, dead: false },
+      { name: 'Тролль', emoji: '👾', x: 14, y: 6,  hp: 400, maxHp: 400, attackInterval: 4500, dmgMin: 18, dmgMax: 30, dead: false },
+      { name: 'Кабан',  emoji: '🐗', x: 7,  y: 14, hp: 220, maxHp: 220, attackInterval: 2800, dmgMin: 10, dmgMax: 18, dead: false },
+      { name: 'Тролль', emoji: '👾', x: 15, y: 15, hp: 400, maxHp: 400, attackInterval: 4500, dmgMin: 18, dmgMax: 30, dead: false },
     ],
   };
   return defs[loc].map((d, i) => ({ ...d, id: i + 1 }));

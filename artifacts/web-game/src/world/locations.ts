@@ -14,35 +14,35 @@ export interface NpcDef { id: string; name: string; emoji: string; x: number; y:
 // ── Location type ─────────────────────────────────────────────────────────────
 export interface Location {
   /** Unique location identifier. */
-  id:          LocationId;
+  id:                 LocationId;
   /** Display name shown in the UI (Russian). */
-  name:        string;
+  name:               string;
   /** Short flavour description. */
-  description: string;
+  description:        string;
   /** Recommended player level. */
-  level:       number;
-  /** Biome tag used for tile-rendering hints. */
-  biome:       'city' | 'forest' | 'cave' | 'fields' | 'graveyard';
+  recommendedLevel:   number;
+  /** Biome tag. */
+  biome:              'village' | 'forest' | 'cave' | 'ruins' | 'swamp';
   /** Names of enemy types that spawn here. */
-  enemies:     string[];
+  enemies:            string[];
   /** Exit portals keyed by "x,y" tile coordinates. */
-  exits:       Map<string, ExitDef>;
+  exits:              Map<string, ExitDef>;
   /** Whether the player can travel here yet. */
-  unlocked:    boolean;
+  unlocked:           boolean;
   /** CSS background colour for the map area. */
-  background:  string;
-
-  // ── Additional runtime data (used by App.tsx directly) ────────────────────
-  /** True when combat cannot start here. */
-  safe:  boolean;
+  background:         string;
+  /** True when combat cannot start here (full HP restore on entry). */
+  isSafeZone:         boolean;
   /** Emoji shown in the status bar and transition overlay. */
-  emoji: string;
+  emoji:              string;
   /** 20×20 tile grid. 0=floor 1=wall/tree 2=rock 3=water 4=exit. */
-  map:   number[][];
+  map:                number[][];
   /** Default player spawn coordinates for this location. */
-  spawn: { x: number; y: number };
+  spawn:              { x: number; y: number };
   /** NPCs present in this location. */
-  npcs:  NpcDef[];
+  npcs:               NpcDef[];
+  /** IDs of directly connected locations (bidirectional graph). */
+  connectedLocations: LocationId[];
 }
 
 // ── Internal exit-map builder ─────────────────────────────────────────────────
@@ -58,29 +58,30 @@ function buildExits(
 // ── Location definitions ──────────────────────────────────────────────────────
 // Tile key: 0=floor  1=wall/tree  2=rock  3=water  4=exit
 const LOCATIONS: Record<LocationId, Location> = {
-  city: {
-    id:          'city',
-    name:        'Город',
-    description: 'Безопасный торговый город, укреплённый каменными стенами.',
-    level:       1,
-    biome:       'city',
-    enemies:     [],
-    exits:       buildExits([
-      [19,  9, 'forest', 1,  9],
+
+  // ── VILLAGE ──────────────────────────────────────────────────────────────
+  village: {
+    id:                 'village',
+    name:               'Деревня',
+    description:        'Небольшая безопасная деревня — здесь можно отдохнуть и восстановить силы.',
+    recommendedLevel:   1,
+    biome:              'village',
+    enemies:            [],
+    exits:              buildExits([
+      [19, 9,  'forest', 1, 9 ],
       [19, 10, 'forest', 1, 10],
-      [ 9, 19, 'fields', 9,  1],
-      [10, 19, 'fields',10,  1],
     ]),
-    unlocked:    true,
-    background:  '#1e1e28',
-    safe:        true,
-    emoji:       '🏰',
-    spawn:       { x: 2, y: 16 },
+    unlocked:           true,
+    background:         '#1e1e28',
+    isSafeZone:         true,
+    emoji:              '🏘️',
+    spawn:              { x: 2, y: 16 },
+    connectedLocations: ['forest'],
     npcs: [
-      { id: 'smith',    name: 'Кузнец',   emoji: '⚒️', x:  4, y:  5 },
-      { id: 'alch',     name: 'Алхимик',  emoji: '🧪', x: 15, y:  5 },
-      { id: 'merchant', name: 'Торговец', emoji: '🛒', x:  4, y: 13 },
-      { id: 'elder',    name: 'Староста', emoji: '👴', x: 15, y: 13 },
+      { id: 'smith',    name: 'Кузнец',   emoji: '⚒️', x: 4,  y: 5  },
+      { id: 'alch',     name: 'Алхимик',  emoji: '🧪', x: 15, y: 5  },
+      { id: 'merchant', name: 'Торговец', emoji: '🛒', x: 4,  y: 13 },
+      { id: 'elder',    name: 'Старейшина', emoji: '👴', x: 15, y: 13 },
     ],
     map: [
       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
@@ -102,29 +103,33 @@ const LOCATIONS: Record<LocationId, Location> = {
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1],
       [1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1],
-      [1,0,0,0,0,0,0,0,0,4,4,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
     ],
   },
 
+  // ── FOREST ───────────────────────────────────────────────────────────────
   forest: {
-    id:          'forest',
-    name:        'Лес',
-    description: 'Густой тёмный лес, населённый гоблинами и волками.',
-    level:       2,
-    biome:       'forest',
-    enemies:     ['Гоблин', 'Волк'],
-    exits:       buildExits([
-      [ 0,  9, 'city',   18,  9],
-      [ 0, 10, 'city',   18, 10],
-      [19,  9, 'cave',    1,  9],
-      [19, 10, 'cave',    1, 10],
+    id:                 'forest',
+    name:               'Лес',
+    description:        'Густой тёмный лес, населённый гоблинами и волками.',
+    recommendedLevel:   2,
+    biome:              'forest',
+    enemies:            ['Гоблин', 'Волк'],
+    exits:              buildExits([
+      [0,  9,  'village', 18, 9 ],
+      [0,  10, 'village', 18, 10],
+      [19, 9,  'cave',    1,  9 ],
+      [19, 10, 'cave',    1,  10],
+      [9,  19, 'swamp',   9,  1 ],
+      [10, 19, 'swamp',   10, 1 ],
     ]),
-    unlocked:    true,
-    background:  '#0d1a0f',
-    safe:        false,
-    emoji:       '🌲',
-    spawn:       { x: 2, y: 9 },
-    npcs:        [],
+    unlocked:           true,
+    background:         '#0d1a0f',
+    isSafeZone:         false,
+    emoji:              '🌲',
+    spawn:              { x: 2, y: 9 },
+    connectedLocations: ['village', 'cave', 'swamp'],
+    npcs:               [],
     map: [
       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,0,0,1,1,0,1,1,0,0,1,1,0,0,1,1,0,1,1,1],
@@ -145,27 +150,31 @@ const LOCATIONS: Record<LocationId, Location> = {
       [1,1,0,0,1,1,0,0,1,0,0,0,1,0,0,1,1,0,0,1],
       [1,0,1,1,0,0,0,1,1,0,0,1,1,0,0,1,0,0,1,1],
       [1,0,0,1,1,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,1,1,1,1,1,1,1,1,4,4,1,1,1,1,1,1,1,1,1],
     ],
   },
 
+  // ── CAVE ─────────────────────────────────────────────────────────────────
   cave: {
-    id:          'cave',
-    name:        'Пещера',
-    description: 'Мрачная пещера с орками и гигантскими пауками.',
-    level:       5,
-    biome:       'cave',
-    enemies:     ['Орк', 'Гигантский паук'],
-    exits:       buildExits([
-      [0,  9, 'forest', 17,  9],
-      [0, 10, 'forest', 17, 10],
+    id:                 'cave',
+    name:               'Пещера',
+    description:        'Мрачная пещера с орками и гигантскими пауками.',
+    recommendedLevel:   4,
+    biome:              'cave',
+    enemies:            ['Орк', 'Гигантский паук'],
+    exits:              buildExits([
+      [0,  9,  'forest', 17, 9 ],
+      [0,  10, 'forest', 17, 10],
+      [19, 9,  'ruins',  1,  9 ],
+      [19, 10, 'ruins',  1,  10],
     ]),
-    unlocked:    true,
-    background:  '#111118',
-    safe:        false,
-    emoji:       '⛏️',
-    spawn:       { x: 2, y: 9 },
-    npcs:        [],
+    unlocked:           true,
+    background:         '#111118',
+    isSafeZone:         false,
+    emoji:              '⛏️',
+    spawn:              { x: 2, y: 9 },
+    connectedLocations: ['forest', 'ruins'],
+    npcs:               [],
     map: [
       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,0,0,2,0,0,0,2,0,0,2,0,0,0,0,2,0,0,0,1],
@@ -176,8 +185,8 @@ const LOCATIONS: Record<LocationId, Location> = {
       [1,0,0,0,2,0,0,0,0,2,0,0,0,0,0,2,0,0,0,1],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [1,0,0,0,0,2,0,0,0,2,0,0,0,0,0,2,0,0,0,1],
       [1,0,2,0,0,0,0,2,0,0,0,0,2,0,0,0,0,2,0,1],
@@ -190,86 +199,88 @@ const LOCATIONS: Record<LocationId, Location> = {
     ],
   },
 
-  fields: {
-    id:          'fields',
-    name:        'Поля',
-    description: 'Открытые равнины с волками и кабанами.',
-    level:       3,
-    biome:       'fields',
-    enemies:     ['Волк', 'Кабан'],
-    exits:       buildExits([
-      [ 9, 0, 'city',      9, 17],
-      [10, 0, 'city',     10, 17],
-      [19, 9, 'graveyard', 1,  9],
-      [19,10, 'graveyard', 1, 10],
+  // ── RUINS ────────────────────────────────────────────────────────────────
+  ruins: {
+    id:                 'ruins',
+    name:               'Руины',
+    description:        'Проклятые руины древнего города, кишащие нежитью.',
+    recommendedLevel:   6,
+    biome:              'ruins',
+    enemies:            ['Скелет', 'Зомби'],
+    exits:              buildExits([
+      [0, 9,  'cave', 17, 9 ],
+      [0, 10, 'cave', 17, 10],
     ]),
-    unlocked:    true,
-    background:  '#0f1a0a',
-    safe:        false,
-    emoji:       '🌾',
-    spawn:       { x: 9, y: 2 },
-    npcs:        [],
-    map: [
-      [1,1,1,1,1,1,1,1,1,4,4,1,1,1,1,1,1,1,1,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [0,0,0,0,2,2,0,0,0,0,0,0,0,2,2,0,0,0,0,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
-      [0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1],
-      [0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [0,0,0,0,2,2,0,0,0,0,0,0,0,2,2,0,0,0,0,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    ],
-  },
-
-  graveyard: {
-    id:          'graveyard',
-    name:        'Кладбище',
-    description: 'Проклятое кладбище со скелетами и зомби.',
-    level:       6,
-    biome:       'graveyard',
-    enemies:     ['Скелет', 'Зомби'],
-    exits:       buildExits([
-      [0,  9, 'fields', 17,  9],
-      [0, 10, 'fields', 17, 10],
-    ]),
-    unlocked:    true,
-    background:  '#0d0f0d',
-    safe:        false,
-    emoji:       '🪦',
-    spawn:       { x: 2, y: 9 },
-    npcs:        [],
+    unlocked:           true,
+    background:         '#0d0f0d',
+    isSafeZone:         false,
+    emoji:              '🏚️',
+    spawn:              { x: 2, y: 9 },
+    connectedLocations: ['cave'],
+    npcs:               [],
     map: [
       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
       [1,0,2,0,2,0,0,2,0,0,2,0,0,2,0,0,2,0,0,1],
       [1,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,1],
       [1,2,0,2,0,0,0,0,0,2,0,0,0,0,2,0,2,0,0,1],
-      [1,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,2,1],
-      [1,0,2,0,0,0,0,2,0,0,0,0,0,2,0,0,0,2,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,2,1],
+      [1,0,2,0,0,1,0,2,1,0,0,1,0,2,0,0,0,2,0,1],
+      [1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,0,1],
       [1,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [1,0,2,0,0,0,0,0,2,0,0,0,0,2,0,0,0,0,2,1],
-      [1,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,2,0,0,1],
-      [1,2,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,1],
+      [1,0,0,0,2,1,0,0,1,0,2,1,0,0,0,0,2,0,0,1],
+      [1,2,0,0,0,1,0,2,1,0,0,1,0,0,2,0,0,0,0,1],
       [1,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,1],
       [1,0,0,0,0,2,0,0,0,2,0,0,0,0,2,0,0,0,0,1],
       [1,0,2,0,0,0,0,0,0,0,0,2,0,0,0,0,2,0,0,1],
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+  },
+
+  // ── SWAMP ────────────────────────────────────────────────────────────────
+  swamp: {
+    id:                 'swamp',
+    name:               'Болото',
+    description:        'Густое болото с кабанами и троллями, скрывающимися в трясине.',
+    recommendedLevel:   4,
+    biome:              'swamp',
+    enemies:            ['Кабан', 'Тролль'],
+    exits:              buildExits([
+      [9,  0, 'forest', 9,  17],
+      [10, 0, 'forest', 10, 17],
+    ]),
+    unlocked:           true,
+    background:         '#0f1a0a',
+    isSafeZone:         false,
+    emoji:              '🌿',
+    spawn:              { x: 9, y: 2 },
+    connectedLocations: ['forest'],
+    npcs:               [],
+    map: [
+      [1,1,1,1,1,1,1,1,1,4,4,1,1,1,1,1,1,1,1,1],
+      [0,3,0,0,0,0,0,3,0,0,0,0,3,0,0,0,0,3,0,1],
+      [0,0,0,2,0,3,0,0,0,0,0,0,0,0,3,0,0,0,0,1],
+      [0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,1],
+      [0,0,0,0,2,0,3,0,0,0,0,0,3,0,0,2,0,0,0,1],
+      [0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,1],
+      [0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1],
+      [0,0,0,0,0,3,0,0,0,0,0,0,0,3,0,0,0,0,0,1],
+      [0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1],
+      [0,2,0,0,0,3,0,0,0,0,0,0,0,3,0,0,0,0,2,1],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [0,0,0,0,2,0,0,3,0,0,0,3,0,0,2,0,0,0,0,1],
+      [0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,1],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [0,3,0,0,0,0,0,3,0,0,0,0,3,0,0,0,0,3,0,1],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     ],
   },
@@ -302,16 +313,22 @@ export function getAvailableExits(
   return LOCATIONS[locationId].exits.get(`${x},${y}`);
 }
 
-// ── Backward-compatible flat records (consumed by App.tsx) ────────────────────
-// These are derived from the canonical LOCATIONS record so there is a single
-// source of truth; App.tsx can use the same identifiers without changes.
+/**
+ * Whether `to` is directly connected to `from`.
+ */
+export function isConnected(from: LocationId, to: LocationId): boolean {
+  return LOCATIONS[from].connectedLocations.includes(to);
+}
 
-export const LOCATION_META: Record<LocationId, { label: string; emoji: string; safe: boolean }> =
+// ── Backward-compatible flat records (consumed by App.tsx) ────────────────────
+// Derived from the canonical LOCATIONS record — single source of truth.
+
+export const LOCATION_META: Record<LocationId, { label: string; emoji: string; isSafeZone: boolean }> =
   (Object.keys(LOCATIONS) as LocationId[]).reduce((acc, id) => {
     const loc = LOCATIONS[id];
-    acc[id] = { label: loc.name, emoji: loc.emoji, safe: loc.safe };
+    acc[id] = { label: loc.name, emoji: loc.emoji, isSafeZone: loc.isSafeZone };
     return acc;
-  }, {} as Record<LocationId, { label: string; emoji: string; safe: boolean }>);
+  }, {} as Record<LocationId, { label: string; emoji: string; isSafeZone: boolean }>);
 
 export const LOCATION_SPAWN: Record<LocationId, { x: number; y: number }> =
   (Object.keys(LOCATIONS) as LocationId[]).reduce((acc, id) => {

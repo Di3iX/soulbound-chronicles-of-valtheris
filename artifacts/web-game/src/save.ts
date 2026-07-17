@@ -25,7 +25,7 @@ export interface SaveData {
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;   // bumped: LocationId set changed (village/forest/cave/ruins/swamp)
 
 export function saveGame(data: Omit<SaveData, 'version'>): void {
   const payload: SaveData = { version: SAVE_VERSION, ...data };

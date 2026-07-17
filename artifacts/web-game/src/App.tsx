@@ -18,7 +18,7 @@ import {
 import {
   MAP_COLS, MAP_ROWS, VP_COLS, VP_ROWS,
   LOCATION_META, LOCATION_SPAWN, LOCATION_EXITS, LOCATION_MAPS, LOCATION_NPCS,
-  getLocation, moveToLocation, getAvailableExits,
+  getLocation, moveToLocation, getAvailableExits, isConnected,
 } from './world/locations';
 
 const INITIAL_PLAYER_HP      = 100;
@@ -49,7 +49,7 @@ export default function App() {
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [phase, setPhase]                 = useState<Phase>('explore');
-  const [playerPos, setPlayerPos]         = useState(sv?.playerPos        ?? LOCATION_SPAWN.city);
+  const [playerPos, setPlayerPos]         = useState(sv?.playerPos        ?? LOCATION_SPAWN.village);
   const [playerHp, setPlayerHp]           = useState(sv?.playerHp         ?? INITIAL_PLAYER_HP);
   const [playerMaxHp, setPlayerMaxHp]     = useState(sv?.playerMaxHp      ?? calcMaxHp(0, INITIAL_STATS.endurance));
   const [enemies, setEnemies]             = useState<Enemy[]>(sv?.enemies  ?? []);
@@ -80,9 +80,10 @@ export default function App() {
   const [showInventory, setShowInventory] = useState(false);
   const [selectedItem, setSelectedItem]   = useState<Item | null>(null);
   const [lootNotif, setLootNotif]         = useState<string | null>(null);
+  const [showWorldMap, setShowWorldMap]   = useState(false);
 
   // ── World map state ─────────────────────────────────────────────────────────
-  const [currentLocation, setCurrentLocation] = useState<LocationId>(sv?.currentLocation ?? 'city');
+  const [currentLocation, setCurrentLocation] = useState<LocationId>(sv?.currentLocation ?? 'village');
   const [transitioning, setTransitioning]     = useState(false);
   const [npcDialog, setNpcDialog]             = useState<string | null>(null);
 
@@ -91,7 +92,7 @@ export default function App() {
   const playerMaxHpRef     = useRef(sv?.playerMaxHp      ?? calcMaxHp(0, INITIAL_STATS.endurance));
   const shieldRef          = useRef(false);
   const phaseRef           = useRef<Phase>('explore');
-  const playerPosRef       = useRef(sv?.playerPos         ?? LOCATION_SPAWN.city);
+  const playerPosRef       = useRef(sv?.playerPos         ?? LOCATION_SPAWN.village);
   const enemiesRef         = useRef<Enemy[]>(sv?.enemies  ?? []);
   const activeEnemyIdRef   = useRef<number | null>(null);
   const statsRef           = useRef<Stats>(sv?.stats      ?? { ...INITIAL_STATS });
@@ -103,7 +104,7 @@ export default function App() {
   const statPointsRef      = useRef(sv?.statPoints        ?? 0);
   const equipmentRef       = useRef<Equipment>(sv?.equipment        ?? { ...EMPTY_EQUIPMENT });
   const equipBonusesRef    = useRef<EquipBonuses>(sv?.equipBonuses  ?? { ...ZERO_EQUIP_BONUSES });
-  const currentLocationRef = useRef<LocationId>(sv?.currentLocation ?? 'city');
+  const currentLocationRef = useRef<LocationId>(sv?.currentLocation ?? 'village');
   const transitioningRef   = useRef(false);
   // These two have no paired state→ref sync in callbacks, so we track them explicitly:
   const inventoryRef       = useRef<Item[]>(sv?.inventory        ?? []);
@@ -379,6 +380,13 @@ export default function App() {
       setFloatingNums([]);
       setTransitioning(false);
       addLog(`📍 Вы прибыли: ${LOCATION_META[to].label}`);
+      // Restore full HP when entering a safe zone
+      if (getLocation(to).isSafeZone) {
+        const fullHp = playerMaxHpRef.current;
+        playerHpRef.current = fullHp;
+        setPlayerHp(fullHp);
+        addLog('💚 Добро пожаловать! HP полностью восстановлено.');
+      }
     }, 800);
   }, [addLog]);
 
@@ -542,6 +550,14 @@ export default function App() {
     }
   }, [skillsCd, addLog, spawnFloat, handleEnemyDeath]);
 
+  // ── World map travel ──────────────────────────────────────────────────────
+  const handleWorldMapTravel = useCallback((to: LocationId) => {
+    if (phaseRef.current !== 'explore') return;
+    if (transitioningRef.current) return;
+    setShowWorldMap(false);
+    handleLocationTransition(to, LOCATION_SPAWN[to]);
+  }, [handleLocationTransition]);
+
   // ── Reset current map (respawn in current location — keep all character progress) ──
   const resetCurrentMap = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
@@ -596,7 +612,7 @@ export default function App() {
     playerMaxHpRef.current     = initMaxHp;
     phaseRef.current           = 'explore';
     shieldRef.current          = false;
-    playerPosRef.current       = LOCATION_SPAWN.city;
+    playerPosRef.current       = LOCATION_SPAWN.village;
     enemiesRef.current         = [];
     activeEnemyIdRef.current   = null;
     playerBonusDmgRef.current  = 0;
@@ -610,11 +626,11 @@ export default function App() {
     equipmentRef.current       = { ...EMPTY_EQUIPMENT };
     equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
     inventoryRef.current       = [];
-    currentLocationRef.current = 'city';
+    currentLocationRef.current = 'village';
 
     // Reset state
     setPhase('explore');
-    setPlayerPos(LOCATION_SPAWN.city);
+    setPlayerPos(LOCATION_SPAWN.village);
     setPlayerHp(initMaxHp);
     setPlayerMaxHp(initMaxHp);
     setEnemies([]);
@@ -634,7 +650,7 @@ export default function App() {
     setEquipment({ ...EMPTY_EQUIPMENT });
     setInventory([]);
     setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
-    setCurrentLocation('city');
+    setCurrentLocation('village');
     setLootNotif(null);
     setShowInventory(false);
     setSelectedItem(null);
@@ -716,7 +732,7 @@ export default function App() {
             ) : (
               <>
                 <div className="flex justify-end items-end mb-1">
-                  {LOCATION_META[currentLocation].safe
+                  {LOCATION_META[currentLocation].isSafeZone
                     ? <span className="text-xs text-green-700 font-mono">Безопасная зона</span>
                     : <span className="text-xs text-[#666] font-mono">Врагов: {livingEnemies.length} / {enemies.length}</span>
                   }
@@ -732,7 +748,7 @@ export default function App() {
           <span className="text-[10px] font-bold text-[#555] uppercase tracking-widest">
             {LOCATION_META[currentLocation].emoji} {LOCATION_META[currentLocation].label}
           </span>
-          {LOCATION_META[currentLocation].safe && (
+          {LOCATION_META[currentLocation].isSafeZone && (
             <span className="text-[9px] text-green-800 font-bold">· Безопасная зона</span>
           )}
         </div>
@@ -759,13 +775,21 @@ export default function App() {
 
           {/* Инвентарь button */}
           <button
-            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setSelectedItem(null); }}
+            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showInventory ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {inventory.length > 0 && (
               <span className="w-[14px] h-[14px] rounded-full bg-[#3a3a50] text-white text-[9px] font-black flex items-center justify-center leading-none">{inventory.length}</span>
             )}
             🎒
+          </button>
+
+          {/* Карта мира button */}
+          <button
+            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showWorldMap ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            🗺
           </button>
         </div>
       </div>
@@ -1130,6 +1154,114 @@ export default function App() {
 
             </div>
           )}
+
+          {/* ══ WORLD MAP OVERLAY  (z-60) ══════════════════════════════════════
+              Shows all 5 locations as a visual graph.
+              Connected locations are clickable; unreachable ones are dimmed.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showWorldMap && (() => {
+            // Node layout in SVG coordinate space (viewBox 340×220)
+            const nodes: { id: LocationId; cx: number; cy: number }[] = [
+              { id: 'village', cx: 45,  cy: 110 },
+              { id: 'forest',  cx: 160, cy: 55  },
+              { id: 'cave',    cx: 285, cy: 55  },
+              { id: 'swamp',   cx: 160, cy: 175 },
+              { id: 'ruins',   cx: 285, cy: 175 },
+            ];
+            // Static edge list (undirected)
+            const edges: [number,number,number,number][] = [
+              [45,110,160,55],   // village–forest
+              [160,55,285,55],   // forest–cave
+              [160,55,160,175],  // forest–swamp
+              [285,55,285,175],  // cave–ruins
+            ];
+            return (
+              <div className="absolute inset-0 z-[60] bg-[#08080d]/97 flex flex-col rounded backdrop-blur-md">
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-tile-border shrink-0">
+                  <h2 className="text-base font-bold text-primary tracking-wide">🗺 Карта мира</h2>
+                  {phase !== 'explore' && (
+                    <span className="text-[10px] text-destructive font-bold">⚔️ недоступно в бою</span>
+                  )}
+                  <button onClick={() => setShowWorldMap(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded border border-tile-border text-[#888] hover:text-white hover:border-primary transition-colors text-sm font-bold">✕</button>
+                </div>
+
+                {/* Graph area */}
+                <div className="flex-1 relative">
+
+                  {/* SVG edges */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none"
+                    viewBox="0 0 340 220" preserveAspectRatio="xMidYMid meet">
+                    {/* Dim base lines */}
+                    {edges.map(([x1,y1,x2,y2], i) => (
+                      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                        stroke="#1e1e2e" strokeWidth="2.5" />
+                    ))}
+                    {/* Highlight active connections from current location */}
+                    {edges.map(([x1,y1,x2,y2], i) => {
+                      const a = nodes.find(n => n.cx === x1 && n.cy === y1)?.id;
+                      const b = nodes.find(n => n.cx === x2 && n.cy === y2)?.id;
+                      const active = (a === currentLocation || b === currentLocation) &&
+                                     a !== undefined && b !== undefined &&
+                                     isConnected(a, b);
+                      return active ? (
+                        <line key={`h${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                          stroke="#c89628" strokeWidth="1.5" opacity="0.45" />
+                      ) : null;
+                    })}
+                  </svg>
+
+                  {/* Location nodes */}
+                  {nodes.map(({ id, cx, cy }) => {
+                    const loc       = getLocation(id);
+                    const isCurrent = id === currentLocation;
+                    const canTravel = !isCurrent && isConnected(currentLocation, id) && phase === 'explore' && !transitioning;
+                    const reachable = isCurrent || isConnected(currentLocation, id);
+                    return (
+                      <button key={id}
+                        onClick={() => canTravel && handleWorldMapTravel(id)}
+                        disabled={!canTravel && !isCurrent}
+                        style={{
+                          position: 'absolute',
+                          left: `${(cx / 340) * 100}%`,
+                          top:  `${(cy / 220) * 100}%`,
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                        className={[
+                          'flex flex-col items-center gap-[2px] px-2 py-[6px] rounded-lg border text-center w-[68px] transition-all',
+                          isCurrent
+                            ? 'border-primary bg-primary/20 shadow-[0_0_12px_rgba(200,150,42,0.25)] cursor-default'
+                            : canTravel
+                              ? 'border-[#3a3a50] bg-[#131320] hover:border-primary hover:bg-primary/10 cursor-pointer active:scale-95'
+                              : reachable
+                                ? 'border-[#222] bg-[#0d0d14] opacity-50 cursor-not-allowed'
+                                : 'border-[#181818] bg-[#0a0a0f] opacity-25 cursor-not-allowed',
+                        ].join(' ')}>
+                        <span className="text-lg leading-none">{loc.emoji}</span>
+                        <span className={`text-[10px] font-bold leading-tight ${isCurrent ? 'text-primary' : 'text-[#bbb]'}`}>
+                          {loc.name}
+                        </span>
+                        <span className="text-[9px] text-[#555] leading-none font-mono">Ур.{loc.recommendedLevel}</span>
+                        {loc.isSafeZone && (
+                          <span className="text-[8px] text-green-700 font-bold leading-none">★ СЕЙФ</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div className="shrink-0 px-4 py-2 border-t border-tile-border/30 flex items-center justify-center">
+                  <span className="text-[10px] text-[#444] font-mono">
+                    {`★ ${getLocation(currentLocation).name} · Ур.${getLocation(currentLocation).recommendedLevel}${getLocation(currentLocation).isSafeZone ? ' · Безопасная зона' : ''}`}
+                  </span>
+                </div>
+
+              </div>
+            );
+          })()}
 
         </div>
       </div>
