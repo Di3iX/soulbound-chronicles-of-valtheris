@@ -938,8 +938,8 @@ export default function App() {
     }
   }, [skillsCd, addLog, spawnFloat, handleEnemyDeath]);
 
-  // ── Reset run (respawn in current location — keep all character progress) ──
-  const resetRun = useCallback(() => {
+  // ── Reset current map (respawn in current location — keep all character progress) ──
+  const resetCurrentMap = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
@@ -1285,7 +1285,7 @@ export default function App() {
                   <span className="text-yellow-400 font-bold">+{lastKillReward.gold} золота</span>
                 </div>
               )}
-              <button onClick={resetCharacter}
+              <button onClick={resetCurrentMap}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
               </button>
@@ -1298,7 +1298,7 @@ export default function App() {
               <h2 className="text-3xl font-bold text-destructive mb-2 drop-shadow-lg">☠️ ПОРАЖЕНИЕ</h2>
               <p className="text-white/80 mb-2 font-medium">Вы пали в бою...</p>
               <p className="text-[#666] text-sm mb-5">Уровень {playerLevel} · 💰 {playerGold}</p>
-              <button onClick={resetCharacter}
+              <button onClick={resetCurrentMap}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
               </button>
