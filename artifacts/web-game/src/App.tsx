@@ -371,67 +371,113 @@ const makeLocationEnemies = (loc: LocationId): Enemy[] => {
   return defs[loc].map((d, i) => ({ ...d, id: i + 1 }));
 };
 
+// ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
+
+const SAVE_KEY     = 'dungeon_rpg_v1';
+const SAVE_VERSION = 1;
+
+interface SaveData {
+  version:         number;
+  playerLevel:     number;
+  playerXp:        number;
+  xpToNext:        number;
+  playerGold:      number;
+  playerBonusDmg:  number;
+  levelHpBonus:    number;
+  playerHp:        number;
+  playerMaxHp:     number;
+  stats:           Stats;
+  statPoints:      number;
+  inventory:       Item[];
+  equipment:       Equipment;
+  equipBonuses:    EquipBonuses;
+  playerPos:       { x: number; y: number };
+  currentLocation: LocationId;
+  enemies:         Enemy[];
+}
+
+function saveGame(data: SaveData): void {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch { /* quota */ }
+}
+
+function loadSave(): SaveData | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as SaveData;
+    if (data.version !== SAVE_VERSION) return null;
+    return data;
+  } catch { return null; }
+}
+
+function deleteSave(): void {
+  localStorage.removeItem(SAVE_KEY);
+}
+
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
 export default function App() {
 
+  // ── Load saved game exactly once on mount ──────────────────────────────────
+  const [sv] = useState<SaveData | null>(() => loadSave());
+
   // ── Core state ─────────────────────────────────────────────────────────────
   const [phase, setPhase]                 = useState<Phase>('explore');
-  const [playerPos, setPlayerPos]         = useState(LOCATION_SPAWN.city);
-  const [playerHp, setPlayerHp]           = useState(INITIAL_PLAYER_HP);
-  const [playerMaxHp, setPlayerMaxHp]     = useState(calcMaxHp(0, INITIAL_STATS.endurance));
-  const [enemies, setEnemies]             = useState<Enemy[]>([]);
+  const [playerPos, setPlayerPos]         = useState(sv?.playerPos        ?? LOCATION_SPAWN.city);
+  const [playerHp, setPlayerHp]           = useState(sv?.playerHp         ?? INITIAL_PLAYER_HP);
+  const [playerMaxHp, setPlayerMaxHp]     = useState(sv?.playerMaxHp      ?? calcMaxHp(0, INITIAL_STATS.endurance));
+  const [enemies, setEnemies]             = useState<Enemy[]>(sv?.enemies  ?? []);
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
   const [shieldActive, setShieldActive]   = useState(false);
   const [skillsCd, setSkillsCd]           = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-  const [logs, setLogs]                   = useState<LogEntry[]>([{ id: 0, msg: 'Тёмные подземелья ждут...' }]);
+  const [logs, setLogs]                   = useState<LogEntry[]>([{ id: 0, msg: sv ? '💾 Игра загружена!' : 'Тёмные подземелья ждут...' }]);
   const [floatingNums, setFloatingNums]   = useState<FloatingNum[]>([]);
 
   // ── Progression state ──────────────────────────────────────────────────────
-  const [playerLevel, setPlayerLevel]       = useState(INITIAL_PLAYER_LVL);
-  const [playerXp, setPlayerXp]             = useState(0);
-  const [xpToNext, setXpToNext]             = useState(xpRequired(INITIAL_PLAYER_LVL));
-  const [playerGold, setPlayerGold]         = useState(0);
-  const [playerBonusDmg, setPlayerBonusDmg] = useState(0);
-  const [levelHpBonus, setLevelHpBonus]     = useState(0);
+  const [playerLevel, setPlayerLevel]       = useState(sv?.playerLevel     ?? INITIAL_PLAYER_LVL);
+  const [playerXp, setPlayerXp]             = useState(sv?.playerXp        ?? 0);
+  const [xpToNext, setXpToNext]             = useState(sv?.xpToNext        ?? xpRequired(INITIAL_PLAYER_LVL));
+  const [playerGold, setPlayerGold]         = useState(sv?.playerGold      ?? 0);
+  const [playerBonusDmg, setPlayerBonusDmg] = useState(sv?.playerBonusDmg ?? 0);
+  const [levelHpBonus, setLevelHpBonus]     = useState(sv?.levelHpBonus    ?? 0);
   const [lastKillReward, setLastKillReward] = useState<KillReward | null>(null);
 
   // ── Stats state ────────────────────────────────────────────────────────────
-  const [stats, setStats]               = useState<Stats>({ ...INITIAL_STATS });
-  const [statPoints, setStatPoints]     = useState(0);
+  const [stats, setStats]               = useState<Stats>(sv?.stats         ?? { ...INITIAL_STATS });
+  const [statPoints, setStatPoints]     = useState(sv?.statPoints            ?? 0);
   const [showCharPanel, setShowCharPanel] = useState(false);
 
   // ── Inventory / equipment state ────────────────────────────────────────────
-  const [equipment, setEquipment]       = useState<Equipment>({ ...EMPTY_EQUIPMENT });
-  const [inventory, setInventory]       = useState<Item[]>([]);
-  const [equipBonuses, setEquipBonuses] = useState<EquipBonuses>({ ...ZERO_EQUIP_BONUSES });
+  const [equipment, setEquipment]         = useState<Equipment>(sv?.equipment       ?? { ...EMPTY_EQUIPMENT });
+  const [inventory, setInventory]         = useState<Item[]>(sv?.inventory           ?? []);
+  const [equipBonuses, setEquipBonuses]   = useState<EquipBonuses>(sv?.equipBonuses ?? { ...ZERO_EQUIP_BONUSES });
   const [showInventory, setShowInventory] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  const [lootNotif, setLootNotif]           = useState<string | null>(null);
+  const [selectedItem, setSelectedItem]   = useState<Item | null>(null);
+  const [lootNotif, setLootNotif]         = useState<string | null>(null);
 
   // ── World map state ─────────────────────────────────────────────────────────
-  const [currentLocation, setCurrentLocation] = useState<LocationId>('city');
+  const [currentLocation, setCurrentLocation] = useState<LocationId>(sv?.currentLocation ?? 'city');
   const [transitioning, setTransitioning]     = useState(false);
   const [npcDialog, setNpcDialog]             = useState<string | null>(null);
 
-  // ── Refs ───────────────────────────────────────────────────────────────────
-  const playerHpRef        = useRef(calcMaxHp(0, INITIAL_STATS.endurance));
-  const playerMaxHpRef     = useRef(calcMaxHp(0, INITIAL_STATS.endurance));
+  // ── Refs (initialised from save so callbacks see correct values immediately) ─
+  const playerHpRef        = useRef(sv?.playerHp         ?? calcMaxHp(0, INITIAL_STATS.endurance));
+  const playerMaxHpRef     = useRef(sv?.playerMaxHp      ?? calcMaxHp(0, INITIAL_STATS.endurance));
   const shieldRef          = useRef(false);
   const phaseRef           = useRef<Phase>('explore');
-  const playerPosRef       = useRef(LOCATION_SPAWN.city);
-  const enemiesRef         = useRef<Enemy[]>([]);
+  const playerPosRef       = useRef(sv?.playerPos         ?? LOCATION_SPAWN.city);
+  const enemiesRef         = useRef<Enemy[]>(sv?.enemies  ?? []);
   const activeEnemyIdRef   = useRef<number | null>(null);
-  const statsRef           = useRef<Stats>({ ...INITIAL_STATS });
-  const playerBonusDmgRef  = useRef(0);
-  const levelHpBonusRef    = useRef(0);
-  const playerLevelRef     = useRef(INITIAL_PLAYER_LVL);
-  const playerXpRef        = useRef(0);
-  const playerGoldRef      = useRef(0);
-  const statPointsRef      = useRef(0);
-  const equipmentRef       = useRef<Equipment>({ ...EMPTY_EQUIPMENT });
-  const equipBonusesRef    = useRef<EquipBonuses>({ ...ZERO_EQUIP_BONUSES });
-  const currentLocationRef = useRef<LocationId>('city');
+  const statsRef           = useRef<Stats>(sv?.stats      ?? { ...INITIAL_STATS });
+  const playerBonusDmgRef  = useRef(sv?.playerBonusDmg   ?? 0);
+  const levelHpBonusRef    = useRef(sv?.levelHpBonus      ?? 0);
+  const playerLevelRef     = useRef(sv?.playerLevel       ?? INITIAL_PLAYER_LVL);
+  const playerXpRef        = useRef(sv?.playerXp          ?? 0);
+  const playerGoldRef      = useRef(sv?.playerGold        ?? 0);
+  const statPointsRef      = useRef(sv?.statPoints        ?? 0);
+  const equipmentRef       = useRef<Equipment>(sv?.equipment        ?? { ...EMPTY_EQUIPMENT });
+  const equipBonusesRef    = useRef<EquipBonuses>(sv?.equipBonuses  ?? { ...ZERO_EQUIP_BONUSES });
+  const currentLocationRef = useRef<LocationId>(sv?.currentLocation ?? 'city');
   const transitioningRef   = useRef(false);
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -455,6 +501,24 @@ export default function App() {
   useEffect(() => { statPointsRef.current      = statPoints;    }, [statPoints]);
   useEffect(() => { equipmentRef.current       = equipment;     }, [equipment]);
   useEffect(() => { equipBonusesRef.current    = equipBonuses;  }, [equipBonuses]);
+
+  // ── Auto-save (debounced 400 ms after any saveable state change) ───────────
+  useEffect(() => {
+    const t = setTimeout(() => {
+      saveGame({
+        version: SAVE_VERSION,
+        playerLevel, playerXp, xpToNext, playerGold,
+        playerBonusDmg, levelHpBonus,
+        playerHp, playerMaxHp,
+        stats, statPoints,
+        inventory, equipment, equipBonuses,
+        playerPos, currentLocation, enemies,
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [playerLevel, playerXp, xpToNext, playerGold, playerBonusDmg, levelHpBonus,
+      playerHp, playerMaxHp, stats, statPoints, inventory, equipment, equipBonuses,
+      playerPos, currentLocation, enemies]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const addLog = useCallback((msg: string) => {
@@ -885,25 +949,63 @@ export default function App() {
     // gold, inventory, equipment, equipBonuses, playerMaxHp
   }, []);
 
-  // ── Full character reset (available for future use — not called anywhere) ──
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // ── Full reset — wipes save, returns to Lv.1 in city ("Играть снова") ──────
   const resetCharacter = useCallback(() => {
-    resetRun();
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+
+    deleteSave();
+
     const initMaxHp = calcMaxHp(0, INITIAL_STATS.endurance);
 
-    playerHpRef.current      = initMaxHp; playerMaxHpRef.current = initMaxHp;
-    playerBonusDmgRef.current = 0; levelHpBonusRef.current = 0; playerLevelRef.current = INITIAL_PLAYER_LVL;
-    playerXpRef.current      = 0; playerGoldRef.current = 0; statPointsRef.current = 0;
-    statsRef.current         = { ...INITIAL_STATS };
-    equipmentRef.current     = { ...EMPTY_EQUIPMENT }; equipBonusesRef.current = { ...ZERO_EQUIP_BONUSES };
+    // Reset refs immediately so any in-flight callbacks see correct values
+    playerHpRef.current        = initMaxHp;
+    playerMaxHpRef.current     = initMaxHp;
+    phaseRef.current           = 'explore';
+    shieldRef.current          = false;
+    playerPosRef.current       = LOCATION_SPAWN.city;
+    enemiesRef.current         = [];
+    activeEnemyIdRef.current   = null;
+    playerBonusDmgRef.current  = 0;
+    levelHpBonusRef.current    = 0;
+    playerLevelRef.current     = INITIAL_PLAYER_LVL;
+    playerXpRef.current        = 0;
+    playerGoldRef.current      = 0;
+    statPointsRef.current      = 0;
+    statsRef.current           = { ...INITIAL_STATS };
+    equipmentRef.current       = { ...EMPTY_EQUIPMENT };
+    equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
+    currentLocationRef.current = 'city';
 
-    setPlayerHp(initMaxHp); setPlayerMaxHp(initMaxHp);
-    setPlayerLevel(INITIAL_PLAYER_LVL); setPlayerXp(0); setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
-    setPlayerGold(0); setPlayerBonusDmg(0); setLevelHpBonus(0);
-    setStats({ ...INITIAL_STATS }); setStatPoints(0);
-    setEquipment({ ...EMPTY_EQUIPMENT }); setInventory([]); setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
+    // Reset state
+    setPhase('explore');
+    setPlayerPos(LOCATION_SPAWN.city);
+    setPlayerHp(initMaxHp);
+    setPlayerMaxHp(initMaxHp);
+    setEnemies([]);
+    setActiveEnemyId(null);
+    setShieldActive(false);
+    setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    setFloatingNums([]);
+    setLastKillReward(null);
+    setPlayerLevel(INITIAL_PLAYER_LVL);
+    setPlayerXp(0);
+    setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
+    setPlayerGold(0);
+    setPlayerBonusDmg(0);
+    setLevelHpBonus(0);
+    setStats({ ...INITIAL_STATS });
+    setStatPoints(0);
+    setEquipment({ ...EMPTY_EQUIPMENT });
+    setInventory([]);
+    setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
+    setCurrentLocation('city');
+    setLootNotif(null);
+    setShowInventory(false);
+    setSelectedItem(null);
+    setShowCharPanel(false);
     setLogs([{ id: Date.now(), msg: 'Тёмные подземелья ждут...' }]);
-  }, [resetRun]);
+  }, []);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const activeEnemy   = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
@@ -1152,7 +1254,7 @@ export default function App() {
                   <span className="text-yellow-400 font-bold">+{lastKillReward.gold} золота</span>
                 </div>
               )}
-              <button onClick={resetRun}
+              <button onClick={resetCharacter}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
               </button>
@@ -1165,7 +1267,7 @@ export default function App() {
               <h2 className="text-3xl font-bold text-destructive mb-2 drop-shadow-lg">☠️ ПОРАЖЕНИЕ</h2>
               <p className="text-white/80 mb-2 font-medium">Вы пали в бою...</p>
               <p className="text-[#666] text-sm mb-5">Уровень {playerLevel} · 💰 {playerGold}</p>
-              <button onClick={resetRun}
+              <button onClick={resetCharacter}
                 className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
                 Играть снова
               </button>
