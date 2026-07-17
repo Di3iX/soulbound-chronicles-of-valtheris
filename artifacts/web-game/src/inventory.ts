@@ -1,6 +1,6 @@
 // ─── INVENTORY / ITEM SYSTEM ──────────────────────────────────────────────────
 
-export type ItemType = 'weapon' | 'helmet' | 'armor' | 'gloves' | 'boots';
+export type ItemType = 'weapon' | 'helmet' | 'armor' | 'gloves' | 'boots' | 'consumable';
 export type Rarity   = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface ItemBonuses {
@@ -21,6 +21,9 @@ export interface Item {
 }
 
 export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
+  // Consumables
+  healing_potion:         { key: 'healing_potion',         name: 'Зелье лечения',        type: 'consumable', rarity: 'common',    bonuses: {} },
+  greater_healing_potion: { key: 'greater_healing_potion', name: 'Большое зелье лечения', type: 'consumable', rarity: 'uncommon',  bonuses: {} },
   // Weapons
   rusty_sword:      { key: 'rusty_sword',      name: 'Ржавый меч',         type: 'weapon',  rarity: 'common',    bonuses: { damage: 2 } },
   iron_sword:       { key: 'iron_sword',       name: 'Железный меч',       type: 'weapon',  rarity: 'uncommon',  bonuses: { damage: 5 } },
@@ -65,7 +68,7 @@ export const RARITY_STYLE: Record<Rarity, { label: string; border: string; text:
 };
 
 export const TYPE_LABEL: Record<ItemType, string> = {
-  weapon: 'Оружие', helmet: 'Шлем', armor: 'Броня', gloves: 'Перчатки', boots: 'Обувь',
+  weapon: 'Оружие', helmet: 'Шлем', armor: 'Броня', gloves: 'Перчатки', boots: 'Обувь', consumable: 'Зелье',
 };
 
 /** Instantiate an item from the catalog with a unique runtime ID. */

@@ -22,6 +22,8 @@ import {
 } from './world/locations';
 import { QuestProgress, QUEST_DEFS, getQuestEntry } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
+import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL } from './shop/shop';
+import ShopPanel from './shop/ShopPanel';
 
 const INITIAL_PLAYER_HP      = 100;
 const INITIAL_PLAYER_LVL     = 1;
@@ -91,6 +93,7 @@ export default function App() {
   const [questProgress, setQuestProgress]     = useState<QuestProgress>(sv?.questProgress ?? {});
   const [questDialogue, setQuestDialogue]     = useState<NpcDialogue | null>(null);
   const [showQuestPanel, setShowQuestPanel]   = useState(false);
+  const [showShop, setShowShop]               = useState(false);
 
   // ── Refs (initialised from save so callbacks see correct values immediately) ─
   const playerHpRef        = useRef(sv?.playerHp         ?? calcMaxHp(0, INITIAL_STATS.endurance));
@@ -669,10 +672,67 @@ export default function App() {
 
   // ── NPC interact (called by the nearby-NPC Interact button) ──────────────
   const handleNpcInteract = useCallback((npc: { id: string; name: string; emoji: string }) => {
+    // Merchant → open shop
+    if (npc.id === 'merchant') {
+      setShowShop(true);
+      setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false);
+      return;
+    }
+    // Quest NPCs or generic dialog
     const dlg = getNpcDialogue(npc.id, questProgressRef.current);
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
   }, []);
+
+  // ── Shop: buy ────────────────────────────────────────────────────────────
+  const handleShopBuy = useCallback((key: string) => {
+    const price = SHOP_BUY_PRICE[key];
+    if (price === undefined) return;
+    if (playerGoldRef.current < price) {
+      addLog('💰 Недостаточно золота!');
+      return;
+    }
+    const item = makeItem(key);
+    playerGoldRef.current -= price;
+    setPlayerGold(playerGoldRef.current);
+    inventoryRef.current = [...inventoryRef.current, item];
+    setInventory(prev => [...prev, item]);
+    addLog(`🛒 Куплено: ${item.name} за ${price}💰`);
+  }, [addLog]);
+
+  // ── Shop: sell ───────────────────────────────────────────────────────────
+  const handleShopSell = useCallback((itemId: string) => {
+    const item = inventoryRef.current.find(i => i.id === itemId);
+    if (!item) return;
+    if (Object.values(equipmentRef.current).some(eq => eq?.id === itemId)) {
+      addLog('Нельзя продать надетый предмет!');
+      return;
+    }
+    const price = sellPrice(item);
+    inventoryRef.current = inventoryRef.current.filter(i => i.id !== itemId);
+    setInventory(prev => prev.filter(i => i.id !== itemId));
+    playerGoldRef.current += price;
+    setPlayerGold(playerGoldRef.current);
+    addLog(`💸 Продано: ${item.name} за ${price}💰`);
+  }, [addLog]);
+
+  // ── Consumable: use ───────────────────────────────────────────────────────
+  const handleUseItem = useCallback((item: Item) => {
+    const healAmt = CONSUMABLE_HEAL[item.key];
+    if (!healAmt) return;
+    const currentHp = playerHpRef.current;
+    const maxHp     = playerMaxHpRef.current;
+    if (currentHp >= maxHp) { addLog('❤️ HP уже максимально!'); return; }
+    const newHp  = Math.min(maxHp, currentHp + healAmt);
+    const healed = newHp - currentHp;
+    playerHpRef.current = newHp;
+    setPlayerHp(newHp);
+    inventoryRef.current = inventoryRef.current.filter(i => i.id !== item.id);
+    setInventory(prev => prev.filter(i => i.id !== item.id));
+    setSelectedItem(null);
+    addLog(`🧪 Использовано ${item.name}: +${healed} HP!`);
+    spawnFloat(`+${healed}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
+  }, [addLog, spawnFloat]);
 
   // ── Reset current map (respawn in current location — keep all character progress) ──
   const resetCurrentMap = useCallback(() => {
@@ -707,6 +767,7 @@ export default function App() {
     setShowInventory(false);
     setSelectedItem(null);
     setShowCharPanel(false);
+    setShowShop(false);
     setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
 
     // ── Character progress intentionally NOT reset: ──────────────────────────
@@ -912,7 +973,7 @@ export default function App() {
 
           {/* Персонаж button */}
           <button
-            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setSelectedItem(null); }}
+            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showCharPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {statPoints > 0 && (
@@ -923,7 +984,7 @@ export default function App() {
 
           {/* Инвентарь button */}
           <button
-            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setSelectedItem(null); }}
+            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showInventory ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {inventory.length > 0 && (
@@ -934,7 +995,7 @@ export default function App() {
 
           {/* Карта мира button */}
           <button
-            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setSelectedItem(null); }}
+            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showWorldMap ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             🗺
@@ -942,7 +1003,7 @@ export default function App() {
 
           {/* Задания button */}
           <button
-            onClick={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setSelectedItem(null); }}
+            onClick={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showQuestPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {Object.values(questProgress).some(e => e.status === 'active') && (
@@ -1331,7 +1392,20 @@ export default function App() {
                         <span key={i} className="text-[13px] text-white font-mono">• {line}</span>
                       ))}
                     </div>
-                    {isEquipped ? (
+                    {selectedItem.type === 'consumable' ? (
+                      <>
+                        {CONSUMABLE_HEAL[selectedItem.key] && (
+                          <p className="text-[12px] text-green-400 mb-2">
+                            ❤️ Восстанавливает {CONSUMABLE_HEAL[selectedItem.key]} HP
+                          </p>
+                        )}
+                        <button
+                          onClick={() => handleUseItem(selectedItem)}
+                          className="w-full py-2 rounded border-2 border-green-700 text-green-400 font-bold text-[13px] bg-green-950/20 active:scale-95 transition-transform shadow-[0_0_8px_rgba(34,197,94,0.15)]">
+                          🧪 Использовать
+                        </button>
+                      </>
+                    ) : isEquipped ? (
                       <button
                         onClick={() => unequipItem(slot)}
                         className="w-full py-2 rounded border-2 border-[#555] text-[#aaa] font-bold text-[13px] bg-[#111118] active:scale-95 transition-transform">
@@ -1349,6 +1423,20 @@ export default function App() {
               })()}
 
             </div>
+          )}
+
+          {/* ══ SHOP PANEL OVERLAY (z-60) ════════════════════════════════════════
+              Merchant shop — Buy / Sell tabs.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showShop && (
+            <ShopPanel
+              playerGold={playerGold}
+              inventory={inventory}
+              equipment={equipment}
+              onBuy={handleShopBuy}
+              onSell={handleShopSell}
+              onClose={() => setShowShop(false)}
+            />
           )}
 
           {/* ══ QUEST PANEL OVERLAY (z-60) ══════════════════════════════════════
