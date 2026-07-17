@@ -247,9 +247,13 @@ const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
 };
 
 const DROP_TABLES: Record<string, { chance: number; pool: string[] }> = {
-  'Гоблин': { chance: 0.20, pool: ['rusty_sword', 'leather_helm', 'leather_armor', 'leather_gloves', 'light_boots'] },
-  'Волк':   { chance: 0.15, pool: ['rusty_sword', 'leather_helm', 'light_boots',   'leather_gloves'] },
-  'Орк':    { chance: 0.50, pool: ['iron_sword',  'orc_axe',      'iron_helm',     'chainmail',     'battle_gloves', 'scout_boots'] },
+  'Гоблин':          { chance: 0.20, pool: ['rusty_sword', 'leather_helm', 'leather_armor', 'leather_gloves', 'light_boots'] },
+  'Волк':            { chance: 0.15, pool: ['rusty_sword', 'leather_helm', 'light_boots',   'leather_gloves'] },
+  'Орк':             { chance: 0.50, pool: ['iron_sword',  'orc_axe',      'iron_helm',     'chainmail',     'battle_gloves', 'scout_boots'] },
+  'Кабан':           { chance: 0.25, pool: ['rusty_sword', 'leather_armor', 'light_boots'] },
+  'Гигантский паук': { chance: 0.35, pool: ['iron_sword',  'leather_gloves', 'scout_boots'] },
+  'Скелет':          { chance: 0.30, pool: ['orc_axe',     'iron_helm',      'chainmail'] },
+  'Зомби':           { chance: 0.45, pool: ['iron_sword',  'orc_axe',        'iron_helm',  'chainmail', 'battle_gloves', 'scout_boots', 'arcane_staff'] },
 };
 
 const RARITY_STYLE: Record<Rarity, { label: string; border: string; text: string; glow: string; bg: string }> = {
@@ -334,13 +338,38 @@ interface KillReward { xp: number; gold: number; leveledUp: boolean; newLevel: n
 
 // ─── ENEMY FACTORY ────────────────────────────────────────────────────────────
 
-const makeEnemies = (): Enemy[] => [
-  { id: 1, name: 'Гоблин', emoji: '👺', x: 8, y: 0, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
-  { id: 2, name: 'Гоблин', emoji: '👺', x: 5, y: 3, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
-  { id: 3, name: 'Гоблин', emoji: '👺', x: 0, y: 5, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
-  { id: 4, name: 'Волк',   emoji: '🐺', x: 9, y: 6, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
-  { id: 5, name: 'Орк',    emoji: '👹', x: 0, y: 0, hp: 300, maxHp: 300, attackInterval: 3500, dmgMin: 15, dmgMax: 25, dead: false },
-];
+const makeLocationEnemies = (loc: LocationId): Enemy[] => {
+  const defs: Record<LocationId, Array<Omit<Enemy, 'id'>>> = {
+    city:      [],
+    forest:    [
+      { name: 'Гоблин',          emoji: '👺', x: 5,  y: 2,  hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
+      { name: 'Гоблин',          emoji: '👺', x: 14, y: 5,  hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
+      { name: 'Волк',            emoji: '🐺', x: 8,  y: 13, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
+      { name: 'Волк',            emoji: '🐺', x: 16, y: 14, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
+      { name: 'Гоблин',          emoji: '👺', x: 4,  y: 17, hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
+    ],
+    cave:      [
+      { name: 'Орк',             emoji: '👹', x: 8,  y: 4,  hp: 300, maxHp: 300, attackInterval: 3500, dmgMin: 15, dmgMax: 25, dead: false },
+      { name: 'Орк',             emoji: '👹', x: 5,  y: 13, hp: 300, maxHp: 300, attackInterval: 3500, dmgMin: 15, dmgMax: 25, dead: false },
+      { name: 'Гигантский паук', emoji: '🕷️', x: 15, y: 7,  hp: 180, maxHp: 180, attackInterval: 1400, dmgMin: 8,  dmgMax: 16, dead: false },
+      { name: 'Гигантский паук', emoji: '🕷️', x: 12, y: 16, hp: 180, maxHp: 180, attackInterval: 1400, dmgMin: 8,  dmgMax: 16, dead: false },
+    ],
+    fields:    [
+      { name: 'Волк',            emoji: '🐺', x: 4,  y: 5,  hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
+      { name: 'Кабан',           emoji: '🐗', x: 14, y: 6,  hp: 220, maxHp: 220, attackInterval: 2800, dmgMin: 10, dmgMax: 18, dead: false },
+      { name: 'Волк',            emoji: '🐺', x: 7,  y: 13, hp: 100, maxHp: 100, attackInterval: 900,  dmgMin: 3,  dmgMax: 8,  dead: false },
+      { name: 'Кабан',           emoji: '🐗', x: 14, y: 15, hp: 220, maxHp: 220, attackInterval: 2800, dmgMin: 10, dmgMax: 18, dead: false },
+    ],
+    graveyard: [
+      { name: 'Скелет',          emoji: '💀', x: 4,  y: 6,  hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
+      { name: 'Зомби',           emoji: '🧟', x: 14, y: 5,  hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
+      { name: 'Скелет',          emoji: '💀', x: 7,  y: 12, hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
+      { name: 'Зомби',           emoji: '🧟', x: 16, y: 14, hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
+      { name: 'Скелет',          emoji: '💀', x: 4,  y: 17, hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
+    ],
+  };
+  return defs[loc].map((d, i) => ({ ...d, id: i + 1 }));
+};
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -348,10 +377,10 @@ export default function App() {
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [phase, setPhase]                 = useState<Phase>('explore');
-  const [playerPos, setPlayerPos]         = useState({ x: 1, y: 8 });
+  const [playerPos, setPlayerPos]         = useState(LOCATION_SPAWN.city);
   const [playerHp, setPlayerHp]           = useState(INITIAL_PLAYER_HP);
   const [playerMaxHp, setPlayerMaxHp]     = useState(calcMaxHp(0, INITIAL_STATS.endurance));
-  const [enemies, setEnemies]             = useState<Enemy[]>(makeEnemies);
+  const [enemies, setEnemies]             = useState<Enemy[]>([]);
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
   const [shieldActive, setShieldActive]   = useState(false);
   const [skillsCd, setSkillsCd]           = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
@@ -378,15 +407,20 @@ export default function App() {
   const [equipBonuses, setEquipBonuses] = useState<EquipBonuses>({ ...ZERO_EQUIP_BONUSES });
   const [showInventory, setShowInventory] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  const [lootNotif, setLootNotif]       = useState<string | null>(null);
+  const [lootNotif, setLootNotif]           = useState<string | null>(null);
+
+  // ── World map state ─────────────────────────────────────────────────────────
+  const [currentLocation, setCurrentLocation] = useState<LocationId>('city');
+  const [transitioning, setTransitioning]     = useState(false);
+  const [npcDialog, setNpcDialog]             = useState<string | null>(null);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const playerHpRef        = useRef(calcMaxHp(0, INITIAL_STATS.endurance));
   const playerMaxHpRef     = useRef(calcMaxHp(0, INITIAL_STATS.endurance));
   const shieldRef          = useRef(false);
   const phaseRef           = useRef<Phase>('explore');
-  const playerPosRef       = useRef({ x: 1, y: 8 });
-  const enemiesRef         = useRef<Enemy[]>(makeEnemies());
+  const playerPosRef       = useRef(LOCATION_SPAWN.city);
+  const enemiesRef         = useRef<Enemy[]>([]);
   const activeEnemyIdRef   = useRef<number | null>(null);
   const statsRef           = useRef<Stats>({ ...INITIAL_STATS });
   const playerBonusDmgRef  = useRef(0);
@@ -397,17 +431,21 @@ export default function App() {
   const statPointsRef      = useRef(0);
   const equipmentRef       = useRef<Equipment>({ ...EMPTY_EQUIPMENT });
   const equipBonusesRef    = useRef<EquipBonuses>({ ...ZERO_EQUIP_BONUSES });
+  const currentLocationRef = useRef<LocationId>('city');
+  const transitioningRef   = useRef(false);
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep refs in sync
-  useEffect(() => { playerHpRef.current       = playerHp;       }, [playerHp]);
-  useEffect(() => { playerMaxHpRef.current     = playerMaxHp;   }, [playerMaxHp]);
-  useEffect(() => { shieldRef.current          = shieldActive;  }, [shieldActive]);
-  useEffect(() => { phaseRef.current           = phase;         }, [phase]);
-  useEffect(() => { playerPosRef.current       = playerPos;     }, [playerPos]);
-  useEffect(() => { enemiesRef.current         = enemies;       }, [enemies]);
-  useEffect(() => { activeEnemyIdRef.current   = activeEnemyId; }, [activeEnemyId]);
+  useEffect(() => { playerHpRef.current       = playerHp;         }, [playerHp]);
+  useEffect(() => { playerMaxHpRef.current     = playerMaxHp;     }, [playerMaxHp]);
+  useEffect(() => { shieldRef.current          = shieldActive;    }, [shieldActive]);
+  useEffect(() => { phaseRef.current           = phase;           }, [phase]);
+  useEffect(() => { playerPosRef.current       = playerPos;       }, [playerPos]);
+  useEffect(() => { enemiesRef.current         = enemies;         }, [enemies]);
+  useEffect(() => { activeEnemyIdRef.current   = activeEnemyId;   }, [activeEnemyId]);
+  useEffect(() => { currentLocationRef.current = currentLocation; }, [currentLocation]);
+  useEffect(() => { transitioningRef.current   = transitioning;   }, [transitioning]);
   useEffect(() => { statsRef.current           = stats;         }, [stats]);
   useEffect(() => { playerBonusDmgRef.current  = playerBonusDmg; }, [playerBonusDmg]);
   useEffect(() => { levelHpBonusRef.current    = levelHpBonus;  }, [levelHpBonus]);
@@ -532,7 +570,16 @@ export default function App() {
 
   // ── Progression ───────────────────────────────────────────────────────────
   const applyRewards = useCallback((enemyName: string): KillReward => {
-    const reward = { xp: 10, goldMin: 1, goldMax: 3, ...({ 'Гоблин': { xp: 25, goldMin: 5, goldMax: 10 }, 'Волк': { xp: 20, goldMin: 3, goldMax: 7 }, 'Орк': { xp: 60, goldMin: 15, goldMax: 25 } }[enemyName] ?? {}) };
+    const REWARD_TABLE: Record<string, { xp: number; goldMin: number; goldMax: number }> = {
+      'Гоблин':          { xp: 25,  goldMin: 5,  goldMax: 10 },
+      'Волк':            { xp: 20,  goldMin: 3,  goldMax: 7  },
+      'Орк':             { xp: 60,  goldMin: 15, goldMax: 25 },
+      'Кабан':           { xp: 35,  goldMin: 6,  goldMax: 12 },
+      'Гигантский паук': { xp: 45,  goldMin: 8,  goldMax: 15 },
+      'Скелет':          { xp: 50,  goldMin: 10, goldMax: 18 },
+      'Зомби':           { xp: 80,  goldMin: 20, goldMax: 35 },
+    };
+    const reward = REWARD_TABLE[enemyName] ?? { xp: 10, goldMin: 1, goldMax: 3 };
 
     const goldGained = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
     playerGoldRef.current += goldGained;
@@ -610,21 +657,62 @@ export default function App() {
     }
   }, [addLog, applyRewards]);
 
+  // ── Location transition ───────────────────────────────────────────────────
+  const handleLocationTransition = useCallback((to: LocationId, spawnAt: { x: number; y: number }) => {
+    if (transitioningRef.current) return;
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+    transitioningRef.current = true;
+    setTransitioning(true);
+    setTimeout(() => {
+      const fresh = makeLocationEnemies(to);
+      currentLocationRef.current  = to;
+      playerPosRef.current        = spawnAt;
+      enemiesRef.current          = fresh;
+      phaseRef.current            = 'explore';
+      activeEnemyIdRef.current    = null;
+      transitioningRef.current    = false;
+      setCurrentLocation(to);
+      setPlayerPos(spawnAt);
+      setEnemies(fresh);
+      setPhase('explore');
+      setActiveEnemyId(null);
+      setShieldActive(false);
+      setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+      setFloatingNums([]);
+      setTransitioning(false);
+      addLog(`📍 Вы прибыли: ${LOCATION_META[to].label}`);
+    }, 800);
+  }, [addLog]);
+
   // ── Movement ─────────────────────────────────────────────────────────────
   const movePlayer = useCallback((dx: number, dy: number) => {
     if (phaseRef.current !== 'explore') return;
+    if (transitioningRef.current) return;
     const { x, y } = playerPosRef.current;
     const nx = x + dx, ny = y + dy;
-    if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) { addLog('Путь заблокирован!'); return; }
+    if (nx < 0 || ny < 0 || nx >= MAP_COLS || ny >= MAP_ROWS) { addLog('Путь заблокирован!'); return; }
+    const currentMap = LOCATION_MAPS[currentLocationRef.current];
+    const tileType = currentMap[ny]?.[nx] ?? 1;
+    // NPC intercept
+    const npc = (LOCATION_NPCS[currentLocationRef.current] ?? []).find(n => n.x === nx && n.y === ny);
+    if (npc) { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); return; }
+    // Enemy intercept
     const hitEnemy = enemiesRef.current.find(e => !e.dead && e.x === nx && e.y === ny);
     if (hitEnemy) {
       phaseRef.current = 'combat'; activeEnemyIdRef.current = hitEnemy.id;
       setActiveEnemyId(hitEnemy.id); setPhase('combat');
       addLog(`⚔️ Бой с ${hitEnemy.name}!`); return;
     }
-    if (MAP[ny][nx] !== 0) { addLog('Путь заблокирован!'); return; }
+    // Exit tile intercept
+    if (tileType === 4) {
+      const exits = LOCATION_EXITS[currentLocationRef.current];
+      const exit = exits?.get(`${nx},${ny}`);
+      if (exit) { handleLocationTransition(exit.to, exit.spawnAt); return; }
+    }
+    if (tileType !== 0) { addLog('Путь заблокирован!'); return; }
     playerPosRef.current = { x: nx, y: ny }; setPlayerPos({ x: nx, y: ny });
-  }, [addLog]);
+  }, [addLog, handleLocationTransition]);
 
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -757,26 +845,28 @@ export default function App() {
     }
   }, [skillsCd, addLog, spawnFloat, handleEnemyDeath]);
 
-  // ── Reset run (new map + enemies, restore HP — keep all character progress) ─
+  // ── Reset run (respawn in current location — keep all character progress) ──
   const resetRun = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
-    const fresh = makeEnemies();
+    const loc   = currentLocationRef.current;
+    const fresh = makeLocationEnemies(loc);
+    const spawn = LOCATION_SPAWN[loc];
 
     // Max HP is based on current level, stats and equipment — nothing changes here
     const fullHp = playerMaxHpRef.current;
 
     // Run-level state
-    phaseRef.current        = 'explore';
-    playerHpRef.current     = fullHp;
-    shieldRef.current       = false;
-    playerPosRef.current    = { x: 1, y: 8 };
-    enemiesRef.current      = fresh;
+    phaseRef.current         = 'explore';
+    playerHpRef.current      = fullHp;
+    shieldRef.current        = false;
+    playerPosRef.current     = spawn;
+    enemiesRef.current       = fresh;
     activeEnemyIdRef.current = null;
 
     setPhase('explore');
-    setPlayerPos({ x: 1, y: 8 });
+    setPlayerPos(spawn);
     setPlayerHp(fullHp);
     setEnemies(fresh);
     setActiveEnemyId(null);
@@ -827,13 +917,22 @@ export default function App() {
   const dmgMax        = 16 + playerBonusDmg + totalStr * 2 + equipBonuses.damage;
   const atkIntervalSec = (calcAttackInterval(totalAgi, equipBonuses.atkSpeedPenalty) / 1000).toFixed(1);
 
+  // ── Camera / viewport ─────────────────────────────────────────────────────
+  const camCol    = Math.max(0, Math.min(MAP_COLS - VP_COLS, playerPos.x - Math.floor(VP_COLS / 2)));
+  const camRow    = Math.max(0, Math.min(MAP_ROWS - VP_ROWS, playerPos.y - Math.floor(VP_ROWS / 2)));
+  const currentMap = LOCATION_MAPS[currentLocation];
+  const currentNpcs = LOCATION_NPCS[currentLocation] ?? [];
+
   // ── Tile renderer ─────────────────────────────────────────────────────────
-  const renderTileContent = (x: number, y: number, tileType: number) => {
-    if (x === playerPos.x && y === playerPos.y)
+  const renderTileContent = (gx: number, gy: number, tileType: number) => {
+    if (gx === playerPos.x && gy === playerPos.y)
       return <div className="w-full h-full tile-player rounded flex items-center justify-center text-lg z-10 relative">🧝</div>;
-    const enemy = livingEnemies.find(e => e.x === x && e.y === y);
+    const enemy = livingEnemies.find(e => e.x === gx && e.y === gy);
     if (enemy)
       return <div className={`w-full h-full rounded flex items-center justify-center text-lg z-10 relative ${enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle'}`}>{enemy.emoji}</div>;
+    const npc = currentNpcs.find(n => n.x === gx && n.y === gy);
+    if (npc) return <div className="w-full h-full tile-npc flex items-center justify-center text-sm">{npc.emoji}</div>;
+    if (tileType === 4) return <div className="w-full h-full tile-exit flex items-center justify-center text-sm">🚪</div>;
     if (tileType === 1) return <div className="w-full h-full tile-tree  flex items-center justify-center text-sm">🌲</div>;
     if (tileType === 2) return <div className="w-full h-full tile-rock  flex items-center justify-center text-sm">🪨</div>;
     if (tileType === 3) return <div className="w-full h-full tile-water flex items-center justify-center text-blue-400 text-xs font-bold tracking-tighter opacity-80">〰</div>;
@@ -880,12 +979,25 @@ export default function App() {
             ) : (
               <>
                 <div className="flex justify-end items-end mb-1">
-                  <span className="text-xs text-[#666] font-mono">Врагов: {livingEnemies.length} / 5</span>
+                  {LOCATION_META[currentLocation].safe
+                    ? <span className="text-xs text-green-700 font-mono">Безопасная зона</span>
+                    : <span className="text-xs text-[#666] font-mono">Врагов: {livingEnemies.length} / {enemies.length}</span>
+                  }
                 </div>
                 <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full border border-tile-border" />
               </>
             )}
           </div>
+        </div>
+
+        {/* Row 1b — Location name */}
+        <div className="flex items-center justify-center gap-2 pb-[2px]">
+          <span className="text-[10px] font-bold text-[#555] uppercase tracking-widest">
+            {LOCATION_META[currentLocation].emoji} {LOCATION_META[currentLocation].label}
+          </span>
+          {LOCATION_META[currentLocation].safe && (
+            <span className="text-[9px] text-green-800 font-bold">· Безопасная зона</span>
+          )}
         </div>
 
         {/* Row 2 — XP bar + gold + panel buttons */}
@@ -925,44 +1037,75 @@ export default function App() {
       <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] p-2">
         <div className="relative" style={{ width: 'min(90vw, 360px)', height: 'min(90vw, 360px)' }}>
 
-          {/* Tile grid */}
+          {/* Tile grid — 10×10 viewport into 20×20 map */}
           <div className="absolute inset-0 grid grid-cols-10 grid-rows-10 gap-[1px] bg-tile-border p-[1px] border border-tile-border rounded shadow-lg shadow-black/50 overflow-hidden">
-            {MAP.map((row, y) => row.map((tileType, x) => (
-              <div key={`${x}-${y}`} className="relative bg-map-bg">
-                {renderTileContent(x, y, tileType)}
-              </div>
-            )))}
+            {Array.from({ length: VP_ROWS }, (_, vr) =>
+              Array.from({ length: VP_COLS }, (_, vc) => {
+                const gx = camCol + vc;
+                const gy = camRow + vr;
+                const tileType = currentMap[gy]?.[gx] ?? 1;
+                return (
+                  <div key={`${gx}-${gy}`} className="relative bg-map-bg">
+                    {renderTileContent(gx, gy, tileType)}
+                  </div>
+                );
+              })
+            )}
           </div>
 
-          {/* Map HP bars */}
+          {/* Map HP bars — camera-relative */}
           {phase === 'combat' && playerHp > 0 && (
             <div className="absolute pointer-events-none z-20 flex justify-center"
-              style={{ top: `${(playerPos.y / 10) * 100}%`, left: `${(playerPos.x / 10) * 100}%`, width: '10%', height: '10%', marginTop: '-6px' }}>
+              style={{ top: `${((playerPos.y - camRow) / VP_ROWS) * 100}%`, left: `${((playerPos.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
               <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
                 <div className="h-full bg-primary" style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
               </div>
             </div>
           )}
-          {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 && (
+          {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 &&
+            activeEnemy.x >= camCol && activeEnemy.x < camCol + VP_COLS &&
+            activeEnemy.y >= camRow && activeEnemy.y < camRow + VP_ROWS && (
             <div className="absolute pointer-events-none z-20 flex justify-center"
-              style={{ top: `${(activeEnemy.y / 10) * 100}%`, left: `${(activeEnemy.x / 10) * 100}%`, width: '10%', height: '10%', marginTop: '-6px' }}>
+              style={{ top: `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`, left: `${((activeEnemy.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
               <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
                 <div className="h-full bg-destructive" style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
               </div>
             </div>
           )}
 
-          {/* Floating numbers */}
-          {floatingNums.map(num => (
+          {/* Floating numbers — camera-relative, only in viewport */}
+          {floatingNums
+            .filter(n => n.col >= camCol && n.col < camCol + VP_COLS && n.row >= camRow && n.row < camRow + VP_ROWS)
+            .map(num => (
             <div key={num.id}
               className="absolute pointer-events-none z-30 font-bold text-base text-center animate-float w-[10%] h-[10%] flex items-center justify-center drop-shadow-md"
               style={{
-                top: `${(num.row / 10) * 100}%`, left: `${(num.col / 10) * 100}%`,
+                top: `${((num.row - camRow) / VP_ROWS) * 100}%`, left: `${((num.col - camCol) / VP_COLS) * 100}%`,
                 color: num.type === 'player-dmg' ? 'hsl(var(--destructive))' : num.type === 'heal' ? 'hsl(var(--success))' : 'hsl(var(--primary))',
               }}>
               {num.value}
             </div>
           ))}
+
+          {/* Transition overlay */}
+          {transitioning && (
+            <div className="absolute inset-0 z-[70] bg-black/90 flex flex-col items-center justify-center gap-2 rounded">
+              <span className="text-3xl animate-pulse">{LOCATION_META[currentLocation].emoji}</span>
+              <p className="text-sm font-bold text-[#aaa] tracking-widest uppercase">Переход...</p>
+            </div>
+          )}
+
+          {/* NPC dialog overlay */}
+          {npcDialog && (
+            <div className="absolute inset-0 z-[70] bg-black/80 flex flex-col items-center justify-center gap-3 rounded p-6">
+              <p className="text-sm text-white text-center leading-relaxed">{npcDialog}</p>
+              <button
+                onClick={() => setNpcDialog(null)}
+                className="px-4 py-1 rounded border border-primary text-primary text-sm font-bold">
+                Закрыть
+              </button>
+            </div>
+          )}
 
           {/* Loot notification toast */}
           {lootNotif && (
