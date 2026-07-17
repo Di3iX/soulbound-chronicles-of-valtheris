@@ -3,6 +3,7 @@ import type { Item } from './inventory';
 import type { Equipment, EquipBonuses } from './equipment';
 import type { LocationId, Enemy } from './combat';
 import type { QuestProgress } from './quests/quests';
+import type { SkillProgress } from './skills/skillTree';
 interface Stats  { strength: number; agility: number; endurance: number; }
 
 export interface SaveData {
@@ -25,6 +26,10 @@ export interface SaveData {
   enemies:         Enemy[];
   /** Optional — missing in old saves; defaults to {} on load. */
   questProgress?:  QuestProgress;
+  /** Optional — missing in old saves; defaults to {} on load. */
+  skillProgress?:  SkillProgress;
+  /** Optional — missing in old saves; defaults to 0 on load. */
+  skillPoints?:    number;
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';

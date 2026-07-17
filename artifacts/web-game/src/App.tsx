@@ -24,6 +24,9 @@ import { QuestProgress, QUEST_DEFS, getQuestEntry } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL } from './shop/shop';
 import ShopPanel from './shop/ShopPanel';
+import { ALL_SKILLS_MAP, SKILL_POINTS_PER_LEVEL } from './skills/skills';
+import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
+import SkillPanel from './skills/SkillPanel';
 
 const INITIAL_PLAYER_HP      = 100;
 const INITIAL_PLAYER_LVL     = 1;
@@ -94,6 +97,9 @@ export default function App() {
   const [questDialogue, setQuestDialogue]     = useState<NpcDialogue | null>(null);
   const [showQuestPanel, setShowQuestPanel]   = useState(false);
   const [showShop, setShowShop]               = useState(false);
+  const [skillProgress, setSkillProgress]     = useState<SkillProgress>(sv?.skillProgress ?? {});
+  const [skillPoints, setSkillPoints]         = useState(sv?.skillPoints ?? 0);
+  const [showSkillPanel, setShowSkillPanel]   = useState(false);
 
   // ── Refs (initialised from save so callbacks see correct values immediately) ─
   const playerHpRef        = useRef(sv?.playerHp         ?? calcMaxHp(0, INITIAL_STATS.endurance));
@@ -118,6 +124,9 @@ export default function App() {
   const inventoryRef       = useRef<Item[]>(sv?.inventory        ?? []);
   const xpToNextRef        = useRef(sv?.xpToNext                 ?? xpRequired(INITIAL_PLAYER_LVL));
   const questProgressRef   = useRef<QuestProgress>(sv?.questProgress ?? {});
+  const skillProgressRef   = useRef<SkillProgress>(sv?.skillProgress ?? {});
+  const skillPointsRef     = useRef(sv?.skillPoints ?? 0);
+  const skillBonusesRef    = useRef<SkillBonuses>(calcSkillBonuses(sv?.skillProgress ?? {}));
   // Prevents the auto-save from firing on the very first render (initial mount).
   // On mount the game either restores a save (sv != null) or starts fresh —
   // either way there is nothing new to persist yet.
@@ -147,6 +156,9 @@ export default function App() {
   useEffect(() => { inventoryRef.current       = inventory;     }, [inventory]);
   useEffect(() => { xpToNextRef.current        = xpToNext;      }, [xpToNext]);
   useEffect(() => { questProgressRef.current   = questProgress; }, [questProgress]);
+  useEffect(() => { skillProgressRef.current   = skillProgress; }, [skillProgress]);
+  useEffect(() => { skillPointsRef.current     = skillPoints;   }, [skillPoints]);
+  useEffect(() => { skillBonusesRef.current    = calcSkillBonuses(skillProgress); }, [skillProgress]);
 
   // ── Auto-save: immediate write on any meaningful state change ──────────────
   // Rules:
@@ -169,10 +181,11 @@ export default function App() {
       inventory, equipment, equipBonuses,
       playerPos, currentLocation, enemies,
       questProgress,
+      skillProgress, skillPoints,
     });
   }, [playerLevel, playerXp, xpToNext, playerGold, playerBonusDmg, levelHpBonus,
       playerHp, playerMaxHp, stats, statPoints, inventory, equipment, equipBonuses,
-      playerPos, currentLocation, enemies, questProgress]);
+      playerPos, currentLocation, enemies, questProgress, skillProgress, skillPoints]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const addLog = useCallback((msg: string) => {
@@ -192,7 +205,7 @@ export default function App() {
     statPointsRef.current -= 1;
     setStatPoints(p => p - 1);
     if (stat === 'endurance') {
-      const newMaxHp = calcMaxHp(levelHpBonusRef.current, newStats.endurance, equipBonusesRef.current.hp);
+      const newMaxHp = calcMaxHp(levelHpBonusRef.current, newStats.endurance, equipBonusesRef.current.hp) + skillBonusesRef.current.bonusHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
     }
@@ -221,7 +234,7 @@ export default function App() {
     setEquipBonuses(newBonuses);
 
     // Recalc max HP
-    const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, newBonuses.hp);
+    const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, newBonuses.hp) + skillBonusesRef.current.bonusHp;
     playerMaxHpRef.current = newMaxHp;
     setPlayerMaxHp(newMaxHp);
 
@@ -255,7 +268,7 @@ export default function App() {
     setEquipBonuses(newBonuses);
 
     // Recalc max HP
-    const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, newBonuses.hp);
+    const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, newBonuses.hp) + skillBonusesRef.current.bonusHp;
     playerMaxHpRef.current = newMaxHp;
     setPlayerMaxHp(newMaxHp);
 
@@ -295,22 +308,22 @@ export default function App() {
     setPlayerGold(playerGoldRef.current);
     addLog(`💰 Получено ${goldGained} золота!`);
 
-    const xpGained = reward.xp;
+    const xpGained = Math.floor(reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
     addLog(`✨ Получено ${xpGained} опыта!`);
 
     let newXp = playerXpRef.current + xpGained;
     let newLevel = playerLevelRef.current;
     let newBonusDmg = playerBonusDmgRef.current;
-    let hpBonusDelta = 0, newStatPts = 0;
+    let hpBonusDelta = 0, newStatPts = 0, newSkillPts = 0;
     let leveledUp = false;
     let needed = xpRequired(newLevel);
 
     while (newXp >= needed) {
-      newXp -= needed; newLevel++; newBonusDmg += 2; hpBonusDelta += 20; newStatPts += STAT_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
+      newXp -= needed; newLevel++; newBonusDmg += 2; hpBonusDelta += 20; newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
     }
 
     const newLevelHpBonus = levelHpBonusRef.current + hpBonusDelta;
-    const newMaxHp = calcMaxHp(newLevelHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp);
+    const newMaxHp = calcMaxHp(newLevelHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp) + skillBonusesRef.current.bonusHp;
 
     playerLevelRef.current    = newLevel;
     playerBonusDmgRef.current = newBonusDmg;
@@ -325,6 +338,11 @@ export default function App() {
       statPointsRef.current += newStatPts;
       setStatPoints(p => p + newStatPts);
       addLog(`🎯 +${newStatPts} очка характеристик!`);
+    }
+    if (newSkillPts > 0) {
+      skillPointsRef.current += newSkillPts;
+      setSkillPoints(p => p + newSkillPts);
+      addLog(`⭐ +${newSkillPts} очко умений!`);
     }
     if (leveledUp) {
       playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp);
@@ -465,12 +483,13 @@ export default function App() {
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
 
-      // Damage includes level bonus, stat strength, and equipment
+      // Damage includes level bonus, stat strength, equipment, and skill bonuses
       const eb = equipBonusesRef.current;
-      const dmg = Math.floor(Math.random() * 9) + 8
-                + playerBonusDmgRef.current
-                + (statsRef.current.strength + eb.strength) * 2
-                + eb.damage;
+      const _base = Math.floor(Math.random() * 9) + 8
+                  + playerBonusDmgRef.current
+                  + (statsRef.current.strength + eb.strength) * 2
+                  + eb.damage;
+      const dmg = Math.floor(_base * (1 + skillBonusesRef.current.damagePct / 100));
       const newHp = Math.max(0, enemy.hp - dmg);
 
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
@@ -481,18 +500,20 @@ export default function App() {
       if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name); return; }
 
       if (phaseRef.current === 'combat') {
-        const interval = calcAttackInterval(
+        const _baseI = calcAttackInterval(
           statsRef.current.agility + equipBonusesRef.current.agility,
           equipBonusesRef.current.atkSpeedPenalty
         );
+        const interval = Math.max(500, Math.floor(_baseI * (1 - skillBonusesRef.current.attackSpeedPct / 100)));
         playerAttackTimeout.current = setTimeout(doPlayerAttack, interval);
       }
     };
 
-    const firstInterval = calcAttackInterval(
+    const _baseFirst = calcAttackInterval(
       statsRef.current.agility + equipBonusesRef.current.agility,
       equipBonusesRef.current.atkSpeedPenalty
     );
+    const firstInterval = Math.max(500, Math.floor(_baseFirst * (1 - skillBonusesRef.current.attackSpeedPct / 100)));
     playerAttackTimeout.current = setTimeout(doPlayerAttack, firstInterval);
 
     const doEnemyAttack = () => {
@@ -619,17 +640,18 @@ export default function App() {
       addLog(`💰 Награда: ${def.reward.gold} золота!`);
 
       // ── XP reward with level-up logic ──────────────────────────────────────
-      let newXp     = playerXpRef.current + def.reward.xp;
+      const _questXp = Math.floor(def.reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+      let newXp     = playerXpRef.current + _questXp;
       let newLevel  = playerLevelRef.current;
       let newBonusDmg = playerBonusDmgRef.current;
-      let hpDelta = 0, newStatPts = 0, leveledUp = false;
+      let hpDelta = 0, newStatPts = 0, newSkillPts = 0, leveledUp = false;
       let needed    = xpRequired(newLevel);
       while (newXp >= needed) {
         newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
-        newStatPts += STAT_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
+        newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
       }
       const newLevelHpBonus = levelHpBonusRef.current + hpDelta;
-      const newMaxHp = calcMaxHp(newLevelHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp);
+      const newMaxHp = calcMaxHp(newLevelHpBonus, statsRef.current.endurance, equipBonusesRef.current.hp) + skillBonusesRef.current.bonusHp;
       playerLevelRef.current    = newLevel;   playerBonusDmgRef.current = newBonusDmg;
       levelHpBonusRef.current   = newLevelHpBonus; playerMaxHpRef.current = newMaxHp;
       playerXpRef.current       = newXp;
@@ -640,8 +662,13 @@ export default function App() {
         setStatPoints(p => p + newStatPts);
         addLog(`🎯 +${newStatPts} очка характеристик!`);
       }
+      if (newSkillPts > 0) {
+        skillPointsRef.current += newSkillPts;
+        setSkillPoints(p => p + newSkillPts);
+        addLog(`⭐ +${newSkillPts} очко умений!`);
+      }
       if (leveledUp) { playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp); addLog(`🌟 Новый уровень ${newLevel}! HP восстановлено!`); }
-      addLog(`✨ Награда: ${def.reward.xp} опыта!`);
+      addLog(`✨ Награда: ${_questXp} опыта!`);
 
       // ── Item rewards (only if not already owned) ───────────────────────────
       for (const itemKey of def.reward.items ?? []) {
@@ -675,7 +702,7 @@ export default function App() {
     // Merchant → open shop
     if (npc.id === 'merchant') {
       setShowShop(true);
-      setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false);
+      setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowSkillPanel(false);
       return;
     }
     // Quest NPCs or generic dialog
@@ -734,6 +761,35 @@ export default function App() {
     spawnFloat(`+${healed}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
   }, [addLog, spawnFloat]);
 
+  // ── Skill upgrade ─────────────────────────────────────────────────────────
+  const handleUpgradeSkill = useCallback((skillId: string) => {
+    const def = ALL_SKILLS_MAP[skillId];
+    if (!def) return;
+    const current = skillProgressRef.current[skillId] ?? 0;
+    if (current >= def.maxLevel) return;
+    if (skillPointsRef.current <= 0) return;
+
+    const newLevel       = current + 1;
+    const newProgress: SkillProgress = { ...skillProgressRef.current, [skillId]: newLevel };
+    skillProgressRef.current = newProgress;
+    setSkillProgress(newProgress);
+
+    skillPointsRef.current -= 1;
+    setSkillPoints(p => p - 1);
+
+    const newBonuses = calcSkillBonuses(newProgress);
+    skillBonusesRef.current = newBonuses;
+
+    // Iron Skin — recalculate max HP immediately
+    if (skillId === 'iron_skin') {
+      const newMaxHp = calcMaxHp(levelHpBonusRef.current, statsRef.current.endurance, equipBonusesRef.current.hp) + newBonuses.bonusHp;
+      playerMaxHpRef.current = newMaxHp;
+      setPlayerMaxHp(newMaxHp);
+    }
+
+    addLog(`⬆️ ${def.name}: уровень ${newLevel}`);
+  }, [addLog]);
+
   // ── Reset current map (respawn in current location — keep all character progress) ──
   const resetCurrentMap = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
@@ -768,6 +824,7 @@ export default function App() {
     setSelectedItem(null);
     setShowCharPanel(false);
     setShowShop(false);
+    setShowSkillPanel(false);
     setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
 
     // ── Character progress intentionally NOT reset: ──────────────────────────
@@ -824,6 +881,8 @@ export default function App() {
     setLevelHpBonus(0);
     setStats({ ...INITIAL_STATS });
     setStatPoints(0);
+    setSkillProgress({});
+    setSkillPoints(0);
     setEquipment({ ...EMPTY_EQUIPMENT });
     setInventory([]);
     setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
@@ -843,9 +902,12 @@ export default function App() {
   // Character panel + inventory derived stats (include equipment)
   const totalStr      = stats.strength + equipBonuses.strength;
   const totalAgi      = stats.agility  + equipBonuses.agility;
-  const dmgMin        = 8  + playerBonusDmg + totalStr * 2 + equipBonuses.damage;
-  const dmgMax        = 16 + playerBonusDmg + totalStr * 2 + equipBonuses.damage;
-  const atkIntervalSec = (calcAttackInterval(totalAgi, equipBonuses.atkSpeedPenalty) / 1000).toFixed(1);
+  const skillBonuses    = calcSkillBonuses(skillProgress);
+  const _dmgMult        = 1 + skillBonuses.damagePct / 100;
+  const dmgMin          = Math.floor((8  + playerBonusDmg + totalStr * 2 + equipBonuses.damage) * _dmgMult);
+  const dmgMax          = Math.floor((16 + playerBonusDmg + totalStr * 2 + equipBonuses.damage) * _dmgMult);
+  const _baseInterval   = calcAttackInterval(totalAgi, equipBonuses.atkSpeedPenalty);
+  const atkIntervalSec  = (Math.max(500, _baseInterval * (1 - skillBonuses.attackSpeedPct / 100)) / 1000).toFixed(1);
 
   // ── Camera / viewport ─────────────────────────────────────────────────────
   const camCol    = Math.max(0, Math.min(MAP_COLS - VP_COLS, playerPos.x - Math.floor(VP_COLS / 2)));
@@ -973,7 +1035,7 @@ export default function App() {
 
           {/* Персонаж button */}
           <button
-            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setSelectedItem(null); }}
+            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showCharPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {statPoints > 0 && (
@@ -984,7 +1046,7 @@ export default function App() {
 
           {/* Инвентарь button */}
           <button
-            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setSelectedItem(null); }}
+            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showInventory ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {inventory.length > 0 && (
@@ -995,7 +1057,7 @@ export default function App() {
 
           {/* Карта мира button */}
           <button
-            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setSelectedItem(null); }}
+            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showWorldMap ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             🗺
@@ -1003,13 +1065,26 @@ export default function App() {
 
           {/* Задания button */}
           <button
-            onClick={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setSelectedItem(null); }}
+            onClick={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
             className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
               ${showQuestPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
             {Object.values(questProgress).some(e => e.status === 'active') && (
               <span className="w-[14px] h-[14px] rounded-full bg-[#c89628] text-[#111] text-[9px] font-black flex items-center justify-center leading-none">!</span>
             )}
             📜
+          </button>
+
+          {/* Умения button */}
+          <button
+            onClick={() => { setShowSkillPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showSkillPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            {skillPoints > 0 && (
+              <span className="w-[14px] h-[14px] rounded-full bg-primary text-[#111] text-[9px] font-black flex items-center justify-center leading-none animate-pulse">
+                {skillPoints}
+              </span>
+            )}
+            🌟
           </button>
         </div>
       </div>
@@ -1423,6 +1498,18 @@ export default function App() {
               })()}
 
             </div>
+          )}
+
+          {/* ══ SKILL PANEL OVERLAY (z-60) ═══════════════════════════════════════
+              Three skill trees — Warrior / Ranger / Mage.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showSkillPanel && (
+            <SkillPanel
+              skillProgress={skillProgress}
+              skillPoints={skillPoints}
+              onUpgrade={handleUpgradeSkill}
+              onClose={() => setShowSkillPanel(false)}
+            />
           )}
 
           {/* ══ SHOP PANEL OVERLAY (z-60) ════════════════════════════════════════
