@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { saveGame, loadGame, clearSave, SaveData } from './save';
 import {
-  Item, ItemType, ItemBonuses, Equipment, EquipBonuses, Rarity,
-  EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES, ITEM_CATALOG, DROP_TABLES,
-  RARITY_STYLE, SLOT_META, TYPE_LABEL,
-  calcEquipBonuses, makeItem, formatBonuses,
+  Item, ItemType, ItemBonuses, Rarity,
+  ITEM_CATALOG, DROP_TABLES, RARITY_STYLE, TYPE_LABEL,
+  makeItem, formatBonuses,
 } from './inventory';
+import {
+  Equipment, EquipBonuses,
+  EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES, SLOT_META,
+  calcEquipBonuses,
+} from './equipment';
 
 // ─── WORLD CONSTANTS ──────────────────────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 // ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
-import type { Item, Equipment, EquipBonuses } from './inventory';
+import type { Item } from './inventory';
+import type { Equipment, EquipBonuses } from './equipment';
 
 // Types used only here — no circular dependency since inventory.ts has no imports.
 type LocationId = 'city' | 'forest' | 'cave' | 'fields' | 'graveyard';
