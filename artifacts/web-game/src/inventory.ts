@@ -47,6 +47,8 @@ export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
   light_boots:      { key: 'light_boots',      name: 'Лёгкие сапоги',      type: 'boots',   rarity: 'common',    bonuses: { agility: 1 } },
   scout_boots:      { key: 'scout_boots',      name: 'Сапоги разведчика',  type: 'boots',   rarity: 'uncommon',  bonuses: { agility: 2 } },
   wind_walkers:     { key: 'wind_walkers',     name: 'Сапоги ветра',       type: 'boots',   rarity: 'legendary', bonuses: { agility: 5, hp: 15 } },
+  // Magic weapons
+  arcane_staff:     { key: 'arcane_staff',     name: 'Магический посох',   type: 'weapon',  rarity: 'rare',      bonuses: { damage: 8, hp: 20 } },
 };
 
 export const DROP_TABLES: Record<string, { chance: number; pool: string[] }> = {
@@ -71,10 +73,86 @@ export const TYPE_LABEL: Record<ItemType, string> = {
   weapon: 'Оружие', helmet: 'Шлем', armor: 'Броня', gloves: 'Перчатки', boots: 'Обувь', consumable: 'Зелье',
 };
 
-/** Instantiate an item from the catalog with a unique runtime ID. */
+// ─── AFFIX SYSTEM ─────────────────────────────────────────────────────────────
+
+/** Rarity multiplier applied to the maximum of each rolled bonus range. */
+export const RARITY_MULT: Record<Rarity, number> = {
+  common:    1.00,
+  uncommon:  1.15,
+  rare:      1.30,
+  epic:      1.50,
+  legendary: 1.80,
+};
+
+type AffixRange = Partial<Record<keyof ItemBonuses, [number, number]>>;
+
+/**
+ * Per-item bonus ranges [min, max] at common (100%) tier.
+ * Rarity multiplier is applied to max at roll time (except atkSpeedPenalty).
+ * Items absent from this table keep their static catalog bonuses.
+ */
+export const AFFIX_TABLE: Record<string, AffixRange> = {
+  // ── Weapons ──────────────────────────────────────────────────────────────────
+  rusty_sword:     { damage: [2,  5]                              },  // spec: +2–5
+  iron_sword:      { damage: [4,  7]                              },
+  orc_axe:         { damage: [7, 12], atkSpeedPenalty: [3, 7]    },  // penalty NOT scaled
+  shadow_blade:    { damage: [12, 18], agility: [1, 3]           },
+  dragon_fang:     { damage: [20, 30], strength: [2, 4]          },
+  // ── Helmets ───────────────────────────────────────────────────────────────────
+  leather_helm:    { hp: [10, 20]                                 },  // spec: +10–20
+  iron_helm:       { hp: [16, 25]                                 },
+  mage_hood:       { hp: [22, 38], strength: [1, 2]              },
+  // ── Armor ─────────────────────────────────────────────────────────────────────
+  leather_armor:   { hp: [20, 40]                                 },  // spec: +20–40
+  chainmail:       { hp: [32, 50]                                 },
+  plate_armor:     { hp: [48, 72]                                 },
+  void_plate:      { hp: [70, 110], strength: [1, 3]             },
+  // ── Gloves ───────────────────────────────────────────────────────────────────
+  leather_gloves:  { strength: [1, 3]                             },  // spec: +1–3
+  battle_gloves:   { strength: [1, 3]                             },
+  titan_gauntlets: { strength: [3,  5], hp: [15, 25]             },
+  // ── Boots ────────────────────────────────────────────────────────────────────
+  light_boots:     { agility: [1, 2]                              },
+  scout_boots:     { agility: [1, 3]                              },  // spec: +1–3
+  wind_walkers:    { agility: [4,  6], hp: [10, 20]              },
+  // ── Magic weapons ────────────────────────────────────────────────────────────
+  arcane_staff:    { damage: [6, 10], hp: [15, 25]               },
+};
+
+function randInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/**
+ * Roll randomised bonuses for an item, scaling the ceiling by rarity.
+ * Returns static catalog bonuses for items not in AFFIX_TABLE (e.g. consumables).
+ */
+export function rollAffixedBonuses(key: string, rarity: Rarity): ItemBonuses {
+  const ranges = AFFIX_TABLE[key];
+  if (!ranges) return { ...(ITEM_CATALOG[key]?.bonuses ?? {}) };
+
+  const mult   = RARITY_MULT[rarity];
+  const result: ItemBonuses = {};
+
+  for (const [stat, range] of Object.entries(ranges) as [keyof ItemBonuses, [number, number]][]) {
+    const [min, max] = range;
+    // atkSpeedPenalty is a debuff — never reward higher rarity with a harsher penalty
+    const scaledMax = stat === 'atkSpeedPenalty' ? max : Math.floor(max * mult);
+    (result as Record<string, number>)[stat] = randInt(min, Math.max(min, scaledMax));
+  }
+
+  return result;
+}
+
+/** Instantiate an item from the catalog with a unique runtime ID and rolled bonuses. */
 export function makeItem(key: string): Item {
   const tpl = ITEM_CATALOG[key];
-  return { ...tpl, id: `${key}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` };
+  if (!tpl) throw new Error(`makeItem: unknown item key "${key}" — add it to ITEM_CATALOG`);
+  return {
+    ...tpl,
+    bonuses: rollAffixedBonuses(key, tpl.rarity),
+    id: `${key}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+  };
 }
 
 /** Human-readable bonus lines for display in the item tooltip. */
