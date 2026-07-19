@@ -41,8 +41,19 @@ const INITIAL_PLAYER_LVL = 1;
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 // BaseStats (strength / agility / vitality / intelligence) lives in ./stats
-type FloatingNum = { id: number; value: string; col: number; row: number; type: 'player-dmg' | 'enemy-dmg' | 'heal'; timestamp: number; };
-type LogEntry = { id: number; msg: string };
+export type FloatingNum = {
+  id: number;
+  value: string;
+  col: number;
+  row: number;
+  type: 'player-dmg' | 'enemy-dmg' | 'heal';
+  timestamp: number;
+};
+
+export type LogEntry = {
+  id: number;
+  msg: string;
+};
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
