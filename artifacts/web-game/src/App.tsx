@@ -1250,3 +1250,265 @@ const log = useCallback((msg: string) => {
             )}
             🎒
           </button>
+
+          {/* Карта мира button */}
+          <button
+            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showWorldMap ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            🗺
+          </button>
+
+          {/* Задания button */}
+          <button
+            onClick={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showQuestPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            {Object.values(questProgress).some(e => e.status === 'active') && (
+              <span className="w-[14px] h-[14px] rounded-full bg-[#c89628] text-[#111] text-[9px] font-black flex items-center justify-center leading-none">!</span>
+            )}
+            📜
+          </button>
+
+          {/* Умения button */}
+          <button
+            onClick={() => { setShowSkillPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showSkillPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            {skillPoints > 0 && (
+              <span className="w-[14px] h-[14px] rounded-full bg-primary text-[#111] text-[9px] font-black flex items-center justify-center leading-none animate-pulse">
+                {skillPoints}
+              </span>
+            )}
+            🌟
+          </button>
+        </div>
+      </div>
+
+      {/* ══ 2. MAP ══ */}
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] p-2">
+        <div className="relative" style={{ width: 'min(90vw, 360px)', height: 'min(90vw, 360px)' }}>
+
+          {/* Tile grid — 10×10 viewport into 20×20 map */}
+          <div className="absolute inset-0 grid grid-cols-10 grid-rows-10 gap-[1px] bg-tile-border p-[1px] border border-tile-border rounded shadow-lg shadow-black/50 overflow-hidden">
+            {Array.from({ length: VP_ROWS }, (_, vr) =>
+              Array.from({ length: VP_COLS }, (_, vc) => {
+                const gx = camCol + vc;
+                const gy = camRow + vr;
+                const tileType = currentMap[gy]?.[gx] ?? 1;
+                return (
+                  <div key={`${gx}-${gy}`} className="relative bg-map-bg">
+                    {renderTileContent(gx, gy, tileType)}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Map HP bars — camera-relative */}
+          {phase === 'combat' && playerHp > 0 && (
+            <div className="absolute pointer-events-none z-20 flex justify-center"
+              style={{ top: `${((playerPos.y - camRow) / VP_ROWS) * 100}%`, left: `${((playerPos.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
+              <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
+                <div className="h-full bg-primary" style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
+              </div>
+            </div>
+          )}
+          {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 &&
+            activeEnemy.x >= camCol && activeEnemy.x < camCol + VP_COLS &&
+            activeEnemy.y >= camRow && activeEnemy.y < camRow + VP_ROWS && (
+            activeEnemy.id === BOSS_ID ? (
+              // Boss HP bar — wider, red gradient, name above
+              <div className="absolute pointer-events-none z-20 flex flex-col items-center"
+                style={{
+                  top:        `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`,
+                  left:       `${Math.max(0, (activeEnemy.x - camCol - 1) / VP_COLS) * 100}%`,
+                  width:      `${(3 / VP_COLS) * 100}%`,
+                  marginTop:  '-20px',
+                }}>
+                <span className="text-[7px] font-black text-red-400 uppercase tracking-wide mb-[2px] leading-none drop-shadow-md">{activeEnemy.name}</span>
+                <div className="w-full h-[5px] bg-[#1a1a1f] border border-red-900/60 rounded-full overflow-hidden shadow-[0_0_4px_rgba(220,38,38,0.5)]">
+                  <div className="h-full bg-red-600 transition-all duration-300"
+                    style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                </div>
+              </div>
+            ) : (
+              // Normal enemy HP bar
+              <div className="absolute pointer-events-none z-20 flex justify-center"
+                style={{ top: `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`, left: `${((activeEnemy.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
+                <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
+                  <div className="h-full bg-destructive" style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                </div>
+              </div>
+            )
+          )}
+
+          {/* Floating numbers — camera-relative, only in viewport */}
+          {floatingNums
+            .filter(n => n.col >= camCol && n.col < camCol + VP_COLS && n.row >= camRow && n.row < camRow + VP_ROWS)
+            .map(num => (
+            <div key={num.id}
+              className="absolute pointer-events-none z-30 font-bold text-base text-center animate-float w-[10%] h-[10%] flex items-center justify-center drop-shadow-md"
+              style={{
+                top: `${((num.row - camRow) / VP_ROWS) * 100}%`, left: `${((num.col - camCol) / VP_COLS) * 100}%`,
+                color: num.type === 'player-dmg' ? 'hsl(var(--destructive))' : num.type === 'heal' ? 'hsl(var(--success))' : 'hsl(var(--primary))',
+              }}>
+              {num.value}
+            </div>
+          ))}
+
+          {/* Boss appear notification */}
+          {bossAppearNotif && (
+            <div className="absolute inset-x-0 z-[55] flex justify-center pointer-events-none" style={{ top: '28%' }}>
+              <div className="bg-black/90 border-2 border-red-600 rounded-xl px-6 py-4 mx-4 text-center shadow-[0_0_30px_rgba(220,38,38,0.5)] animate-in fade-in duration-300">
+                <p className="text-red-500 text-[10px] font-bold uppercase tracking-widest mb-1">⚔️ Появился Босс</p>
+                <p className="text-white text-lg font-black tracking-wide">👑 Главарь гоблинов</p>
+                <p className="text-red-400/70 text-[10px] mt-1 font-mono">750 HP · Урон ×2 · Скорость +20%</p>
+              </div>
+            </div>
+          )}
+
+          {/* Transition overlay */}
+          {transitioning && (
+            <div className="absolute inset-0 z-[70] bg-black/90 flex flex-col items-center justify-center gap-2 rounded">
+              <span className="text-3xl animate-pulse">{LOCATION_META[currentLocation].emoji}</span>
+              <p className="text-sm font-bold text-[#aaa] tracking-widest uppercase">Переход...</p>
+            </div>
+          )}
+
+          {/* Generic NPC dialog overlay (non-quest NPCs) */}
+          {npcDialog && (
+            <div className="absolute inset-0 z-[70] bg-black/80 flex flex-col items-center justify-center gap-3 rounded p-6">
+              <p className="text-sm text-white text-center leading-relaxed">{npcDialog}</p>
+              <button
+                onClick={() => setNpcDialog(null)}
+                className="px-4 py-1 rounded border border-primary text-primary text-sm font-bold">
+                Закрыть
+              </button>
+            </div>
+          )}
+
+          {/* ══ NPC QUEST DIALOGUE OVERLAY (z-70) ══════════════════════════════
+              Rich modal: NPC lines + action buttons (Accept / Complete / Dismiss)
+          ═══════════════════════════════════════════════════════════════════ */}
+          {questDialogue && (
+            <div className="absolute inset-0 z-[70] bg-black/85 flex flex-col justify-end rounded px-3 pb-4 pt-14 backdrop-blur-[2px]">
+              <div className="w-full bg-[#0d0d16] border border-tile-border/80 rounded-xl shadow-2xl overflow-hidden">
+                {/* NPC name row */}
+                <div className="flex items-center gap-2 px-4 py-3 bg-[#111118] border-b border-tile-border/60">
+                  <span className="text-xl leading-none">{questDialogue.emoji}</span>
+                  <span className="text-sm font-bold text-primary tracking-wide">{questDialogue.name}</span>
+                </div>
+                {/* Dialogue lines */}
+                <div className="px-4 py-3 space-y-1">
+                  {questDialogue.lines.map((line, i) => (
+                    <p key={i} className="text-[12px] text-[#ccc] leading-relaxed italic">
+                      {i === 0 && '«'}{line}{i === questDialogue.lines.length - 1 && '»'}
+                    </p>
+                  ))}
+                </div>
+                {/* Action buttons */}
+                <div className="px-4 pb-4 pt-1 flex flex-col gap-[6px]">
+                  {questDialogue.buttons.map((btn, i) => (
+                    <button key={i}
+                      onClick={() => handleQuestAction(btn.action)}
+                      className={`w-full py-2 rounded-lg border font-bold text-[12px] active:scale-95 transition-transform ${
+                        btn.primary
+                          ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_rgba(200,150,42,0.2)]'
+                          : 'border-tile-border bg-[#111118] text-[#777]'
+                      }`}>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Loot notification toast */}
+          {lootNotif && (
+            <div className="absolute top-2 inset-x-2 z-[65] flex items-center gap-2 bg-[#0b1f0e]/95 border border-green-700/70 rounded px-3 py-2 shadow-lg pointer-events-none animate-in fade-in duration-200">
+              <span className="text-base shrink-0">📦</span>
+              <span className="text-[12px] font-bold text-green-300 leading-tight">Получен предмет: {lootNotif}</span>
+            </div>
+          )}
+
+          {/* Per-kill victory flash */}
+          {phase === 'victory' && (
+            <div className="absolute inset-0 z-50 bg-black/75 flex flex-col items-center justify-center gap-1 rounded backdrop-blur-sm animate-in fade-in duration-300">
+              <h2 className="text-2xl font-bold text-primary drop-shadow-lg">⚔️ ПОБЕДА!</h2>
+              <p className="text-white/70 text-sm">Враг повержен!</p>
+              {lastKillReward && (
+                <div className="mt-1 flex flex-col items-center gap-[2px]">
+                  <span className="text-[13px] font-bold text-[#38bdf8]">+{lastKillReward.xp} опыта</span>
+                  <span className="text-[13px] font-bold text-yellow-400">+{lastKillReward.gold} золота</span>
+                  {lastKillReward.droppedItem && (
+                    <span className={`text-[12px] font-bold mt-1 ${RARITY_STYLE[lastKillReward.droppedItem.rarity].text}`}>
+                      📦 {lastKillReward.droppedItem.name}
+                    </span>
+                  )}
+                </div>
+              )}
+              {lastKillReward?.leveledUp && (
+                <div className="mt-2 px-3 py-1 bg-primary/20 border border-primary rounded-md text-center">
+                  <p className="text-primary font-bold text-sm tracking-wide">НОВЫЙ УРОВЕНЬ!</p>
+                  <p className="text-white text-xs">Уровень {lastKillReward.newLevel}{lastKillReward.statPtsGained > 0 && ` · +${lastKillReward.statPtsGained} очка`}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Final victory (normal — boss victory handled by BossVictoryPanel below) */}
+          {phase === 'final-victory' && !showBossVictory && (
+            <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
+              <h2 className="text-3xl font-bold text-primary mb-2 drop-shadow-lg">🏆 ПОБЕДА!</h2>
+              <p className="text-white/80 mb-1 font-medium">Все враги повержены!</p>
+              <p className="text-[#666] text-sm mb-3">Уровень {playerLevel} · 💰 {playerGold}</p>
+              {lastKillReward && (
+                <div className="mb-4 flex gap-3 text-sm">
+                  <span className="text-[#38bdf8] font-bold">+{lastKillReward.xp} опыта</span>
+                  <span className="text-yellow-400 font-bold">+{lastKillReward.gold} золота</span>
+                </div>
+              )}
+              <button onClick={resetCurrentMap}
+                className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
+                Играть снова
+              </button>
+            </div>
+          )}
+
+          {/* Boss Victory Panel — shown instead of regular final-victory after boss kill */}
+          {showBossVictory && bossRewardInfo && (
+            <BossVictoryPanel
+              reward={bossRewardInfo}
+              onContinue={() => {
+                setShowBossVictory(false);
+                phaseRef.current = 'explore';
+                setPhase('explore');
+              }}
+            />
+          )}
+
+          {/* Defeat */}
+          {phase === 'defeat' && (
+            <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
+              <h2 className="text-3xl font-bold text-destructive mb-2 drop-shadow-lg">☠️ ПОРАЖЕНИЕ</h2>
+              <p className="text-white/80 mb-2 font-medium">Вы пали в бою...</p>
+              <p className="text-[#666] text-sm mb-5">Уровень {playerLevel} · 💰 {playerGold}</p>
+              <button onClick={resetCurrentMap}
+                className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
+                Играть снова
+              </button>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════
+              CHARACTER PANEL OVERLAY  (z-60)
+          ═══════════════════════════════════════════════════════ */}
+          {showCharPanel && (
+            <div className="absolute inset-0 z-[60] bg-[#0d0d0f]/95 flex flex-col rounded backdrop-blur-md">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-tile-border shrink-0">
+                <h2 className="text-base font-bold text-primary tracking-wide">⚔️ Персонаж</h2>
+                {statPoints > 0 && (
+                  <span className="text-xs text-primary font-bold animate-pulse">
+                    {statPoints} очко{statPoints === 1 ? '' : statPoints < 5 ? 'а' : 'в'} не потрачено
