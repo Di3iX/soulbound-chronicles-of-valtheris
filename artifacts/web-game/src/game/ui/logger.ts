@@ -1,7 +1,8 @@
-import { LogEntry } from '../types/ui';
+import type { Dispatch, SetStateAction } from 'react';
+import type { LogEntry } from '../types/ui';
 
 export function addLog(
-  setLogs: React.Dispatch<React.SetStateAction<LogEntry[]>>,
+  setLogs: Dispatch<SetStateAction<LogEntry[]>>,
   msg: string
 ) {
   setLogs(prev => [
