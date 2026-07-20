@@ -198,7 +198,7 @@ export default function App() {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 const log = useCallback((msg: string) => {
-  log(setLogs, msg);
+  appendLog(setLogs, msg);
 }, [setLogs]);
 
   const spawnFloat = useCallback((value: string, col: number, row: number, type: FloatingNum['type']) => {
