@@ -1002,3 +1002,251 @@ const log = useCallback((msg: string) => {
     // level, XP, statPoints, stats, playerBonusDmg, levelHpBonus,
     // gold, inventory, equipment, equipBonuses, playerMaxHp
   }, []);
+
+  // ── Full reset — wipes save, returns to Lv.1 in city ("Играть снова") ──────
+  const resetCharacter = useCallback(() => {
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+
+    clearSave();
+
+    const initMaxHp = INITIAL_HP + INITIAL_BASE_STATS.vitality * 10;
+
+    // Reset refs immediately so any in-flight callbacks see correct values
+    playerHpRef.current        = initMaxHp;
+    playerMaxHpRef.current     = initMaxHp;
+    phaseRef.current           = 'explore';
+    shieldRef.current          = false;
+    playerPosRef.current       = LOCATION_SPAWN.village;
+    enemiesRef.current         = [];
+    activeEnemyIdRef.current   = null;
+    playerBonusDmgRef.current  = 0;
+    levelHpBonusRef.current    = 0;
+    playerLevelRef.current     = INITIAL_PLAYER_LVL;
+    playerXpRef.current        = 0;
+    xpToNextRef.current        = xpRequired(INITIAL_PLAYER_LVL);
+    playerGoldRef.current      = 0;
+    statPointsRef.current      = 0;
+    statsRef.current           = { ...INITIAL_BASE_STATS };
+    equipmentRef.current       = { ...EMPTY_EQUIPMENT };
+    equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
+    inventoryRef.current       = [];
+    currentLocationRef.current           = 'village';
+    bossStateRef.current                  = INITIAL_BOSS_STATE;
+    bossSpawnedThisVisitRef.current       = false;
+    bossDefeatedThisVisitRef.current      = false;
+
+    // Reset state
+    setPhase('explore');
+    setPlayerPos(LOCATION_SPAWN.village);
+    setPlayerHp(initMaxHp);
+    setPlayerMaxHp(initMaxHp);
+    setEnemies([]);
+    setActiveEnemyId(null);
+    setShieldActive(false);
+    setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    setFloatingNums([]);
+    setLastKillReward(null);
+    setPlayerLevel(INITIAL_PLAYER_LVL);
+    setPlayerXp(0);
+    setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
+    setPlayerGold(0);
+    setPlayerBonusDmg(0);
+    setLevelHpBonus(0);
+    setStats({ ...INITIAL_BASE_STATS });
+    setStatPoints(0);
+    setSkillProgress({});
+    setSkillPoints(0);
+    setBossState(INITIAL_BOSS_STATE);
+    setBossSpawnedThisVisit(false);
+    setBossDefeatedThisVisit(false);
+    setShowBossVictory(false);
+    setEquipment({ ...EMPTY_EQUIPMENT });
+    setInventory([]);
+    setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
+    setCurrentLocation('village');
+    setLootNotif(null);
+    setShowInventory(false);
+    setSelectedItem(null);
+    setShowCharPanel(false);
+    setLogs([{ id: Date.now(), msg: 'Тёмные подземелья ждут...' }]);
+  }, []);
+
+  // ── Derived values ────────────────────────────────────────────────────────
+  const activeEnemy   = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
+  const livingEnemies = enemies.filter(e => !e.dead);
+  const xpPct         = Math.min(100, Math.round((playerXp / xpToNext) * 100));
+
+  // All derived character stats — single source of truth from stats.ts
+  const skillBonuses = calcSkillBonuses(skillProgress);
+  const cs: ComputedStats = computeStats({
+    base: stats, levelHpBonus, bonusDmg: playerBonusDmg,
+    equip: equipBonuses, skills: skillBonuses,
+  });
+
+  // ── Camera / viewport ─────────────────────────────────────────────────────
+  const camCol    = Math.max(0, Math.min(MAP_COLS - VP_COLS, playerPos.x - Math.floor(VP_COLS / 2)));
+  const camRow    = Math.max(0, Math.min(MAP_ROWS - VP_ROWS, playerPos.y - Math.floor(VP_ROWS / 2)));
+  const currentMap = LOCATION_MAPS[currentLocation];
+  const currentNpcs = LOCATION_NPCS[currentLocation] ?? [];
+
+  // Adjacent NPC — shows the Interact button when the player is 1 tile away
+  const nearbyNpc = (phase === 'explore' && !transitioning)
+    ? currentNpcs.find(n =>
+        Math.abs(n.x - playerPos.x) <= 1 &&
+        Math.abs(n.y - playerPos.y) <= 1 &&
+        !(n.x === playerPos.x && n.y === playerPos.y),
+      ) ?? null
+    : null;
+
+  // ── Tile renderer ─────────────────────────────────────────────────────────
+  const renderTileContent = (gx: number, gy: number, tileType: number) => {
+    if (gx === playerPos.x && gy === playerPos.y)
+      return <div className="w-full h-full tile-player rounded flex items-center justify-center text-lg z-10 relative">🧝</div>;
+    const enemy = livingEnemies.find(e => e.x === gx && e.y === gy);
+    if (enemy) {
+      const isBoss = enemy.id === BOSS_ID;
+      return (
+        <div className={[
+          'w-full h-full rounded flex items-center justify-center z-10 relative',
+          isBoss ? 'text-2xl' : 'text-lg',
+          enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle',
+          isBoss ? 'ring-2 ring-red-600/60 ring-inset' : '',
+        ].join(' ')}>
+          {enemy.emoji}
+          {isBoss && (
+            <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[7px] font-black text-red-400 whitespace-nowrap uppercase tracking-wider leading-none pointer-events-none drop-shadow">
+              БОСС
+            </span>
+          )}
+        </div>
+      );
+    }
+    const npc = currentNpcs.find(n => n.x === gx && n.y === gy);
+    if (npc) return <div className="w-full h-full tile-npc flex items-center justify-center text-sm">{npc.emoji}</div>;
+    if (tileType === 4) {
+      // Look up which destination this exit leads to, then render themed tile.
+      const exitDef = LOCATION_EXITS[currentLocation]?.get(`${gx},${gy}`);
+      const dest    = exitDef?.to;
+      const src     = currentLocation;
+      // Dirt road: Village ↔ Forest
+      if ((src === 'village' && dest === 'forest') || (src === 'forest' && dest === 'village'))
+        return <div className="w-full h-full tile-exit-road  flex items-center justify-center text-sm" title="Дорога в лес">🛤️</div>;
+      // Cave entrance / exit: Forest ↔ Cave
+      if (src === 'forest' && dest === 'cave')
+        return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Вход в пещеру">🕳️</div>;
+      if (src === 'cave'   && dest === 'forest')
+        return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Выход из пещеры">⛰️</div>;
+      // Stone stairs / ruined gate: Cave ↔ Ruins
+      if (src === 'cave'  && dest === 'ruins')
+        return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Врата руин">🏛️</div>;
+      if (src === 'ruins' && dest === 'cave')
+        return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Разрушенная лестница">🪜</div>;
+      // Wooden bridge / muddy path: Forest ↔ Swamp
+      if ((src === 'forest' && dest === 'swamp') || (src === 'swamp' && dest === 'forest'))
+        return <div className="w-full h-full tile-exit-bridge flex items-center justify-center text-sm" title="Мост в болото">🌉</div>;
+      // Fallback — should never be reached with current map data
+      return <div className="w-full h-full tile-exit flex items-center justify-center text-sm">🚪</div>;
+    }
+    if (tileType === 1) return <div className="w-full h-full tile-tree  flex items-center justify-center text-sm">🌲</div>;
+    if (tileType === 2) return <div className="w-full h-full tile-rock  flex items-center justify-center text-sm">🪨</div>;
+    if (tileType === 3) return <div className="w-full h-full tile-water flex items-center justify-center text-blue-400 text-xs font-bold tracking-tighter opacity-80">〰</div>;
+    return <div className="w-full h-full tile-grass" />;
+  };
+
+  // ── RENDER ────────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-[100dvh] w-full max-w-[420px] mx-auto bg-background text-foreground flex flex-col relative select-none">
+
+      {/* ══ 1. STATUS HEADER ══ */}
+      <div className="shrink-0 border-b border-tile-border bg-[#111116]">
+
+        {/* Row 1 — HP bars */}
+        <div className="flex items-center px-4 pt-2 pb-1 justify-between">
+          <div className="flex flex-col w-[45%]">
+            <div className="flex justify-between items-end mb-1">
+              <span className="text-sm font-bold text-white tracking-wide">
+                Воин{shieldActive ? ' 🛡️' : ''}
+                <span className="text-primary text-xs font-mono ml-1">Lv.{playerLevel}</span>
+              </span>
+              <span className="text-xs text-primary font-mono">{playerHp}/{playerMaxHp}</span>
+            </div>
+            <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
+              <div className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
+            </div>
+          </div>
+
+          <div className="text-sm font-bold text-[#444] text-center w-[10%]">VS</div>
+
+          <div className="flex flex-col w-[45%]">
+            {activeEnemy ? (
+              <>
+                {activeEnemy.id === BOSS_ID && (
+                  <div className="flex justify-center mb-[2px]">
+                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest animate-pulse">👑 БОСС</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-end mb-1">
+                  <span className={`text-xs font-mono ${activeEnemy.id === BOSS_ID ? 'text-red-400' : 'text-destructive'}`}>{activeEnemy.hp}/{activeEnemy.maxHp}</span>
+                  <span className="text-sm font-bold text-white tracking-wide">{activeEnemy.emoji} {activeEnemy.name}</span>
+                </div>
+                <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
+                  <div className={`h-full transition-all duration-300 ${activeEnemy.id === BOSS_ID ? 'bg-red-600' : 'bg-destructive'}`}
+                    style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-end items-end mb-1">
+                  {LOCATION_META[currentLocation].isSafeZone
+                    ? <span className="text-xs text-green-700 font-mono">Безопасная зона</span>
+                    : <span className="text-xs text-[#666] font-mono">Врагов: {livingEnemies.length} / {enemies.length}</span>
+                  }
+                </div>
+                <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full border border-tile-border" />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Row 1b — Location name */}
+        <div className="flex items-center justify-center gap-2 pb-[2px]">
+          <span className="text-[10px] font-bold text-[#555] uppercase tracking-widest">
+            {LOCATION_META[currentLocation].emoji} {LOCATION_META[currentLocation].label}
+          </span>
+          {LOCATION_META[currentLocation].isSafeZone && (
+            <span className="text-[9px] text-green-800 font-bold">· Безопасная зона</span>
+          )}
+        </div>
+
+        {/* Row 2 — XP bar + gold + panel buttons */}
+        <div className="flex items-center px-4 pb-2 gap-2">
+          <span className="text-[10px] text-[#555] font-bold uppercase tracking-wide shrink-0">Опыт</span>
+          <div className="flex-1 h-[5px] bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
+            <div className="h-full rounded-full transition-all duration-500 bg-[#3a8fc4]" style={{ width: `${xpPct}%` }} />
+          </div>
+          <span className="text-[10px] font-mono text-[#666] shrink-0">{playerXp}/{xpToNext}</span>
+          <span className="text-[11px] font-bold text-yellow-400 shrink-0">💰{playerGold}</span>
+
+          {/* Персонаж button */}
+          <button
+            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showCharPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            {statPoints > 0 && (
+              <span className="w-[14px] h-[14px] rounded-full bg-primary text-[#111] text-[9px] font-black flex items-center justify-center leading-none">{statPoints}</span>
+            )}
+            👤
+          </button>
+
+          {/* Инвентарь button */}
+          <button
+            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
+              ${showInventory ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+            {inventory.length > 0 && (
+              <span className="w-[14px] h-[14px] rounded-full bg-[#3a3a50] text-white text-[9px] font-black flex items-center justify-center leading-none">{inventory.length}</span>
+            )}
+            🎒
+          </button>
