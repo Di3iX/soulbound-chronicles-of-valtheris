@@ -812,3 +812,193 @@ const log = useCallback((msg: string) => {
         newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
         newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
       }
+      const newLevelHpBonus = levelHpBonusRef.current + hpDelta;
+      const newMaxHp = computeStats({
+        base: statsRef.current, levelHpBonus: newLevelHpBonus,
+        bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
+        skills: skillBonusesRef.current,
+      }).maxHp;
+      playerLevelRef.current    = newLevel;   playerBonusDmgRef.current = newBonusDmg;
+      levelHpBonusRef.current   = newLevelHpBonus; playerMaxHpRef.current = newMaxHp;
+      playerXpRef.current       = newXp;
+      setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
+      setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLevelHpBonus); setPlayerMaxHp(newMaxHp);
+      if (newStatPts > 0) {
+        statPointsRef.current += newStatPts;
+        setStatPoints(p => p + newStatPts);
+        log(`🎯 +${newStatPts} очка характеристик!`);
+      }
+      if (newSkillPts > 0) {
+        skillPointsRef.current += newSkillPts;
+        setSkillPoints(p => p + newSkillPts);
+        log(`⭐ +${newSkillPts} очко умений!`);
+      }
+      if (leveledUp) { playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp); log(`🌟 Новый уровень ${newLevel}! HP восстановлено!`); }
+      log(`✨ Награда: ${_questXp} опыта!`);
+
+      // ── Item rewards (only if not already owned) ───────────────────────────
+      for (const itemKey of def.reward.items ?? []) {
+        if (!inventoryRef.current.some(i => i.key === itemKey)) {
+          const item = makeItem(itemKey);
+          inventoryRef.current = [...inventoryRef.current, item];
+          setInventory(prev => [...prev, item]);
+          log(`🎁 Получен предмет: ${item.name}!`);
+        } else {
+          log(`(У вас уже есть ${ITEM_CATALOG[itemKey]?.name ?? itemKey})`);
+        }
+      }
+
+      // ── Mark completed ─────────────────────────────────────────────────────
+      const updated: QuestProgress = {
+        ...questProgressRef.current,
+        [action.questId]: {
+          status:  'completed' as const,
+          current: questProgressRef.current[action.questId]?.current ?? 0,
+        },
+      };
+      questProgressRef.current = updated;
+      setQuestProgress(updated);
+      log('🏆 Задание завершено!');
+      setQuestDialogue(null);
+    }
+  }, [log]);
+
+  // ── NPC interact (called by the nearby-NPC Interact button) ──────────────
+  const handleNpcInteract = useCallback((npc: { id: string; name: string; emoji: string }) => {
+    // Merchant → open shop
+    if (npc.id === 'merchant') {
+      setShowShop(true);
+      setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowSkillPanel(false);
+      return;
+    }
+    // Quest NPCs or generic dialog
+    const dlg = getNpcDialogue(npc.id, questProgressRef.current);
+    if (dlg) { setQuestDialogue(dlg); }
+    else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
+  }, []);
+
+  // ── Shop: buy ────────────────────────────────────────────────────────────
+  const handleShopBuy = useCallback((key: string) => {
+    const price = SHOP_BUY_PRICE[key];
+    if (price === undefined) return;
+    if (playerGoldRef.current < price) {
+      log('💰 Недостаточно золота!');
+      return;
+    }
+    const item = makeItem(key);
+    playerGoldRef.current -= price;
+    setPlayerGold(playerGoldRef.current);
+    inventoryRef.current = [...inventoryRef.current, item];
+    setInventory(prev => [...prev, item]);
+    log(`🛒 Куплено: ${item.name} за ${price}💰`);
+  }, [log]);
+
+  // ── Shop: sell ───────────────────────────────────────────────────────────
+  const handleShopSell = useCallback((itemId: string) => {
+    const item = inventoryRef.current.find(i => i.id === itemId);
+    if (!item) return;
+    if (Object.values(equipmentRef.current).some(eq => eq?.id === itemId)) {
+      log('Нельзя продать надетый предмет!');
+      return;
+    }
+    const price = sellPrice(item);
+    inventoryRef.current = inventoryRef.current.filter(i => i.id !== itemId);
+    setInventory(prev => prev.filter(i => i.id !== itemId));
+    playerGoldRef.current += price;
+    setPlayerGold(playerGoldRef.current);
+    log(`💸 Продано: ${item.name} за ${price}💰`);
+  }, [log]);
+
+  // ── Consumable: use ───────────────────────────────────────────────────────
+  const handleUseItem = useCallback((item: Item) => {
+    const healAmt = CONSUMABLE_HEAL[item.key];
+    if (!healAmt) return;
+    const currentHp = playerHpRef.current;
+    const maxHp     = playerMaxHpRef.current;
+    if (currentHp >= maxHp) { log('❤️ HP уже максимально!'); return; }
+    const newHp  = Math.min(maxHp, currentHp + healAmt);
+    const healed = newHp - currentHp;
+    playerHpRef.current = newHp;
+    setPlayerHp(newHp);
+    inventoryRef.current = inventoryRef.current.filter(i => i.id !== item.id);
+    setInventory(prev => prev.filter(i => i.id !== item.id));
+    setSelectedItem(null);
+    log(`🧪 Использовано ${item.name}: +${healed} HP!`);
+    spawnFloat(`+${healed}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
+  }, [log, spawnFloat]);
+
+  // ── Skill upgrade ─────────────────────────────────────────────────────────
+  const handleUpgradeSkill = useCallback((skillId: string) => {
+    const def = ALL_SKILLS_MAP[skillId];
+    if (!def) return;
+    const current = skillProgressRef.current[skillId] ?? 0;
+    if (current >= def.maxLevel) return;
+    if (skillPointsRef.current <= 0) return;
+
+    const newLevel       = current + 1;
+    const newProgress: SkillProgress = { ...skillProgressRef.current, [skillId]: newLevel };
+    skillProgressRef.current = newProgress;
+    setSkillProgress(newProgress);
+
+    skillPointsRef.current -= 1;
+    setSkillPoints(p => p - 1);
+
+    const newBonuses = calcSkillBonuses(newProgress);
+    skillBonusesRef.current = newBonuses;
+
+    // Iron Skin — recalculate max HP immediately
+    if (skillId === 'iron_skin') {
+      const newMaxHp = computeStats({
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: newBonuses,
+      }).maxHp;
+      playerMaxHpRef.current = newMaxHp;
+      setPlayerMaxHp(newMaxHp);
+    }
+
+    log(`⬆️ ${def.name}: уровень ${newLevel}`);
+  }, [log]);
+
+  // ── Reset current map (respawn in current location — keep all character progress) ──
+  const resetCurrentMap = useCallback(() => {
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+
+    const loc   = currentLocationRef.current;
+    const fresh = makeLocationEnemies(loc);
+    const spawn = LOCATION_SPAWN[loc];
+
+    // Max HP is based on current level, stats and equipment — nothing changes here
+    const fullHp = playerMaxHpRef.current;
+
+    // Run-level state
+    phaseRef.current         = 'explore';
+    playerHpRef.current      = fullHp;
+    shieldRef.current        = false;
+    playerPosRef.current     = spawn;
+    enemiesRef.current       = fresh;
+    activeEnemyIdRef.current = null;
+
+    setPhase('explore');
+    setPlayerPos(spawn);
+    setPlayerHp(fullHp);
+    setEnemies(fresh);
+    setActiveEnemyId(null);
+    setShieldActive(false);
+    setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    setFloatingNums([]);
+    setLastKillReward(null);
+    setLootNotif(null);
+    setShowInventory(false);
+    setSelectedItem(null);
+    setShowCharPanel(false);
+    setShowShop(false);
+    setShowSkillPanel(false);
+    setShowBossVictory(false);
+    setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
+
+    // ── Character progress intentionally NOT reset: ──────────────────────────
+    // level, XP, statPoints, stats, playerBonusDmg, levelHpBonus,
+    // gold, inventory, equipment, equipBonuses, playerMaxHp
+  }, []);
