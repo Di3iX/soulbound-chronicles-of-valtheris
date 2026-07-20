@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { appendLog } from './game/ui/logger';
 import { saveGame, loadGame, clearSave, SaveData } from './save';
 import {
   Item, ItemType, ItemBonuses, Rarity,
