@@ -288,3 +288,271 @@ const log = useCallback((msg: string) => {
     const newMaxHp = computeStats({
       base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
+      skills: skillBonusesRef.current,
+    }).maxHp;
+    playerMaxHpRef.current = newMaxHp;
+    setPlayerMaxHp(newMaxHp);
+
+    // Clamp current HP to new (lower) max if necessary
+    const hpDelta = newBonuses.hp - oldBonuses.hp; // will be negative or zero
+    if (hpDelta < 0) {
+      const clampedHp = Math.min(playerHpRef.current, newMaxHp);
+      if (clampedHp !== playerHpRef.current) {
+        playerHpRef.current = clampedHp;
+        setPlayerHp(clampedHp);
+      }
+    }
+
+    setSelectedItem(null);
+    log(`📤 Снято: ${item.name}`);
+  }, [log]);
+
+  // ── Loot drop (called from applyRewards) ──────────────────────────────────
+  const rollLoot = useCallback((enemyName: string): Item | undefined => {
+    const table = DROP_TABLES[enemyName];
+    if (!table || Math.random() >= table.chance) return undefined;
+    const key = table.pool[Math.floor(Math.random() * table.pool.length)];
+    const item = makeItem(key);
+    setInventory(prev => [...prev, item]);
+    setLootNotif(item.name);
+    log(`📦 Получен лут: ${item.name}!`);
+    setTimeout(() => setLootNotif(null), 2500);
+    return item;
+  }, [log]);
+
+  // ── Progression ───────────────────────────────────────────────────────────
+  const applyRewards = useCallback((enemyName: string): KillReward => {
+    const reward = REWARD_TABLE[enemyName] ?? { xp: 10, goldMin: 1, goldMax: 3 };
+
+    const goldGained = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
+    playerGoldRef.current += goldGained;
+    setPlayerGold(playerGoldRef.current);
+    log(`💰 Получено ${goldGained} золота!`);
+
+    const xpGained = Math.floor(reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    log(`✨ Получено ${xpGained} опыта!`);
+
+    let newXp = playerXpRef.current + xpGained;
+    let newLevel = playerLevelRef.current;
+    let newBonusDmg = playerBonusDmgRef.current;
+    let hpBonusDelta = 0, newStatPts = 0, newSkillPts = 0;
+    let leveledUp = false;
+    let needed = xpRequired(newLevel);
+
+    while (newXp >= needed) {
+      newXp -= needed; newLevel++; newBonusDmg += 2; hpBonusDelta += 20; newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
+    }
+
+    const newLevelHpBonus = levelHpBonusRef.current + hpBonusDelta;
+    const newMaxHp = computeStats({
+      base: statsRef.current, levelHpBonus: newLevelHpBonus,
+      bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
+      skills: skillBonusesRef.current,
+    }).maxHp;
+
+    playerLevelRef.current    = newLevel;
+    playerBonusDmgRef.current = newBonusDmg;
+    levelHpBonusRef.current   = newLevelHpBonus;
+    playerMaxHpRef.current    = newMaxHp;
+    playerXpRef.current       = newXp;
+
+    setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
+    setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLevelHpBonus); setPlayerMaxHp(newMaxHp);
+
+    if (newStatPts > 0) {
+      statPointsRef.current += newStatPts;
+      setStatPoints(p => p + newStatPts);
+      log(`🎯 +${newStatPts} очка характеристик!`);
+    }
+    if (newSkillPts > 0) {
+      skillPointsRef.current += newSkillPts;
+      setSkillPoints(p => p + newSkillPts);
+      log(`⭐ +${newSkillPts} очко умений!`);
+    }
+    if (leveledUp) {
+      playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp);
+      log(`🌟 Новый уровень ${newLevel}! HP восстановлено!`);
+    }
+
+    const droppedItem = rollLoot(enemyName);
+    return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: newStatPts, droppedItem };
+  }, [log, rollLoot]);
+
+  // ── Cave Boss: spawn after all normal enemies die ─────────────────────────
+  const spawnCaveBoss = useCallback(() => {
+    const bossEnemy: Enemy = { ...CAVE_BOSS_DEF, id: BOSS_ID };
+    bossSpawnedThisVisitRef.current = true;
+    setBossSpawnedThisVisit(true);
+    enemiesRef.current = [...enemiesRef.current, bossEnemy];
+    setEnemies(prev => [...prev, bossEnemy]);
+    phaseRef.current = 'explore';
+    setPhase('explore');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossAppearNotif(true);
+    setTimeout(() => setBossAppearNotif(false), 3500);
+    log('⚔️ Появился Босс: Главарь гоблинов!');
+  }, [log]);
+
+  // ── Cave Boss: handle kill + rewards ──────────────────────────────────────
+  const handleBossDeath = useCallback(() => {
+    // Enemy already marked dead + player position already set by handleEnemyDeath
+    log('👑 Главарь гоблинов повержен!');
+
+    // Gold
+    playerGoldRef.current += BOSS_REWARD.gold;
+    setPlayerGold(playerGoldRef.current);
+    log(`💰 Получено ${BOSS_REWARD.gold} золота!`);
+
+    // XP with Wisdom bonus
+    const xpGained = Math.floor(BOSS_REWARD.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    log(`✨ Получено ${xpGained} опыта!`);
+
+    // Level-up logic (mirrors applyRewards)
+    let newXp       = playerXpRef.current + xpGained;
+    let newLevel    = playerLevelRef.current;
+    let newBonusDmg = playerBonusDmgRef.current;
+    let hpDelta     = 0, newStatPts = 0, newSkillPts = 0, leveledUp = false;
+    let needed      = xpRequired(newLevel);
+    while (newXp >= needed) {
+      newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
+      newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL;
+      needed = xpRequired(newLevel); leveledUp = true;
+    }
+    const newLvHpBonus = levelHpBonusRef.current + hpDelta;
+    const newMaxHp = computeStats({
+      base: statsRef.current, levelHpBonus: newLvHpBonus,
+      bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
+      skills: skillBonusesRef.current,
+    }).maxHp;
+    playerLevelRef.current  = newLevel;  playerBonusDmgRef.current = newBonusDmg;
+    levelHpBonusRef.current = newLvHpBonus; playerMaxHpRef.current = newMaxHp;
+    playerXpRef.current     = newXp;
+    setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
+    setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLvHpBonus); setPlayerMaxHp(newMaxHp);
+    if (newStatPts > 0) { statPointsRef.current += newStatPts; setStatPoints(p => p + newStatPts); log(`🎯 +${newStatPts} очка характеристик!`); }
+    if (newSkillPts > 0) { skillPointsRef.current += newSkillPts; setSkillPoints(p => p + newSkillPts); log(`⭐ +${newSkillPts} очко умений!`); }
+    if (leveledUp) { playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp); log(`🌟 Новый уровень ${newLevel}! HP восстановлено!`); }
+
+    // Guaranteed item drop (25% rare, 75% common/uncommon pool)
+    const isRare    = Math.random() < BOSS_RARE_CHANCE;
+    const dropPool  = isRare ? [...BOSS_RARE_LOOT] : [...BOSS_COMMON_LOOT];
+    const dropKey   = dropPool[Math.floor(Math.random() * dropPool.length)];
+    const dropItem  = makeItem(dropKey);
+    inventoryRef.current = [...inventoryRef.current, dropItem];
+    setInventory(prev => [...prev, dropItem]);
+    setLootNotif(dropItem.name);
+    setTimeout(() => setLootNotif(null), 2500);
+    log(`📦 Получен лут: ${dropItem.name}!`);
+
+    // Trophy — first kill only
+    const wasFirstKill = !bossStateRef.current.caveChief.firstKillDone;
+    let trophyItem: Item | undefined;
+    if (wasFirstKill) {
+      trophyItem = makeBossTrophy();
+      inventoryRef.current = [...inventoryRef.current, trophyItem];
+      setInventory(prev => [...prev, trophyItem!]);
+      log('🏆 Получен трофей: Трофей главаря гоблинов!');
+      const newBS: BossState = { caveChief: { firstKillDone: true } };
+      bossStateRef.current = newBS;
+      setBossState(newBS);
+      log('🏛️ Руины разблокированы! Путь на восток открыт.');
+    }
+
+    // Flags
+    bossDefeatedThisVisitRef.current = true;
+    setBossDefeatedThisVisit(true);
+
+    // Show boss victory overlay
+    phaseRef.current = 'final-victory';
+    setPhase('final-victory');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossRewardInfo({ xp: xpGained, gold: BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
+    setShowBossVictory(true);
+  }, [log]);
+
+  // ── Enemy death ──────────────────────────────────────────────────────────
+  const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string) => {
+    phaseRef.current = 'victory';
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+
+    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e);
+    setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e));
+    playerPosRef.current = { x: ex, y: ey };
+    setPlayerPos({ x: ex, y: ey });
+    log(`💀 ${name} повержен!`);
+
+    // Boss intercept — rewards and victory handled separately
+    if (id === BOSS_ID) { handleBossDeath(); return; }
+
+    const reward = applyRewards(name);
+    setLastKillReward(reward);
+
+    // ── Quest: track goblin kills ────────────────────────────────────────────
+    if (name === 'Гоблин') {
+      const qid   = 'quest_goblin_001';
+      const def   = QUEST_DEFS[qid];
+      const entry = questProgressRef.current[qid] ?? { status: 'inactive' as const, current: 0 };
+      if (entry.status === 'active' && entry.current < def.objective.required) {
+        const newCurrent = entry.current + 1;
+        const updated: QuestProgress = {
+          ...questProgressRef.current,
+          [qid]: { status: 'active' as const, current: newCurrent },
+        };
+        questProgressRef.current = updated;
+        setQuestProgress(updated);
+        log(`📜 Гоблины: ${newCurrent} / ${def.objective.required}`);
+        if (newCurrent >= def.objective.required)
+          log('✅ Цель выполнена! Вернитесь к Старейшине.');
+      }
+    }
+
+    const allDead = enemiesRef.current.every(e => e.dead);
+    if (allDead) {
+      // Cave: spawn the boss after all normal enemies die (once per visit)
+      if (currentLocationRef.current === 'cave' && !bossSpawnedThisVisitRef.current) {
+        spawnCaveBoss();
+      } else {
+        phaseRef.current = 'final-victory'; setPhase('final-victory');
+        setActiveEnemyId(null); activeEnemyIdRef.current = null;
+        log('🏆 Все враги побеждены!');
+      }
+    } else {
+      setPhase('victory');
+      setTimeout(() => {
+        if (phaseRef.current === 'victory') {
+          phaseRef.current = 'explore'; setPhase('explore');
+          setActiveEnemyId(null); activeEnemyIdRef.current = null;
+        }
+      }, 1500);
+    }
+  }, [log, applyRewards, handleBossDeath, spawnCaveBoss]);
+
+  // ── Location transition ───────────────────────────────────────────────────
+  const handleLocationTransition = useCallback((to: LocationId, spawnAt: { x: number; y: number }) => {
+    if (transitioningRef.current) return;
+    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+    transitioningRef.current = true;
+    setTransitioning(true);
+    setTimeout(() => {
+      const fresh = makeLocationEnemies(to);
+      currentLocationRef.current  = to;
+      playerPosRef.current        = spawnAt;
+      enemiesRef.current          = fresh;
+      phaseRef.current            = 'explore';
+      activeEnemyIdRef.current    = null;
+      transitioningRef.current    = false;
+      setCurrentLocation(to);
+      setPlayerPos(spawnAt);
+      setEnemies(fresh);
+      setPhase('explore');
+      setActiveEnemyId(null);
+      setShieldActive(false);
+      setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+      setFloatingNums([]);
+      setTransitioning(false);
+      log(`📍 Вы прибыли: ${LOCATION_META[to].label}`);
+      // Cave: reset boss visit flags on (re-)entry so the boss can spawn again
