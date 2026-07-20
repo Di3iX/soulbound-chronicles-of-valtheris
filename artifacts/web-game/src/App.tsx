@@ -197,9 +197,9 @@ export default function App() {
       playerPos, currentLocation, enemies, questProgress, skillProgress, skillPoints]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
-  const addLog = useCallback((msg: string) => {
-    setLogs(prev => [{ id: Date.now() + Math.random(), msg }, ...prev].slice(0, 12));
-  }, []);
+const log = useCallback((msg: string) => {
+  addLog(setLogs, msg);
+}, [setLogs]);
 
   const spawnFloat = useCallback((value: string, col: number, row: number, type: FloatingNum['type']) => {
     setFloatingNums(prev => [...prev, { id: Date.now() + Math.random(), value, col, row, type, timestamp: Date.now() }]);
