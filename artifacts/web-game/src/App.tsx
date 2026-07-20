@@ -556,3 +556,259 @@ const log = useCallback((msg: string) => {
       setTransitioning(false);
       log(`📍 Вы прибыли: ${LOCATION_META[to].label}`);
       // Cave: reset boss visit flags on (re-)entry so the boss can spawn again
+      if (to === 'cave') {
+        bossSpawnedThisVisitRef.current = false;
+        setBossSpawnedThisVisit(false);
+        bossDefeatedThisVisitRef.current = false;
+        setBossDefeatedThisVisit(false);
+      }
+      // Restore full HP when entering a safe zone
+      if (getLocation(to).isSafeZone) {
+        const fullHp = playerMaxHpRef.current;
+        playerHpRef.current = fullHp;
+        setPlayerHp(fullHp);
+        log('💚 Добро пожаловать! HP полностью восстановлено.');
+      }
+    }, 800);
+  }, [log]);
+
+  // ── Movement ─────────────────────────────────────────────────────────────
+  const movePlayer = useCallback((dx: number, dy: number) => {
+    if (phaseRef.current !== 'explore') return;
+    if (transitioningRef.current) return;
+    const { x, y } = playerPosRef.current;
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= MAP_COLS || ny >= MAP_ROWS) { log('Путь заблокирован!'); return; }
+    const currentMap = LOCATION_MAPS[currentLocationRef.current];
+    const tileType = currentMap[ny]?.[nx] ?? 1;
+    // NPC intercept
+    const npc = (LOCATION_NPCS[currentLocationRef.current] ?? []).find(n => n.x === nx && n.y === ny);
+    if (npc) {
+      const dlg = getNpcDialogue(npc.id, questProgressRef.current);
+      if (dlg) { setQuestDialogue(dlg); }
+      else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
+      return;
+    }
+    // Enemy intercept
+    const hitEnemy = enemiesRef.current.find(e => !e.dead && e.x === nx && e.y === ny);
+    if (hitEnemy) {
+      phaseRef.current = 'combat'; activeEnemyIdRef.current = hitEnemy.id;
+      setActiveEnemyId(hitEnemy.id); setPhase('combat');
+      log(`⚔️ Бой с ${hitEnemy.name}!`); return;
+    }
+    // Exit tile intercept
+    if (tileType === 4) {
+      const exits = LOCATION_EXITS[currentLocationRef.current];
+      const exit = exits?.get(`${nx},${ny}`);
+      if (exit) {
+        // Block Cave → Ruins until Goblin Chief has been defeated for the first time
+        if (currentLocationRef.current === 'cave' && exit.to === 'ruins' && !bossStateRef.current.caveChief.firstKillDone) {
+          log('⚠️ Путь заблокирован! Победите Главаря гоблинов, чтобы пройти в Руины.');
+          return;
+        }
+        handleLocationTransition(exit.to, exit.spawnAt);
+        return;
+      }
+    }
+    if (tileType !== 0) { log('Путь заблокирован!'); return; }
+    playerPosRef.current = { x: nx, y: ny }; setPlayerPos({ x: nx, y: ny });
+  }, [log, handleLocationTransition]);
+
+  // ── Combat ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== 'combat') return;
+
+    const doPlayerAttack = () => {
+      if (phaseRef.current !== 'combat') return;
+      const id = activeEnemyIdRef.current;
+      if (id === null) return;
+      const enemy = enemiesRef.current.find(e => e.id === id);
+      if (!enemy || enemy.dead || enemy.hp <= 0) return;
+
+      // Compute all character stats from central module (pure, cheap)
+      const _cs = computeStats({
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: skillBonusesRef.current,
+      });
+      let dmg = Math.floor(Math.random() * (_cs.dmgMax - _cs.dmgMin + 1)) + _cs.dmgMin;
+      const isCrit = Math.random() * 100 < _cs.critChance;
+      if (isCrit) dmg = Math.floor(dmg * _cs.critDamageMult);
+      const newHp = Math.max(0, enemy.hp - dmg);
+
+      enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
+      setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
+      spawnFloat(isCrit ? `💥${dmg}` : dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
+      log(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона!`);
+
+      if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name); return; }
+
+      if (phaseRef.current === 'combat') {
+        const _atkCs = computeStats({
+          base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+          bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+          skills: skillBonusesRef.current,
+        });
+        playerAttackTimeout.current = setTimeout(doPlayerAttack, _atkCs.attackInterval);
+      }
+    };
+
+    const _firstCs = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+      bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+      skills: skillBonusesRef.current,
+    });
+    playerAttackTimeout.current = setTimeout(doPlayerAttack, _firstCs.attackInterval);
+
+    const doEnemyAttack = () => {
+      if (phaseRef.current !== 'combat') return;
+      const id = activeEnemyIdRef.current;
+      const enemy = enemiesRef.current.find(e => e.id === id);
+      if (!enemy || enemy.dead || enemy.hp <= 0) return;
+
+      // Compute defensive stats
+      const _defCs = computeStats({
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: skillBonusesRef.current,
+      });
+      const pp = playerPosRef.current;
+
+      // Dodge check
+      if (Math.random() * 100 < _defCs.dodgeChance) {
+        spawnFloat('УКЛОН', pp.x, pp.y, 'heal');
+        log(`💨 Вы уклонились от атаки ${enemy.name}!`);
+        if (phaseRef.current === 'combat')
+          enemyAttackTimeout.current = setTimeout(doEnemyAttack, enemy.attackInterval);
+        return;
+      }
+
+      let dmg = Math.floor(Math.random() * (enemy.dmgMax - enemy.dmgMin + 1)) + enemy.dmgMin;
+      if (shieldRef.current) dmg = Math.ceil(dmg / 2);
+      // Defense mitigation: dmg × 100/(100+defense)
+      if (_defCs.defense > 0) dmg = Math.max(1, Math.floor(dmg * 100 / (100 + _defCs.defense)));
+
+      spawnFloat(dmg.toString(), pp.x, pp.y, 'player-dmg');
+      log(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!`);
+
+      const prevHp = playerHpRef.current;
+      const newHp  = Math.max(0, prevHp - dmg);
+      playerHpRef.current = newHp; setPlayerHp(newHp);
+
+      if (prevHp > 0 && newHp === 0) {
+        phaseRef.current = 'defeat'; setPhase('defeat');
+        log('☠️ Вы погибли...'); return;
+      }
+      if (phaseRef.current === 'combat') {
+        enemyAttackTimeout.current = setTimeout(doEnemyAttack, enemy.attackInterval);
+      }
+    };
+
+    const startEnemy = enemiesRef.current.find(e => e.id === activeEnemyIdRef.current);
+    if (startEnemy) enemyAttackTimeout.current = setTimeout(doEnemyAttack, startEnemy.attackInterval);
+
+    return () => {
+      if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
+      if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
+    };
+  }, [phase, log, spawnFloat, handleEnemyDeath]);
+
+  // ── Skill cooldowns ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== 'combat') return;
+    const t = setInterval(() => {
+      setSkillsCd(prev => {
+        const next = { ...prev }; let changed = false;
+        for (const k in next) { if (next[k] > 0) { next[k] = Math.max(0, next[k] - 1); changed = true; } }
+        return changed ? next : prev;
+      });
+    }, 100);
+    return () => clearInterval(t);
+  }, [phase]);
+
+  // ── Floating number cleanup ───────────────────────────────────────────────
+  useEffect(() => {
+    if (floatingNums.length === 0) return;
+    const t = setInterval(() => {
+      const now = Date.now();
+      setFloatingNums(prev => prev.filter(f => now - f.timestamp < 1300));
+    }, 200);
+    return () => clearInterval(t);
+  }, [floatingNums]);
+
+  // ── Skills ────────────────────────────────────────────────────────────────
+  const useSkill = useCallback((skill: typeof SKILLS[0]) => {
+    if (phaseRef.current !== 'combat') return;
+    if (skillsCd[skill.id] > 0) return;
+    setSkillsCd(prev => ({ ...prev, [skill.id]: skill.maxCd }));
+
+    if (skill.damage > 0) {
+      const id = activeEnemyIdRef.current;
+      if (id === null) return;
+      const enemy = enemiesRef.current.find(e => e.id === id);
+      if (!enemy || enemy.dead || enemy.hp <= 0) return;
+      const newHp = Math.max(0, enemy.hp - skill.damage);
+      enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
+      setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
+      spawnFloat(skill.damage.toString(), enemy.x, enemy.y, 'enemy-dmg');
+      log(`✨ Воин использует ${skill.name} на ${skill.damage} урона!`);
+      if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name);
+    }
+    if (skill.healSelf > 0) {
+      const pp = playerPosRef.current;
+      const newHp = Math.min(playerMaxHpRef.current, playerHpRef.current + skill.healSelf);
+      playerHpRef.current = newHp; setPlayerHp(newHp);
+      spawnFloat(`+${skill.healSelf}`, pp.x, pp.y, 'heal');
+      log(`💚 Воин лечится на ${skill.healSelf} HP!`);
+    }
+    if (skill.id === 5) {
+      setShieldActive(true); shieldRef.current = true;
+      log('🛡️ Щит активирован!');
+      setTimeout(() => { setShieldActive(false); shieldRef.current = false; log('🛡️ Действие щита закончилось.'); }, 5000);
+    }
+  }, [skillsCd, log, spawnFloat, handleEnemyDeath]);
+
+  // ── World map travel ──────────────────────────────────────────────────────
+  const handleWorldMapTravel = useCallback((to: LocationId) => {
+    if (phaseRef.current !== 'explore') return;
+    if (transitioningRef.current) return;
+    setShowWorldMap(false);
+    handleLocationTransition(to, LOCATION_SPAWN[to]);
+  }, [handleLocationTransition]);
+
+  // ── Quest action handler ──────────────────────────────────────────────────
+  const handleQuestAction = useCallback((action: DialogAction) => {
+    if (action.kind === 'dismiss') { setQuestDialogue(null); return; }
+
+    if (action.kind === 'accept_quest') {
+      const updated: QuestProgress = {
+        ...questProgressRef.current,
+        [action.questId]: { status: 'active' as const, current: 0 },
+      };
+      questProgressRef.current = updated;
+      setQuestProgress(updated);
+      log(`📜 Задание принято: ${QUEST_DEFS[action.questId]?.title ?? action.questId}`);
+      setQuestDialogue(null);
+      return;
+    }
+
+    if (action.kind === 'complete_quest') {
+      const def = QUEST_DEFS[action.questId];
+      if (!def) { setQuestDialogue(null); return; }
+
+      // ── Gold reward ────────────────────────────────────────────────────────
+      playerGoldRef.current += def.reward.gold;
+      setPlayerGold(playerGoldRef.current);
+      log(`💰 Награда: ${def.reward.gold} золота!`);
+
+      // ── XP reward with level-up logic ──────────────────────────────────────
+      const _questXp = Math.floor(def.reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+      let newXp     = playerXpRef.current + _questXp;
+      let newLevel  = playerLevelRef.current;
+      let newBonusDmg = playerBonusDmgRef.current;
+      let hpDelta = 0, newStatPts = 0, newSkillPts = 0, leveledUp = false;
+      let needed    = xpRequired(newLevel);
+      while (newXp >= needed) {
+        newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
+        newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
+      }
