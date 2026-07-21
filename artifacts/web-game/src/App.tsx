@@ -1636,6 +1636,17 @@ const log = useCallback((msg: string) => {
                   <span className={`text-[13px] font-medium ${statPoints > 0 ? 'text-primary' : 'text-[#888]'}`}>Свободные очки</span>
                   <span className={`text-[16px] font-black font-mono ${statPoints > 0 ? 'text-primary' : 'text-[#555]'}`}>{statPoints}</span>
                 </div>
+{/* Danger zone: full reset — wipes save, back to Lv.1 */}
+                <button
+                  onClick={() => {
+                    if (window.confirm('Сбросить весь прогресс и начать новую игру? Это действие необратимо.')) {
+                      resetCharacter();
+                      setShowCharPanel(false);
+                    }
+                  }}
+                  className="mt-4 w-full py-2 rounded border-2 border-destructive/60 text-destructive font-bold text-[12px] bg-destructive/5 active:scale-95 transition-transform">
+                  🗑️ Новая игра (сбросить прогресс)
+                </button>
               </div>
             </div>
           )}
