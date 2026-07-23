@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { appendLog } from './game/ui/logger';
-import { saveGame, loadGame, clearSave, SaveData } from './save';
+import { loadGame, clearSave, SaveData } from './save';
+import { usePersistence } from './hooks/usePersistence';
 import {
   Item, ItemType, ItemBonuses, Rarity,
   ITEM_CATALOG, DROP_TABLES, RARITY_STYLE,
@@ -13,8 +14,8 @@ import {
 } from './equipment';
 import {
   LocationId, Phase, Enemy, KillReward,
-  SKILLS, STAT_POINTS_PER_LEVEL, REWARD_TABLE,
-  xpRequired, makeLocationEnemies,
+  SKILLS, REWARD_TABLE,
+  xpRequired, makeLocationEnemies, applyXpGain,
 } from './combat';
 import {
   BaseStats, ComputedStats, INITIAL_BASE_STATS, INITIAL_HP,
@@ -135,10 +136,6 @@ export default function App() {
   const bossStateRef              = useRef<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
   const bossSpawnedThisVisitRef   = useRef<boolean>((sv?.enemies ?? []).some(e => e.id === BOSS_ID));
   const bossDefeatedThisVisitRef  = useRef<boolean>((sv?.enemies ?? []).find(e => e.id === BOSS_ID)?.dead === true);
-  // Prevents the auto-save from firing on the very first render (initial mount).
-  // On mount the game either restores a save (sv != null) or starts fresh —
-  // either way there is nothing new to persist yet.
-  const hasMountedRef      = useRef(false);
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -171,33 +168,18 @@ export default function App() {
   useEffect(() => { bossSpawnedThisVisitRef.current   = bossSpawnedThisVisit; }, [bossSpawnedThisVisit]);
   useEffect(() => { bossDefeatedThisVisitRef.current  = bossDefeatedThisVisit;}, [bossDefeatedThisVisit]);
 
-  // ── Auto-save: immediate write on any meaningful state change ──────────────
-  // Rules:
-  //   1. Skip the very first render — nothing has changed yet, and we must not
-  //      write an empty/default player over a just-loaded save.
-  //   2. After mount, every dependency change (XP, gold, HP, position, level,
-  //      inventory, equipment …) triggers an immediate localStorage write so the
-  //      save is always current.  No debounce means no pending timeout that a
-  //      page refresh could cancel.
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      return; // first render — load path already handled by sv initializer
-    }
-    saveGame({
-      playerLevel, playerXp, xpToNext, playerGold,
-      playerBonusDmg, levelHpBonus,
-      playerHp, playerMaxHp,
-      stats, statPoints,
-      inventory, equipment, equipBonuses,
-      playerPos, currentLocation, enemies,
-      questProgress,
-      skillProgress, skillPoints,
-      bossState,
-    });
-  }, [playerLevel, playerXp, xpToNext, playerGold, playerBonusDmg, levelHpBonus,
-      playerHp, playerMaxHp, stats, statPoints, inventory, equipment, equipBonuses,
-      playerPos, currentLocation, enemies, questProgress, skillProgress, skillPoints]);
+  // ── Auto-save: writes to localStorage on every meaningful state change ─────
+  usePersistence({
+    playerLevel, playerXp, xpToNext, playerGold,
+    playerBonusDmg, levelHpBonus,
+    playerHp, playerMaxHp,
+    stats, statPoints,
+    inventory, equipment, equipBonuses,
+    playerPos, currentLocation, enemies,
+    questProgress,
+    skillProgress, skillPoints,
+    bossState,
+  });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 const log = useCallback((msg: string) => {
@@ -324,6 +306,49 @@ const log = useCallback((msg: string) => {
   }, [log]);
 
   // ── Progression ───────────────────────────────────────────────────────────
+  // ── Grant XP + resolve any level-ups (single source of truth) ──────────────
+  // Used by applyRewards, handleBossDeath, and the quest-completion handler —
+  // previously each of the three duplicated this ~20-line calculation inline.
+  const grantXp = useCallback((xpGained: number) => {
+    const result = applyXpGain(
+      playerXpRef.current, playerLevelRef.current,
+      playerBonusDmgRef.current, levelHpBonusRef.current,
+      xpGained,
+    );
+
+    const newMaxHp = computeStats({
+      base: statsRef.current, levelHpBonus: result.levelHpBonus,
+      bonusDmg: result.bonusDmg, equip: equipBonusesRef.current,
+      skills: skillBonusesRef.current,
+    }).maxHp;
+
+    playerLevelRef.current    = result.level;
+    playerBonusDmgRef.current = result.bonusDmg;
+    levelHpBonusRef.current   = result.levelHpBonus;
+    playerMaxHpRef.current    = newMaxHp;
+    playerXpRef.current       = result.xp;
+
+    setPlayerXp(result.xp); setXpToNext(result.xpToNext); setPlayerLevel(result.level);
+    setPlayerBonusDmg(result.bonusDmg); setLevelHpBonus(result.levelHpBonus); setPlayerMaxHp(newMaxHp);
+
+    if (result.statPointsGained > 0) {
+      statPointsRef.current += result.statPointsGained;
+      setStatPoints(p => p + result.statPointsGained);
+      log(`🎯 +${result.statPointsGained} очка характеристик!`);
+    }
+    if (result.skillPointsGained > 0) {
+      skillPointsRef.current += result.skillPointsGained;
+      setSkillPoints(p => p + result.skillPointsGained);
+      log(`⭐ +${result.skillPointsGained} очко умений!`);
+    }
+    if (result.leveledUp) {
+      playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp);
+      log(`🌟 Новый уровень ${result.level}! HP восстановлено!`);
+    }
+
+    return result;
+  }, [log]);
+
   const applyRewards = useCallback((enemyName: string): KillReward => {
     const reward = REWARD_TABLE[enemyName] ?? { xp: 10, goldMin: 1, goldMax: 3 };
 
@@ -335,51 +360,11 @@ const log = useCallback((msg: string) => {
     const xpGained = Math.floor(reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
     log(`✨ Получено ${xpGained} опыта!`);
 
-    let newXp = playerXpRef.current + xpGained;
-    let newLevel = playerLevelRef.current;
-    let newBonusDmg = playerBonusDmgRef.current;
-    let hpBonusDelta = 0, newStatPts = 0, newSkillPts = 0;
-    let leveledUp = false;
-    let needed = xpRequired(newLevel);
-
-    while (newXp >= needed) {
-      newXp -= needed; newLevel++; newBonusDmg += 2; hpBonusDelta += 20; newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
-    }
-
-    const newLevelHpBonus = levelHpBonusRef.current + hpBonusDelta;
-    const newMaxHp = computeStats({
-      base: statsRef.current, levelHpBonus: newLevelHpBonus,
-      bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
-      skills: skillBonusesRef.current,
-    }).maxHp;
-
-    playerLevelRef.current    = newLevel;
-    playerBonusDmgRef.current = newBonusDmg;
-    levelHpBonusRef.current   = newLevelHpBonus;
-    playerMaxHpRef.current    = newMaxHp;
-    playerXpRef.current       = newXp;
-
-    setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
-    setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLevelHpBonus); setPlayerMaxHp(newMaxHp);
-
-    if (newStatPts > 0) {
-      statPointsRef.current += newStatPts;
-      setStatPoints(p => p + newStatPts);
-      log(`🎯 +${newStatPts} очка характеристик!`);
-    }
-    if (newSkillPts > 0) {
-      skillPointsRef.current += newSkillPts;
-      setSkillPoints(p => p + newSkillPts);
-      log(`⭐ +${newSkillPts} очко умений!`);
-    }
-    if (leveledUp) {
-      playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp);
-      log(`🌟 Новый уровень ${newLevel}! HP восстановлено!`);
-    }
+    const { leveledUp, level: newLevel, statPointsGained } = grantXp(xpGained);
 
     const droppedItem = rollLoot(enemyName);
-    return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: newStatPts, droppedItem };
-  }, [log, rollLoot]);
+    return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: statPointsGained, droppedItem };
+  }, [log, rollLoot, grantXp]);
 
   // ── Cave Boss: spawn after all normal enemies die ─────────────────────────
   const spawnCaveBoss = useCallback(() => {
@@ -411,31 +396,7 @@ const log = useCallback((msg: string) => {
     const xpGained = Math.floor(BOSS_REWARD.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
     log(`✨ Получено ${xpGained} опыта!`);
 
-    // Level-up logic (mirrors applyRewards)
-    let newXp       = playerXpRef.current + xpGained;
-    let newLevel    = playerLevelRef.current;
-    let newBonusDmg = playerBonusDmgRef.current;
-    let hpDelta     = 0, newStatPts = 0, newSkillPts = 0, leveledUp = false;
-    let needed      = xpRequired(newLevel);
-    while (newXp >= needed) {
-      newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
-      newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL;
-      needed = xpRequired(newLevel); leveledUp = true;
-    }
-    const newLvHpBonus = levelHpBonusRef.current + hpDelta;
-    const newMaxHp = computeStats({
-      base: statsRef.current, levelHpBonus: newLvHpBonus,
-      bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
-      skills: skillBonusesRef.current,
-    }).maxHp;
-    playerLevelRef.current  = newLevel;  playerBonusDmgRef.current = newBonusDmg;
-    levelHpBonusRef.current = newLvHpBonus; playerMaxHpRef.current = newMaxHp;
-    playerXpRef.current     = newXp;
-    setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
-    setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLvHpBonus); setPlayerMaxHp(newMaxHp);
-    if (newStatPts > 0) { statPointsRef.current += newStatPts; setStatPoints(p => p + newStatPts); log(`🎯 +${newStatPts} очка характеристик!`); }
-    if (newSkillPts > 0) { skillPointsRef.current += newSkillPts; setSkillPoints(p => p + newSkillPts); log(`⭐ +${newSkillPts} очко умений!`); }
-    if (leveledUp) { playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp); log(`🌟 Новый уровень ${newLevel}! HP восстановлено!`); }
+    const { leveledUp, level: newLevel } = grantXp(xpGained);
 
     // Guaranteed item drop (25% rare, 75% common/uncommon pool)
     const isRare    = Math.random() < BOSS_RARE_CHANCE;
@@ -473,7 +434,7 @@ const log = useCallback((msg: string) => {
     activeEnemyIdRef.current = null;
     setBossRewardInfo({ xp: xpGained, gold: BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
     setShowBossVictory(true);
-  }, [log]);
+  }, [log, grantXp]);
 
   // ── Enemy death ──────────────────────────────────────────────────────────
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string) => {
@@ -646,13 +607,9 @@ const log = useCallback((msg: string) => {
 
       if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name); return; }
 
+      // Same stats as above — nothing changed them in between, so no need to recompute.
       if (phaseRef.current === 'combat') {
-        const _atkCs = computeStats({
-          base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
-          bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-          skills: skillBonusesRef.current,
-        });
-        playerAttackTimeout.current = setTimeout(doPlayerAttack, _atkCs.attackInterval);
+        playerAttackTimeout.current = setTimeout(doPlayerAttack, _cs.attackInterval);
       }
     };
 
@@ -806,37 +763,7 @@ const log = useCallback((msg: string) => {
 
       // ── XP reward with level-up logic ──────────────────────────────────────
       const _questXp = Math.floor(def.reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
-      let newXp     = playerXpRef.current + _questXp;
-      let newLevel  = playerLevelRef.current;
-      let newBonusDmg = playerBonusDmgRef.current;
-      let hpDelta = 0, newStatPts = 0, newSkillPts = 0, leveledUp = false;
-      let needed    = xpRequired(newLevel);
-      while (newXp >= needed) {
-        newXp -= needed; newLevel++; newBonusDmg += 2; hpDelta += 20;
-        newStatPts += STAT_POINTS_PER_LEVEL; newSkillPts += SKILL_POINTS_PER_LEVEL; needed = xpRequired(newLevel); leveledUp = true;
-      }
-      const newLevelHpBonus = levelHpBonusRef.current + hpDelta;
-      const newMaxHp = computeStats({
-        base: statsRef.current, levelHpBonus: newLevelHpBonus,
-        bonusDmg: newBonusDmg, equip: equipBonusesRef.current,
-        skills: skillBonusesRef.current,
-      }).maxHp;
-      playerLevelRef.current    = newLevel;   playerBonusDmgRef.current = newBonusDmg;
-      levelHpBonusRef.current   = newLevelHpBonus; playerMaxHpRef.current = newMaxHp;
-      playerXpRef.current       = newXp;
-      setPlayerXp(newXp); setXpToNext(needed); setPlayerLevel(newLevel);
-      setPlayerBonusDmg(newBonusDmg); setLevelHpBonus(newLevelHpBonus); setPlayerMaxHp(newMaxHp);
-      if (newStatPts > 0) {
-        statPointsRef.current += newStatPts;
-        setStatPoints(p => p + newStatPts);
-        log(`🎯 +${newStatPts} очка характеристик!`);
-      }
-      if (newSkillPts > 0) {
-        skillPointsRef.current += newSkillPts;
-        setSkillPoints(p => p + newSkillPts);
-        log(`⭐ +${newSkillPts} очко умений!`);
-      }
-      if (leveledUp) { playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp); log(`🌟 Новый уровень ${newLevel}! HP восстановлено!`); }
+      grantXp(_questXp);
       log(`✨ Награда: ${_questXp} опыта!`);
 
       // ── Item rewards (only if not already owned) ───────────────────────────
@@ -864,7 +791,7 @@ const log = useCallback((msg: string) => {
       log('🏆 Задание завершено!');
       setQuestDialogue(null);
     }
-  }, [log]);
+  }, [log, grantXp]);
 
   // ── NPC interact (called by the nearby-NPC Interact button) ──────────────
   const handleNpcInteract = useCallback((npc: { id: string; name: string; emoji: string }) => {

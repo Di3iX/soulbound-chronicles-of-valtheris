@@ -1,5 +1,6 @@
 // ─── COMBAT SYSTEM ────────────────────────────────────────────────────────────
 import type { Item } from './inventory';
+import { SKILL_POINTS_PER_LEVEL } from './skills/skills';
 
 // ── Shared world type (also used by save.ts and world/locations.ts) ───────────
 export type LocationId = 'village' | 'forest' | 'cave' | 'ruins' | 'swamp';
@@ -60,6 +61,53 @@ export function xpRequired(level: number): number {
 export function calcAttackInterval(agility: number, atkSpeedPenalty = 0): number {
   const base = Math.max(MIN_ATTACK_INTERVAL, Math.floor(BASE_ATTACK_INTERVAL * (1 - 0.03 * agility)));
   return Math.floor(base * (1 + atkSpeedPenalty / 100));
+}
+
+export interface LevelUpResult {
+  xp:                number;  // leftover XP after any level-ups
+  level:              number;
+  bonusDmg:           number;  // cumulative +2/level flat damage bonus
+  levelHpBonus:       number;  // cumulative +20/level max-HP bonus
+  xpToNext:           number;  // XP required at `level` to reach `level + 1`
+  statPointsGained:   number;  // stat points earned THIS call (0 if no level-up)
+  skillPointsGained:  number;  // skill points earned THIS call (0 if no level-up)
+  leveledUp:          boolean;
+}
+
+/**
+ * Pure XP/level-up calculation — no refs, no state, no side effects.
+ * Single source of truth: previously this exact loop was duplicated in
+ * `applyRewards`, `handleBossDeath`, and the quest-completion handler.
+ * Handles multi-level-ups in one call (loops `while`, not `if`).
+ */
+export function applyXpGain(
+  currentXp: number,
+  currentLevel: number,
+  currentBonusDmg: number,
+  currentLevelHpBonus: number,
+  xpGained: number,
+): LevelUpResult {
+  let xp           = currentXp + xpGained;
+  let level        = currentLevel;
+  let bonusDmg     = currentBonusDmg;
+  let levelHpBonus = currentLevelHpBonus;
+  let statPointsGained  = 0;
+  let skillPointsGained = 0;
+  let leveledUp = false;
+  let needed = xpRequired(level);
+
+  while (xp >= needed) {
+    xp -= needed;
+    level++;
+    bonusDmg          += 2;
+    levelHpBonus      += 20;
+    statPointsGained  += STAT_POINTS_PER_LEVEL;
+    skillPointsGained += SKILL_POINTS_PER_LEVEL;
+    needed = xpRequired(level);
+    leveledUp = true;
+  }
+
+  return { xp, level, bonusDmg, levelHpBonus, xpToNext: needed, statPointsGained, skillPointsGained, leveledUp };
 }
 
 // ── Enemy factory ─────────────────────────────────────────────────────────────
