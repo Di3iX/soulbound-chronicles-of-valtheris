@@ -24,14 +24,17 @@ import {
 import {
   MAP_COLS, MAP_ROWS, VP_COLS, VP_ROWS,
   LOCATION_META, LOCATION_SPAWN, LOCATION_EXITS, LOCATION_MAPS, LOCATION_NPCS,
-  getLocation, moveToLocation, getAvailableExits, isConnected,
+  getLocation, moveToLocation, getAvailableExits,
 } from './world/locations';
-import { QuestProgress, QUEST_DEFS, getQuestEntry } from './quests/quests';
+import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL } from './shop/shop';
 import ShopPanel from './shop/ShopPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
+import CombatHUD from './components/CombatHUD';
+import QuestPanel from './components/QuestPanel';
+import WorldMapPanel from './components/WorldMapPanel';
 import { ALL_SKILLS_MAP, SKILL_POINTS_PER_LEVEL } from './skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
@@ -1089,131 +1092,36 @@ const log = useCallback((msg: string) => {
     <div className="min-h-[100dvh] w-full max-w-[420px] mx-auto bg-background text-foreground flex flex-col relative select-none">
 
       {/* ══ 1. STATUS HEADER ══ */}
-      <div className="shrink-0 border-b border-tile-border bg-[#111116]">
-
-        {/* Row 1 — HP bars */}
-        <div className="flex items-center px-4 pt-2 pb-1 justify-between">
-          <div className="flex flex-col w-[45%]">
-            <div className="flex justify-between items-end mb-1">
-              <span className="text-sm font-bold text-white tracking-wide">
-                Воин{shieldActive ? ' 🛡️' : ''}
-                <span className="text-primary text-xs font-mono ml-1">Lv.{playerLevel}</span>
-              </span>
-              <span className="text-xs text-primary font-mono">{playerHp}/{playerMaxHp}</span>
-            </div>
-            <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
-              <div className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
-            </div>
-          </div>
-
-          <div className="text-sm font-bold text-[#444] text-center w-[10%]">VS</div>
-
-          <div className="flex flex-col w-[45%]">
-            {activeEnemy ? (
-              <>
-                {activeEnemy.id === BOSS_ID && (
-                  <div className="flex justify-center mb-[2px]">
-                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest animate-pulse">👑 БОСС</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-end mb-1">
-                  <span className={`text-xs font-mono ${activeEnemy.id === BOSS_ID ? 'text-red-400' : 'text-destructive'}`}>{activeEnemy.hp}/{activeEnemy.maxHp}</span>
-                  <span className="text-sm font-bold text-white tracking-wide">{activeEnemy.emoji} {activeEnemy.name}</span>
-                </div>
-                <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
-                  <div className={`h-full transition-all duration-300 ${activeEnemy.id === BOSS_ID ? 'bg-red-600' : 'bg-destructive'}`}
-                    style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-end items-end mb-1">
-                  {LOCATION_META[currentLocation].isSafeZone
-                    ? <span className="text-xs text-green-700 font-mono">Безопасная зона</span>
-                    : <span className="text-xs text-[#666] font-mono">Врагов: {livingEnemies.length} / {enemies.length}</span>
-                  }
-                </div>
-                <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full border border-tile-border" />
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Row 1b — Location name */}
-        <div className="flex items-center justify-center gap-2 pb-[2px]">
-          <span className="text-[10px] font-bold text-[#555] uppercase tracking-widest">
-            {LOCATION_META[currentLocation].emoji} {LOCATION_META[currentLocation].label}
-          </span>
-          {LOCATION_META[currentLocation].isSafeZone && (
-            <span className="text-[9px] text-green-800 font-bold">· Безопасная зона</span>
-          )}
-        </div>
-
-        {/* Row 2 — XP bar + gold + panel buttons */}
-        <div className="flex items-center px-4 pb-2 gap-2">
-          <span className="text-[10px] text-[#555] font-bold uppercase tracking-wide shrink-0">Опыт</span>
-          <div className="flex-1 h-[5px] bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
-            <div className="h-full rounded-full transition-all duration-500 bg-[#3a8fc4]" style={{ width: `${xpPct}%` }} />
-          </div>
-          <span className="text-[10px] font-mono text-[#666] shrink-0">{playerXp}/{xpToNext}</span>
-          <span className="text-[11px] font-bold text-yellow-400 shrink-0">💰{playerGold}</span>
-
-          {/* Персонаж button */}
-          <button
-            onClick={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
-              ${showCharPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
-            {statPoints > 0 && (
-              <span className="w-[14px] h-[14px] rounded-full bg-primary text-[#111] text-[9px] font-black flex items-center justify-center leading-none">{statPoints}</span>
-            )}
-            👤
-          </button>
-
-          {/* Инвентарь button */}
-          <button
-            onClick={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
-              ${showInventory ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
-            {inventory.length > 0 && (
-              <span className="w-[14px] h-[14px] rounded-full bg-[#3a3a50] text-white text-[9px] font-black flex items-center justify-center leading-none">{inventory.length}</span>
-            )}
-            🎒
-          </button>
-
-          {/* Карта мира button */}
-          <button
-            onClick={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
-              ${showWorldMap ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
-            🗺
-          </button>
-
-          {/* Задания button */}
-          <button
-            onClick={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
-              ${showQuestPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
-            {Object.values(questProgress).some(e => e.status === 'active') && (
-              <span className="w-[14px] h-[14px] rounded-full bg-[#c89628] text-[#111] text-[9px] font-black flex items-center justify-center leading-none">!</span>
-            )}
-            📜
-          </button>
-
-          {/* Умения button */}
-          <button
-            onClick={() => { setShowSkillPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setSelectedItem(null); }}
-            className={`shrink-0 flex items-center gap-1 px-2 py-[3px] rounded border text-[11px] font-bold transition-colors
-              ${showSkillPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
-            {skillPoints > 0 && (
-              <span className="w-[14px] h-[14px] rounded-full bg-primary text-[#111] text-[9px] font-black flex items-center justify-center leading-none animate-pulse">
-                {skillPoints}
-              </span>
-            )}
-            🌟
-          </button>
-        </div>
-      </div>
+      <CombatHUD
+        shieldActive={shieldActive}
+        playerLevel={playerLevel}
+        playerHp={playerHp}
+        playerMaxHp={playerMaxHp}
+        activeEnemy={activeEnemy}
+        bossId={BOSS_ID}
+        currentLocation={currentLocation}
+        locationMeta={LOCATION_META}
+        livingEnemiesCount={livingEnemies.length}
+        totalEnemiesCount={enemies.length}
+        xpPct={xpPct}
+        playerXp={playerXp}
+        xpToNext={xpToNext}
+        playerGold={playerGold}
+        statPoints={statPoints}
+        skillPoints={skillPoints}
+        inventoryCount={inventory.length}
+        questProgress={questProgress}
+        showCharPanel={showCharPanel}
+        showInventory={showInventory}
+        showWorldMap={showWorldMap}
+        showQuestPanel={showQuestPanel}
+        showSkillPanel={showSkillPanel}
+        onToggleCharPanel={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+        onToggleInventory={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+        onToggleWorldMap={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+        onToggleQuestPanel={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
+        onToggleSkillPanel={() => { setShowSkillPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setSelectedItem(null); }}
+      />
 
       {/* ══ 2. MAP ══ */}
       <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] p-2">
@@ -1495,194 +1403,22 @@ const log = useCallback((msg: string) => {
               Lists all quests, objectives, progress, rewards, and status.
           ═══════════════════════════════════════════════════════════════════ */}
           {showQuestPanel && (
-            <div className="absolute inset-0 z-[60] bg-[#08080d]/97 flex flex-col rounded backdrop-blur-md">
-
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-tile-border shrink-0">
-                <h2 className="text-base font-bold text-primary tracking-wide">📜 Задания</h2>
-                <button onClick={() => setShowQuestPanel(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded border border-tile-border text-[#888] hover:text-white hover:border-primary transition-colors text-sm font-bold">✕</button>
-              </div>
-
-              {/* Quest list */}
-              <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-                {Object.values(QUEST_DEFS).map(def => {
-                  const entry    = getQuestEntry(questProgress, def.id);
-                  const pct      = Math.min(100, Math.round((entry.current / def.objective.required) * 100));
-                  const isDone   = entry.status === 'completed';
-                  const isActive = entry.status === 'active';
-                  return (
-                    <div key={def.id}
-                      className={`rounded-lg border px-3 py-3 ${
-                        isDone   ? 'border-green-800/50 bg-green-950/20' :
-                        isActive ? 'border-primary/40 bg-primary/5' :
-                                   'border-tile-border bg-[#111118]'
-                      }`}>
-
-                      {/* Title + status badge */}
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <span className={`text-[13px] font-bold leading-tight ${isDone ? 'text-green-400' : isActive ? 'text-primary' : 'text-[#aaa]'}`}>
-                          {def.title}
-                        </span>
-                        <span className={`shrink-0 text-[9px] font-bold uppercase px-[5px] py-[2px] rounded ${
-                          isDone   ? 'bg-green-900/50 text-green-400' :
-                          isActive ? 'bg-primary/20 text-primary' :
-                                     'bg-[#222] text-[#555]'
-                        }`}>
-                          {isDone ? '✓ Выполнено' : isActive ? 'Активно' : 'Неактивно'}
-                        </span>
-                      </div>
-
-                      {/* Description */}
-                      <p className="text-[11px] text-[#555] mb-2 leading-snug">{def.description}</p>
-
-                      {/* Objective + progress bar */}
-                      {entry.status !== 'inactive' && (
-                        <div className="mb-2">
-                          <div className="flex justify-between text-[10px] mb-1">
-                            <span className="text-[#666]">{def.objective.description}</span>
-                            <span className={`font-mono font-bold ${isDone ? 'text-green-400' : 'text-[#aaa]'}`}>
-                              {entry.current} / {def.objective.required}
-                            </span>
-                          </div>
-                          <div className="h-[4px] bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${isDone ? 'bg-green-600' : 'bg-primary'}`}
-                              style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Rewards */}
-                      <div className="flex items-center flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-tile-border/30">
-                        <span className="text-[9px] text-[#444] font-bold uppercase tracking-wide">Награда:</span>
-                        <span className="text-[10px] text-yellow-400 font-bold">💰 {def.reward.gold}</span>
-                        <span className="text-[10px] text-[#38bdf8] font-bold">✨ {def.reward.xp} опыта</span>
-                        {(def.reward.items ?? []).map(key => (
-                          <span key={key} className="text-[10px] text-[#aaa] font-bold">
-                            🗡️ {ITEM_CATALOG[key]?.name ?? key}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {Object.keys(QUEST_DEFS).length === 0 && (
-                  <p className="text-center text-[#444] text-sm py-8">Заданий пока нет</p>
-                )}
-              </div>
-
-            </div>
+            <QuestPanel questProgress={questProgress} onClose={() => setShowQuestPanel(false)} />
           )}
 
           {/* ══ WORLD MAP OVERLAY  (z-60) ══════════════════════════════════════
               Shows all 5 locations as a visual graph.
               Connected locations are clickable; unreachable ones are dimmed.
           ═══════════════════════════════════════════════════════════════════ */}
-          {showWorldMap && (() => {
-            // Node layout in SVG coordinate space (viewBox 340×220)
-            const nodes: { id: LocationId; cx: number; cy: number }[] = [
-              { id: 'village', cx: 45,  cy: 110 },
-              { id: 'forest',  cx: 160, cy: 55  },
-              { id: 'cave',    cx: 285, cy: 55  },
-              { id: 'swamp',   cx: 160, cy: 175 },
-              { id: 'ruins',   cx: 285, cy: 175 },
-            ];
-            // Static edge list (undirected)
-            const edges: [number,number,number,number][] = [
-              [45,110,160,55],   // village–forest
-              [160,55,285,55],   // forest–cave
-              [160,55,160,175],  // forest–swamp
-              [285,55,285,175],  // cave–ruins
-            ];
-            return (
-              <div className="absolute inset-0 z-[60] bg-[#08080d]/97 flex flex-col rounded backdrop-blur-md">
-
-                {/* Header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-tile-border shrink-0">
-                  <h2 className="text-base font-bold text-primary tracking-wide">🗺 Карта мира</h2>
-                  {phase !== 'explore' && (
-                    <span className="text-[10px] text-destructive font-bold">⚔️ недоступно в бою</span>
-                  )}
-                  <button onClick={() => setShowWorldMap(false)}
-                    className="w-8 h-8 flex items-center justify-center rounded border border-tile-border text-[#888] hover:text-white hover:border-primary transition-colors text-sm font-bold">✕</button>
-                </div>
-
-                {/* Graph area */}
-                <div className="flex-1 relative">
-
-                  {/* SVG edges */}
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none"
-                    viewBox="0 0 340 220" preserveAspectRatio="xMidYMid meet">
-                    {/* Dim base lines */}
-                    {edges.map(([x1,y1,x2,y2], i) => (
-                      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-                        stroke="#1e1e2e" strokeWidth="2.5" />
-                    ))}
-                    {/* Highlight active connections from current location */}
-                    {edges.map(([x1,y1,x2,y2], i) => {
-                      const a = nodes.find(n => n.cx === x1 && n.cy === y1)?.id;
-                      const b = nodes.find(n => n.cx === x2 && n.cy === y2)?.id;
-                      const active = (a === currentLocation || b === currentLocation) &&
-                                     a !== undefined && b !== undefined &&
-                                     isConnected(a, b);
-                      return active ? (
-                        <line key={`h${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
-                          stroke="#c89628" strokeWidth="1.5" opacity="0.45" />
-                      ) : null;
-                    })}
-                  </svg>
-
-                  {/* Location nodes */}
-                  {nodes.map(({ id, cx, cy }) => {
-                    const loc       = getLocation(id);
-                    const isCurrent = id === currentLocation;
-                    const canTravel = !isCurrent && isConnected(currentLocation, id) && phase === 'explore' && !transitioning;
-                    const reachable = isCurrent || isConnected(currentLocation, id);
-                    return (
-                      <button key={id}
-                        onClick={() => canTravel && handleWorldMapTravel(id)}
-                        disabled={!canTravel && !isCurrent}
-                        style={{
-                          position: 'absolute',
-                          left: `${(cx / 340) * 100}%`,
-                          top:  `${(cy / 220) * 100}%`,
-                          transform: 'translate(-50%, -50%)',
-                        }}
-                        className={[
-                          'flex flex-col items-center gap-[2px] px-2 py-[6px] rounded-lg border text-center w-[68px] transition-all',
-                          isCurrent
-                            ? 'border-primary bg-primary/20 shadow-[0_0_12px_rgba(200,150,42,0.25)] cursor-default'
-                            : canTravel
-                              ? 'border-[#3a3a50] bg-[#131320] hover:border-primary hover:bg-primary/10 cursor-pointer active:scale-95'
-                              : reachable
-                                ? 'border-[#222] bg-[#0d0d14] opacity-50 cursor-not-allowed'
-                                : 'border-[#181818] bg-[#0a0a0f] opacity-25 cursor-not-allowed',
-                        ].join(' ')}>
-                        <span className="text-lg leading-none">{loc.emoji}</span>
-                        <span className={`text-[10px] font-bold leading-tight ${isCurrent ? 'text-primary' : 'text-[#bbb]'}`}>
-                          {loc.name}
-                        </span>
-                        <span className="text-[9px] text-[#555] leading-none font-mono">Ур.{loc.recommendedLevel}</span>
-                        {loc.isSafeZone && (
-                          <span className="text-[8px] text-green-700 font-bold leading-none">★ СЕЙФ</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Footer */}
-                <div className="shrink-0 px-4 py-2 border-t border-tile-border/30 flex items-center justify-center">
-                  <span className="text-[10px] text-[#444] font-mono">
-                    {`★ ${getLocation(currentLocation).name} · Ур.${getLocation(currentLocation).recommendedLevel}${getLocation(currentLocation).isSafeZone ? ' · Безопасная зона' : ''}`}
-                  </span>
-                </div>
-
-              </div>
-            );
-          })()}
+          {showWorldMap && (
+            <WorldMapPanel
+              currentLocation={currentLocation}
+              phase={phase}
+              transitioning={transitioning}
+              onTravel={handleWorldMapTravel}
+              onClose={() => setShowWorldMap(false)}
+            />
+          )}
 
         </div>
       </div>
