@@ -35,6 +35,9 @@ import InventoryPanel from './components/InventoryPanel';
 import CombatHUD from './components/CombatHUD';
 import QuestPanel from './components/QuestPanel';
 import WorldMapPanel from './components/WorldMapPanel';
+import GameMap from './components/GameMap';
+import ControlsPanel from './components/ControlsPanel';
+import CombatLog from './components/CombatLog';
 import { ALL_SKILLS_MAP, SKILL_POINTS_PER_LEVEL } from './skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
@@ -1127,92 +1130,24 @@ const log = useCallback((msg: string) => {
       <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] p-2">
         <div className="relative" style={{ width: 'min(90vw, 360px)', height: 'min(90vw, 360px)' }}>
 
-          {/* Tile grid — 10×10 viewport into 20×20 map */}
-          <div className="absolute inset-0 grid grid-cols-10 grid-rows-10 gap-[1px] bg-tile-border p-[1px] border border-tile-border rounded shadow-lg shadow-black/50 overflow-hidden">
-            {Array.from({ length: VP_ROWS }, (_, vr) =>
-              Array.from({ length: VP_COLS }, (_, vc) => {
-                const gx = camCol + vc;
-                const gy = camRow + vr;
-                const tileType = currentMap[gy]?.[gx] ?? 1;
-                return (
-                  <div key={`${gx}-${gy}`} className="relative bg-map-bg">
-                    {renderTileContent(gx, gy, tileType)}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Map HP bars — camera-relative */}
-          {phase === 'combat' && playerHp > 0 && (
-            <div className="absolute pointer-events-none z-20 flex justify-center"
-              style={{ top: `${((playerPos.y - camRow) / VP_ROWS) * 100}%`, left: `${((playerPos.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
-              <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
-                <div className="h-full bg-primary" style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
-              </div>
-            </div>
-          )}
-          {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 &&
-            activeEnemy.x >= camCol && activeEnemy.x < camCol + VP_COLS &&
-            activeEnemy.y >= camRow && activeEnemy.y < camRow + VP_ROWS && (
-            activeEnemy.id === BOSS_ID ? (
-              // Boss HP bar — wider, red gradient, name above
-              <div className="absolute pointer-events-none z-20 flex flex-col items-center"
-                style={{
-                  top:        `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`,
-                  left:       `${Math.max(0, (activeEnemy.x - camCol - 1) / VP_COLS) * 100}%`,
-                  width:      `${(3 / VP_COLS) * 100}%`,
-                  marginTop:  '-20px',
-                }}>
-                <span className="text-[7px] font-black text-red-400 uppercase tracking-wide mb-[2px] leading-none drop-shadow-md">{activeEnemy.name}</span>
-                <div className="w-full h-[5px] bg-[#1a1a1f] border border-red-900/60 rounded-full overflow-hidden shadow-[0_0_4px_rgba(220,38,38,0.5)]">
-                  <div className="h-full bg-red-600 transition-all duration-300"
-                    style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
-                </div>
-              </div>
-            ) : (
-              // Normal enemy HP bar
-              <div className="absolute pointer-events-none z-20 flex justify-center"
-                style={{ top: `${((activeEnemy.y - camRow) / VP_ROWS) * 100}%`, left: `${((activeEnemy.x - camCol) / VP_COLS) * 100}%`, width: `${(1 / VP_COLS) * 100}%`, height: `${(1 / VP_ROWS) * 100}%`, marginTop: '-6px' }}>
-                <div className="w-[80%] h-[4px] bg-[#1a1a1f] border border-black rounded-full overflow-hidden">
-                  <div className="h-full bg-destructive" style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
-                </div>
-              </div>
-            )
-          )}
-
-          {/* Floating numbers — camera-relative, only in viewport */}
-          {floatingNums
-            .filter(n => n.col >= camCol && n.col < camCol + VP_COLS && n.row >= camRow && n.row < camRow + VP_ROWS)
-            .map(num => (
-            <div key={num.id}
-              className="absolute pointer-events-none z-30 font-bold text-base text-center animate-float w-[10%] h-[10%] flex items-center justify-center drop-shadow-md"
-              style={{
-                top: `${((num.row - camRow) / VP_ROWS) * 100}%`, left: `${((num.col - camCol) / VP_COLS) * 100}%`,
-                color: num.type === 'player-dmg' ? 'hsl(var(--destructive))' : num.type === 'heal' ? 'hsl(var(--success))' : 'hsl(var(--primary))',
-              }}>
-              {num.value}
-            </div>
-          ))}
-
-          {/* Boss appear notification */}
-          {bossAppearNotif && (
-            <div className="absolute inset-x-0 z-[55] flex justify-center pointer-events-none" style={{ top: '28%' }}>
-              <div className="bg-black/90 border-2 border-red-600 rounded-xl px-6 py-4 mx-4 text-center shadow-[0_0_30px_rgba(220,38,38,0.5)] animate-in fade-in duration-300">
-                <p className="text-red-500 text-[10px] font-bold uppercase tracking-widest mb-1">⚔️ Появился Босс</p>
-                <p className="text-white text-lg font-black tracking-wide">👑 Главарь гоблинов</p>
-                <p className="text-red-400/70 text-[10px] mt-1 font-mono">750 HP · Урон ×2 · Скорость +20%</p>
-              </div>
-            </div>
-          )}
-
-          {/* Transition overlay */}
-          {transitioning && (
-            <div className="absolute inset-0 z-[70] bg-black/90 flex flex-col items-center justify-center gap-2 rounded">
-              <span className="text-3xl animate-pulse">{LOCATION_META[currentLocation].emoji}</span>
-              <p className="text-sm font-bold text-[#aaa] tracking-widest uppercase">Переход...</p>
-            </div>
-          )}
+          {/* Tile grid, HP bars, floating numbers, boss/transition overlays */}
+          <GameMap
+            camCol={camCol}
+            camRow={camRow}
+            currentMap={currentMap}
+            renderTileContent={renderTileContent}
+            phase={phase}
+            playerHp={playerHp}
+            playerMaxHp={playerMaxHp}
+            playerPos={playerPos}
+            activeEnemy={activeEnemy}
+            bossId={BOSS_ID}
+            floatingNums={floatingNums}
+            bossAppearNotif={bossAppearNotif}
+            transitioning={transitioning}
+            currentLocation={currentLocation}
+            locationEmoji={LOCATION_META[currentLocation].emoji}
+          />
 
           {/* Generic NPC dialog overlay (non-quest NPCs) */}
           {npcDialog && (
@@ -1434,63 +1369,11 @@ const log = useCallback((msg: string) => {
         </div>
       )}
 
-      {/* ══ 3. D-PAD ══ */}
-      <div className="h-[140px] shrink-0 flex flex-col items-center justify-center border-t border-tile-border/50 bg-[#0c0c10]">
-        <span className="text-[10px] uppercase tracking-widest text-[#666] mb-2 font-bold">Движение</span>
-        <div className="grid grid-cols-3 gap-[6px]">
-          <div />
-          <button disabled={phase !== 'explore'} onClick={() => movePlayer(0, -1)}
-            className="dpad-btn w-[56px] h-[56px] bg-[#1e1e28] border-2 border-primary rounded-lg flex items-center justify-center text-primary disabled:opacity-30 disabled:border-tile-border disabled:text-tile-border transition-colors shadow-sm">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-          </button>
-          <div />
-          <button disabled={phase !== 'explore'} onClick={() => movePlayer(-1, 0)}
-            className="dpad-btn w-[56px] h-[56px] bg-[#1e1e28] border-2 border-primary rounded-lg flex items-center justify-center text-primary disabled:opacity-30 disabled:border-tile-border disabled:text-tile-border transition-colors shadow-sm">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <button disabled={phase !== 'explore'} onClick={() => movePlayer(0, 1)}
-            className="dpad-btn w-[56px] h-[56px] bg-[#1e1e28] border-2 border-primary rounded-lg flex items-center justify-center text-primary disabled:opacity-30 disabled:border-tile-border disabled:text-tile-border transition-colors shadow-sm">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
-          <button disabled={phase !== 'explore'} onClick={() => movePlayer(1, 0)}
-            className="dpad-btn w-[56px] h-[56px] bg-[#1e1e28] border-2 border-primary rounded-lg flex items-center justify-center text-primary disabled:opacity-30 disabled:border-tile-border disabled:text-tile-border transition-colors shadow-sm">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
-        </div>
-      </div>
-
-      {/* ══ 4. SKILL BAR ══ */}
-      <div className="h-[80px] shrink-0 bg-[#111116] border-t border-tile-border p-2 flex justify-center gap-2 overflow-x-auto">
-        {SKILLS.map(skill => {
-          const cd = skillsCd[skill.id] || 0;
-          const isOnCd = cd > 0;
-          const isUsable = phase === 'combat' && !isOnCd;
-          return (
-            <button key={skill.id} disabled={!isUsable} onClick={() => useSkill(skill)}
-              className={`relative flex flex-col items-center justify-center w-[60px] h-[60px] rounded bg-[#1e1e28] border
-                ${isUsable ? 'border-skill shadow-[0_0_10px_rgba(26,74,139,0.5)] cursor-pointer active:scale-95 transition-all' : 'border-tile-border opacity-60 cursor-not-allowed'}`}>
-              <span className="text-xl mb-1">{skill.emoji}</span>
-              <span className="text-[10px] font-bold text-white/80">{skill.name}</span>
-              {isOnCd && (
-                <div className="absolute inset-0 bg-black/70 rounded flex items-center justify-center">
-                  <span className="text-white font-mono font-bold text-sm">{(cd / 10).toFixed(1)}</span>
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* ══ 3-4. MOVEMENT + SKILL BAR ══ */}
+      <ControlsPanel phase={phase} movePlayer={movePlayer} skillsCd={skillsCd} useSkill={useSkill} />
 
       {/* ══ 5. COMBAT LOG ══ */}
-      <div className="h-[90px] shrink-0 bg-[#0a0a0f] border-t border-tile-border/80 overflow-y-auto p-2 combat-log-scroll">
-        <div className="flex flex-col-reverse justify-end min-h-full">
-          {logs.map((log, i) => (
-            <div key={log.id} className={`text-[12px] leading-[18px] font-mono ${i === 0 ? 'text-white/90 font-bold' : 'text-[#888]'}`}>
-              {log.msg}
-            </div>
-          ))}
-        </div>
-      </div>
+      <CombatLog logs={logs} />
 
     </div>
   );
