@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { appendLog } from './game/ui/logger';
-import { loadGame, clearSave, SaveData } from './save';
+import { loadGame, SaveData } from './save';
 import { usePersistence } from './hooks/usePersistence';
 import { useCombat } from './hooks/useCombat';
+import { useSyncedRef } from './hooks/useSyncedRef';
+import { useReset } from './hooks/useReset';
+import { useEquipment } from './hooks/useEquipment';
+import { useEconomy } from './hooks/useEconomy';
 import {
   Item, ItemType, ItemBonuses, Rarity,
   ITEM_CATALOG, RARITY_STYLE,
@@ -11,7 +15,6 @@ import {
 import {
   Equipment, EquipBonuses,
   EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES,
-  calcEquipBonuses,
 } from './equipment';
 import {
   LocationId, Phase, Enemy, KillReward,
@@ -28,7 +31,6 @@ import {
 } from './world/locations';
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
-import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL } from './shop/shop';
 import ShopPanel from './shop/ShopPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
@@ -38,7 +40,6 @@ import WorldMapPanel from './components/WorldMapPanel';
 import GameMap from './components/GameMap';
 import ControlsPanel from './components/ControlsPanel';
 import CombatLog from './components/CombatLog';
-import { ALL_SKILLS_MAP, SKILL_POINTS_PER_LEVEL } from './skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
 import {
@@ -145,33 +146,33 @@ export default function App() {
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep refs in sync
-  useEffect(() => { playerHpRef.current       = playerHp;         }, [playerHp]);
-  useEffect(() => { playerMaxHpRef.current     = playerMaxHp;     }, [playerMaxHp]);
-  useEffect(() => { shieldRef.current          = shieldActive;    }, [shieldActive]);
-  useEffect(() => { phaseRef.current           = phase;           }, [phase]);
-  useEffect(() => { playerPosRef.current       = playerPos;       }, [playerPos]);
-  useEffect(() => { enemiesRef.current         = enemies;         }, [enemies]);
-  useEffect(() => { activeEnemyIdRef.current   = activeEnemyId;   }, [activeEnemyId]);
-  useEffect(() => { currentLocationRef.current = currentLocation; }, [currentLocation]);
-  useEffect(() => { transitioningRef.current   = transitioning;   }, [transitioning]);
-  useEffect(() => { statsRef.current           = stats;         }, [stats]);
-  useEffect(() => { playerBonusDmgRef.current  = playerBonusDmg; }, [playerBonusDmg]);
-  useEffect(() => { levelHpBonusRef.current    = levelHpBonus;  }, [levelHpBonus]);
-  useEffect(() => { playerLevelRef.current     = playerLevel;   }, [playerLevel]);
-  useEffect(() => { playerXpRef.current        = playerXp;      }, [playerXp]);
-  useEffect(() => { playerGoldRef.current      = playerGold;    }, [playerGold]);
-  useEffect(() => { statPointsRef.current      = statPoints;    }, [statPoints]);
-  useEffect(() => { equipmentRef.current       = equipment;     }, [equipment]);
-  useEffect(() => { equipBonusesRef.current    = equipBonuses;  }, [equipBonuses]);
-  useEffect(() => { inventoryRef.current       = inventory;     }, [inventory]);
-  useEffect(() => { xpToNextRef.current        = xpToNext;      }, [xpToNext]);
-  useEffect(() => { questProgressRef.current   = questProgress; }, [questProgress]);
-  useEffect(() => { skillProgressRef.current   = skillProgress; }, [skillProgress]);
-  useEffect(() => { skillPointsRef.current     = skillPoints;   }, [skillPoints]);
+  useSyncedRef(playerHpRef, playerHp);
+  useSyncedRef(playerMaxHpRef, playerMaxHp);
+  useSyncedRef(shieldRef, shieldActive);
+  useSyncedRef(phaseRef, phase);
+  useSyncedRef(playerPosRef, playerPos);
+  useSyncedRef(enemiesRef, enemies);
+  useSyncedRef(activeEnemyIdRef, activeEnemyId);
+  useSyncedRef(currentLocationRef, currentLocation);
+  useSyncedRef(transitioningRef, transitioning);
+  useSyncedRef(statsRef, stats);
+  useSyncedRef(playerBonusDmgRef, playerBonusDmg);
+  useSyncedRef(levelHpBonusRef, levelHpBonus);
+  useSyncedRef(playerLevelRef, playerLevel);
+  useSyncedRef(playerXpRef, playerXp);
+  useSyncedRef(playerGoldRef, playerGold);
+  useSyncedRef(statPointsRef, statPoints);
+  useSyncedRef(equipmentRef, equipment);
+  useSyncedRef(equipBonusesRef, equipBonuses);
+  useSyncedRef(inventoryRef, inventory);
+  useSyncedRef(xpToNextRef, xpToNext);
+  useSyncedRef(questProgressRef, questProgress);
+  useSyncedRef(skillProgressRef, skillProgress);
+  useSyncedRef(skillPointsRef, skillPoints);
   useEffect(() => { skillBonusesRef.current    = calcSkillBonuses(skillProgress); }, [skillProgress]);
-  useEffect(() => { bossStateRef.current              = bossState;            }, [bossState]);
-  useEffect(() => { bossSpawnedThisVisitRef.current   = bossSpawnedThisVisit; }, [bossSpawnedThisVisit]);
-  useEffect(() => { bossDefeatedThisVisitRef.current  = bossDefeatedThisVisit;}, [bossDefeatedThisVisit]);
+  useSyncedRef(bossStateRef, bossState);
+  useSyncedRef(bossSpawnedThisVisitRef, bossSpawnedThisVisit);
+  useSyncedRef(bossDefeatedThisVisitRef, bossDefeatedThisVisit);
 
   // ── Auto-save: writes to localStorage on every meaningful state change ─────
   usePersistence({
@@ -215,87 +216,22 @@ const log = useCallback((msg: string) => {
   }, []);
 
   // ── Equipment ─────────────────────────────────────────────────────────────
-  const equipItem = useCallback((item: Item) => {
-    const slot = item.type as keyof Equipment;
-    const prevItem = equipmentRef.current[slot];
-    const oldBonuses = equipBonusesRef.current;
+  const { equipItem, unequipItem } = useEquipment({
+    equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, playerBonusDmgRef,
+    skillBonusesRef, playerMaxHpRef, playerHpRef,
+    setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp, setSelectedItem,
+    log,
+  });
 
-    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: item };
-    equipmentRef.current = newEquipment;
-    setEquipment(newEquipment);
-
-    // Remove newly-equipped item from inventory; return displaced item if any
-    setInventory(prev => {
-      let next = prev.filter(i => i.id !== item.id);
-      if (prevItem) next = [...next, prevItem];
-      return next;
-    });
-
-    // Recalc bonuses from scratch (no double-counting possible)
-    const newBonuses = calcEquipBonuses(newEquipment);
-    equipBonusesRef.current = newBonuses;
-    setEquipBonuses(newBonuses);
-
-    // Recalc max HP via central stats module
-    const newMaxHp = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
-      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
-    }).maxHp;
-    playerMaxHpRef.current = newMaxHp;
-    setPlayerMaxHp(newMaxHp);
-
-    // Increase current HP by the positive HP delta (first equip of HP item)
-    const hpDelta = newBonuses.hp - oldBonuses.hp;
-    if (hpDelta > 0) {
-      const newHp = Math.min(newMaxHp, playerHpRef.current + hpDelta);
-      playerHpRef.current = newHp;
-      setPlayerHp(newHp);
-    }
-
-    setSelectedItem(null);
-    log(`🗡️ Экипировано: ${item.name}`);
-  }, [log]);
-
-  const unequipItem = useCallback((slot: keyof Equipment) => {
-    const item = equipmentRef.current[slot];
-    if (!item) return;
-
-    const oldBonuses = equipBonusesRef.current;
-    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: null };
-    equipmentRef.current = newEquipment;
-    setEquipment(newEquipment);
-
-    // Return item to inventory
-    setInventory(prev => [...prev, item]);
-
-    // Recalc bonuses from scratch
-    const newBonuses = calcEquipBonuses(newEquipment);
-    equipBonusesRef.current = newBonuses;
-    setEquipBonuses(newBonuses);
-
-    // Recalc max HP via central stats module
-    const newMaxHp = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
-      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
-    }).maxHp;
-    playerMaxHpRef.current = newMaxHp;
-    setPlayerMaxHp(newMaxHp);
-
-    // Clamp current HP to new (lower) max if necessary
-    const hpDelta = newBonuses.hp - oldBonuses.hp; // will be negative or zero
-    if (hpDelta < 0) {
-      const clampedHp = Math.min(playerHpRef.current, newMaxHp);
-      if (clampedHp !== playerHpRef.current) {
-        playerHpRef.current = clampedHp;
-        setPlayerHp(clampedHp);
-      }
-    }
-
-    setSelectedItem(null);
-    log(`📤 Снято: ${item.name}`);
-  }, [log]);
+  // ── Shop, consumables, skill-point spending ─────────────────────────────────
+  const { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill } = useEconomy({
+    playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
+    playerPosRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
+    levelHpBonusRef, playerBonusDmgRef,
+    setPlayerGold, setInventory, setPlayerHp, setSelectedItem, setSkillProgress,
+    setSkillPoints, setPlayerMaxHp,
+    log, spawnFloat,
+  });
 
   // ── Combat: loot, XP/level-up, enemy & boss death, auto-attack loop, skills ─
   const { grantXp, useSkill } = useCombat({
@@ -487,199 +423,22 @@ const log = useCallback((msg: string) => {
   }, []);
 
   // ── Shop: buy ────────────────────────────────────────────────────────────
-  const handleShopBuy = useCallback((key: string) => {
-    const price = SHOP_BUY_PRICE[key];
-    if (price === undefined) return;
-    if (playerGoldRef.current < price) {
-      log('💰 Недостаточно золота!');
-      return;
-    }
-    const item = makeItem(key);
-    playerGoldRef.current -= price;
-    setPlayerGold(playerGoldRef.current);
-    inventoryRef.current = [...inventoryRef.current, item];
-    setInventory(prev => [...prev, item]);
-    log(`🛒 Куплено: ${item.name} за ${price}💰`);
-  }, [log]);
 
-  // ── Shop: sell ───────────────────────────────────────────────────────────
-  const handleShopSell = useCallback((itemId: string) => {
-    const item = inventoryRef.current.find(i => i.id === itemId);
-    if (!item) return;
-    if (Object.values(equipmentRef.current).some(eq => eq?.id === itemId)) {
-      log('Нельзя продать надетый предмет!');
-      return;
-    }
-    const price = sellPrice(item);
-    inventoryRef.current = inventoryRef.current.filter(i => i.id !== itemId);
-    setInventory(prev => prev.filter(i => i.id !== itemId));
-    playerGoldRef.current += price;
-    setPlayerGold(playerGoldRef.current);
-    log(`💸 Продано: ${item.name} за ${price}💰`);
-  }, [log]);
-
-  // ── Consumable: use ───────────────────────────────────────────────────────
-  const handleUseItem = useCallback((item: Item) => {
-    const healAmt = CONSUMABLE_HEAL[item.key];
-    if (!healAmt) return;
-    const currentHp = playerHpRef.current;
-    const maxHp     = playerMaxHpRef.current;
-    if (currentHp >= maxHp) { log('❤️ HP уже максимально!'); return; }
-    const newHp  = Math.min(maxHp, currentHp + healAmt);
-    const healed = newHp - currentHp;
-    playerHpRef.current = newHp;
-    setPlayerHp(newHp);
-    inventoryRef.current = inventoryRef.current.filter(i => i.id !== item.id);
-    setInventory(prev => prev.filter(i => i.id !== item.id));
-    setSelectedItem(null);
-    log(`🧪 Использовано ${item.name}: +${healed} HP!`);
-    spawnFloat(`+${healed}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
-  }, [log, spawnFloat]);
-
-  // ── Skill upgrade ─────────────────────────────────────────────────────────
-  const handleUpgradeSkill = useCallback((skillId: string) => {
-    const def = ALL_SKILLS_MAP[skillId];
-    if (!def) return;
-    const current = skillProgressRef.current[skillId] ?? 0;
-    if (current >= def.maxLevel) return;
-    if (skillPointsRef.current <= 0) return;
-
-    const newLevel       = current + 1;
-    const newProgress: SkillProgress = { ...skillProgressRef.current, [skillId]: newLevel };
-    skillProgressRef.current = newProgress;
-    setSkillProgress(newProgress);
-
-    skillPointsRef.current -= 1;
-    setSkillPoints(p => p - 1);
-
-    const newBonuses = calcSkillBonuses(newProgress);
-    skillBonusesRef.current = newBonuses;
-
-    // Iron Skin — recalculate max HP immediately
-    if (skillId === 'iron_skin') {
-      const newMaxHp = computeStats({
-        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
-        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: newBonuses,
-      }).maxHp;
-      playerMaxHpRef.current = newMaxHp;
-      setPlayerMaxHp(newMaxHp);
-    }
-
-    log(`⬆️ ${def.name}: уровень ${newLevel}`);
-  }, [log]);
-
-  // ── Reset current map (respawn in current location — keep all character progress) ──
-  const resetCurrentMap = useCallback(() => {
-    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
-    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
-
-    const loc   = currentLocationRef.current;
-    const fresh = makeLocationEnemies(loc);
-    const spawn = LOCATION_SPAWN[loc];
-
-    // Max HP is based on current level, stats and equipment — nothing changes here
-    const fullHp = playerMaxHpRef.current;
-
-    // Run-level state
-    phaseRef.current         = 'explore';
-    playerHpRef.current      = fullHp;
-    shieldRef.current        = false;
-    playerPosRef.current     = spawn;
-    enemiesRef.current       = fresh;
-    activeEnemyIdRef.current = null;
-
-    setPhase('explore');
-    setPlayerPos(spawn);
-    setPlayerHp(fullHp);
-    setEnemies(fresh);
-    setActiveEnemyId(null);
-    setShieldActive(false);
-    setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-    setFloatingNums([]);
-    setLastKillReward(null);
-    setLootNotif(null);
-    setShowInventory(false);
-    setSelectedItem(null);
-    setShowCharPanel(false);
-    setShowShop(false);
-    setShowSkillPanel(false);
-    setShowBossVictory(false);
-    setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
-
-    // ── Character progress intentionally NOT reset: ──────────────────────────
-    // level, XP, statPoints, stats, playerBonusDmg, levelHpBonus,
-    // gold, inventory, equipment, equipBonuses, playerMaxHp
-  }, []);
-
-  // ── Full reset — wipes save, returns to Lv.1 in city ("Играть снова") ──────
-  const resetCharacter = useCallback(() => {
-    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
-    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
-
-    clearSave();
-
-    const initMaxHp = INITIAL_HP + INITIAL_BASE_STATS.vitality * 10;
-
-    // Reset refs immediately so any in-flight callbacks see correct values
-    playerHpRef.current        = initMaxHp;
-    playerMaxHpRef.current     = initMaxHp;
-    phaseRef.current           = 'explore';
-    shieldRef.current          = false;
-    playerPosRef.current       = LOCATION_SPAWN.village;
-    enemiesRef.current         = [];
-    activeEnemyIdRef.current   = null;
-    playerBonusDmgRef.current  = 0;
-    levelHpBonusRef.current    = 0;
-    playerLevelRef.current     = INITIAL_PLAYER_LVL;
-    playerXpRef.current        = 0;
-    xpToNextRef.current        = xpRequired(INITIAL_PLAYER_LVL);
-    playerGoldRef.current      = 0;
-    statPointsRef.current      = 0;
-    statsRef.current           = { ...INITIAL_BASE_STATS };
-    equipmentRef.current       = { ...EMPTY_EQUIPMENT };
-    equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
-    inventoryRef.current       = [];
-    currentLocationRef.current           = 'village';
-    bossStateRef.current                  = INITIAL_BOSS_STATE;
-    bossSpawnedThisVisitRef.current       = false;
-    bossDefeatedThisVisitRef.current      = false;
-
-    // Reset state
-    setPhase('explore');
-    setPlayerPos(LOCATION_SPAWN.village);
-    setPlayerHp(initMaxHp);
-    setPlayerMaxHp(initMaxHp);
-    setEnemies([]);
-    setActiveEnemyId(null);
-    setShieldActive(false);
-    setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-    setFloatingNums([]);
-    setLastKillReward(null);
-    setPlayerLevel(INITIAL_PLAYER_LVL);
-    setPlayerXp(0);
-    setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
-    setPlayerGold(0);
-    setPlayerBonusDmg(0);
-    setLevelHpBonus(0);
-    setStats({ ...INITIAL_BASE_STATS });
-    setStatPoints(0);
-    setSkillProgress({});
-    setSkillPoints(0);
-    setBossState(INITIAL_BOSS_STATE);
-    setBossSpawnedThisVisit(false);
-    setBossDefeatedThisVisit(false);
-    setShowBossVictory(false);
-    setEquipment({ ...EMPTY_EQUIPMENT });
-    setInventory([]);
-    setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
-    setCurrentLocation('village');
-    setLootNotif(null);
-    setShowInventory(false);
-    setSelectedItem(null);
-    setShowCharPanel(false);
-    setLogs([{ id: Date.now(), msg: 'Тёмные подземелья ждут...' }]);
-  }, []);
+  // ── Reset flows: respawn-in-place after death, and full "New Game" wipe ────
+  const { resetCurrentMap, resetCharacter } = useReset({
+    activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
+    currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
+    inventoryRef, levelHpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
+    playerGoldRef, playerHpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
+    shieldRef, statPointsRef, statsRef, xpToNextRef,
+    setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
+    setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
+    setInventory, setLastKillReward, setLevelHpBonus, setLogs, setLootNotif, setPhase,
+    setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerLevel, setPlayerMaxHp,
+    setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setShowBossVictory,
+    setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
+    setSkillProgress, setSkillsCd, setStatPoints, setStats, setXpToNext,
+  });
 
   // ── Derived values ────────────────────────────────────────────────────────
   const activeEnemy   = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
