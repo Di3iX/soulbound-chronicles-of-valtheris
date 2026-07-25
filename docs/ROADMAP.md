@@ -48,15 +48,15 @@
 # Phase 2 — RPG Expansion 🚧
 
 ## Skills
-- ⬜ Active Skills
-- ⬜ Mana
-- ⬜ Cooldowns
+- ✅ Active Skills
+- ✅ Mana
+- ✅ Cooldowns
 - ⬜ Skill Animations
 - ⬜ Visual Effects
 
 ## Combat
-- ⬜ Critical Hits
-- ⬜ Dodge
+- ✅ Critical Hits
+- ✅ Dodge
 - ⬜ Block
 - ⬜ Status Effects
 - ⬜ Damage Types
