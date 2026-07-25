@@ -26,10 +26,11 @@ export function usePersistence(state: SaveablePlayerState): void {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.playerLevel, state.playerXp, state.xpToNext, state.playerGold,
-    state.playerBonusDmg, state.levelHpBonus,
-    state.playerHp, state.playerMaxHp, state.stats, state.statPoints,
+    state.playerBonusDmg, state.levelHpBonus, state.levelMpBonus,
+    state.playerHp, state.playerMaxHp, state.playerMp, state.playerMaxMp, state.stats, state.statPoints,
     state.inventory, state.equipment, state.equipBonuses,
     state.playerPos, state.currentLocation, state.enemies,
     state.questProgress, state.skillProgress, state.skillPoints,
+    state.bossState, state.exploredTiles,
   ]);
 }

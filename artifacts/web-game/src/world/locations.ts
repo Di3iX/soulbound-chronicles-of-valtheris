@@ -7,6 +7,43 @@ export const MAP_ROWS = 20;
 export const VP_COLS  = 10;   // tiles visible horizontally
 export const VP_ROWS  = 10;   // tiles visible vertically
 
+/** How many tiles around the player get revealed on the minimap as they move. */
+export const REVEAL_RADIUS = 2;
+
+export type ExploredGrid = boolean[][];
+/** Per-location fog-of-war state: which tiles has the player actually walked near. */
+export type ExploredTiles = Record<LocationId, ExploredGrid>;
+
+const emptyGrid = (): ExploredGrid =>
+  Array.from({ length: MAP_ROWS }, () => Array(MAP_COLS).fill(false));
+
+/** Fresh fog-of-war state for a brand new character — nothing explored anywhere. */
+export const makeInitialExploredTiles = (): ExploredTiles => ({
+  village: emptyGrid(), forest: emptyGrid(), cave: emptyGrid(), ruins: emptyGrid(), swamp: emptyGrid(),
+});
+
+/**
+ * Reveals a square of tiles around `center` on `grid`, returning a NEW grid
+ * (only when something actually changed) so callers can skip a re-render/save
+ * when the player re-treads already-explored ground.
+ */
+export function revealAround(grid: ExploredGrid, center: { x: number; y: number }): ExploredGrid {
+  let changed = false;
+  const next = grid.map((row, gy) => {
+    if (Math.abs(gy - center.y) > REVEAL_RADIUS) return row;
+    let rowChanged = false;
+    const newRow = row.map((cell, gx) => {
+      if (cell) return cell;
+      if (Math.abs(gx - center.x) > REVEAL_RADIUS) return cell;
+      rowChanged = true;
+      return true;
+    });
+    if (rowChanged) changed = true;
+    return rowChanged ? newRow : row;
+  });
+  return changed ? next : grid;
+}
+
 // ── Supporting types ──────────────────────────────────────────────────────────
 export type ExitDef = { to: LocationId; spawnAt: { x: number; y: number } };
 export interface NpcDef { id: string; name: string; emoji: string; x: number; y: number; }

@@ -9,7 +9,7 @@ import {
 } from '../stats';
 import { Item } from '../inventory';
 import { Equipment, EquipBonuses, EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES } from '../equipment';
-import { LOCATION_SPAWN } from '../world/locations';
+import { LOCATION_SPAWN, ExploredTiles, makeInitialExploredTiles } from '../world/locations';
 import { QuestProgress } from '../quests/quests';
 import { SkillProgress } from '../skills/skillTree';
 import { BossState, INITIAL_BOSS_STATE } from '../boss/boss';
@@ -32,6 +32,7 @@ export interface ResetCtx {
   inventoryRef: MutableRefObject<Item[]>;
   levelHpBonusRef: MutableRefObject<number>;
   levelMpBonusRef: MutableRefObject<number>;
+  exploredTilesRef: MutableRefObject<ExploredTiles>;
   phaseRef: MutableRefObject<Phase>;
   playerAttackTimeout: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   playerBonusDmgRef: MutableRefObject<number>;
@@ -62,6 +63,7 @@ export interface ResetCtx {
   setLastKillReward: (v: KillReward | null) => void;
   setLevelHpBonus: (v: number) => void;
   setLevelMpBonus: (v: number) => void;
+  setExploredTiles: (v: ExploredTiles) => void;
   setLogs: (v: LogEntry[]) => void;
   setLootNotif: (v: string | null) => void;
   setPhase: (v: Phase) => void;
@@ -100,12 +102,12 @@ export function useReset(ctx: ResetCtx) {
   const {
     activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
-    inventoryRef, levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
+    inventoryRef, levelHpBonusRef, levelMpBonusRef, exploredTilesRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     shieldRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
-    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setLogs, setLootNotif, setPhase,
+    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
     setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
@@ -181,6 +183,7 @@ export function useReset(ctx: ResetCtx) {
     playerBonusDmgRef.current  = 0;
     levelHpBonusRef.current    = 0;
     levelMpBonusRef.current    = 0;
+    exploredTilesRef.current   = makeInitialExploredTiles();
     playerLevelRef.current     = INITIAL_PLAYER_LVL;
     playerXpRef.current        = 0;
     xpToNextRef.current        = xpRequired(INITIAL_PLAYER_LVL);
@@ -215,6 +218,7 @@ export function useReset(ctx: ResetCtx) {
     setPlayerBonusDmg(0);
     setLevelHpBonus(0);
     setLevelMpBonus(0);
+    setExploredTiles(makeInitialExploredTiles());
     setStats({ ...INITIAL_BASE_STATS });
     setStatPoints(0);
     setSkillProgress({});

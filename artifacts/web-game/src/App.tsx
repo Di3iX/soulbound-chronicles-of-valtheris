@@ -28,6 +28,7 @@ import {
   MAP_COLS, MAP_ROWS, VP_COLS, VP_ROWS,
   LOCATION_META, LOCATION_SPAWN, LOCATION_EXITS, LOCATION_MAPS, LOCATION_NPCS,
   getLocation, moveToLocation, getAvailableExits,
+  ExploredTiles, makeInitialExploredTiles, revealAround,
 } from './world/locations';
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
@@ -104,6 +105,8 @@ export default function App() {
   const [npcDialog, setNpcDialog]             = useState<string | null>(null);
   const [questProgress, setQuestProgress]     = useState<QuestProgress>(sv?.questProgress ?? {});
   const [questDialogue, setQuestDialogue]     = useState<NpcDialogue | null>(null);
+  const [exploredTiles, setExploredTiles]     = useState<ExploredTiles>(sv?.exploredTiles ?? makeInitialExploredTiles());
+  const [minimapVisible, setMinimapVisible]   = useState(true);
   const [showQuestPanel, setShowQuestPanel]   = useState(false);
   const [showShop, setShowShop]               = useState(false);
   const [skillProgress, setSkillProgress]     = useState<SkillProgress>(sv?.skillProgress ?? {});
@@ -142,6 +145,7 @@ export default function App() {
   const inventoryRef       = useRef<Item[]>(sv?.inventory        ?? []);
   const xpToNextRef        = useRef(sv?.xpToNext                 ?? xpRequired(INITIAL_PLAYER_LVL));
   const questProgressRef   = useRef<QuestProgress>(sv?.questProgress ?? {});
+  const exploredTilesRef   = useRef<ExploredTiles>(sv?.exploredTiles ?? makeInitialExploredTiles());
   const skillProgressRef   = useRef<SkillProgress>(sv?.skillProgress ?? {});
   const skillPointsRef     = useRef(sv?.skillPoints ?? 0);
   const skillBonusesRef    = useRef<SkillBonuses>(calcSkillBonuses(sv?.skillProgress ?? {}));
@@ -176,9 +180,21 @@ export default function App() {
   useSyncedRef(inventoryRef, inventory);
   useSyncedRef(xpToNextRef, xpToNext);
   useSyncedRef(questProgressRef, questProgress);
+  useSyncedRef(exploredTilesRef, exploredTiles);
   useSyncedRef(skillProgressRef, skillProgress);
   useSyncedRef(skillPointsRef, skillPoints);
   useEffect(() => { skillBonusesRef.current    = calcSkillBonuses(skillProgress); }, [skillProgress]);
+
+  // ── Fog of war: reveal tiles around the player as they move ────────────────
+  useEffect(() => {
+    const grid = exploredTilesRef.current[currentLocation];
+    const revealed = revealAround(grid, playerPos);
+    if (revealed !== grid) {
+      const next = { ...exploredTilesRef.current, [currentLocation]: revealed };
+      exploredTilesRef.current = next;
+      setExploredTiles(next);
+    }
+  }, [playerPos, currentLocation]);
   useSyncedRef(bossStateRef, bossState);
   useSyncedRef(bossSpawnedThisVisitRef, bossSpawnedThisVisit);
   useSyncedRef(bossDefeatedThisVisitRef, bossDefeatedThisVisit);
@@ -186,14 +202,14 @@ export default function App() {
   // ── Auto-save: writes to localStorage on every meaningful state change ─────
   usePersistence({
     playerLevel, playerXp, xpToNext, playerGold,
-    playerBonusDmg, levelHpBonus,
-    playerHp, playerMaxHp,
+    playerBonusDmg, levelHpBonus, levelMpBonus,
+    playerHp, playerMaxHp, playerMp, playerMaxMp,
     stats, statPoints,
     inventory, equipment, equipBonuses,
     playerPos, currentLocation, enemies,
     questProgress,
     skillProgress, skillPoints,
-    bossState,
+    bossState, exploredTiles,
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -440,12 +456,12 @@ const log = useCallback((msg: string) => {
   const { resetCurrentMap, resetCharacter } = useReset({
     activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
-    inventoryRef, levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
+    inventoryRef, levelHpBonusRef, levelMpBonusRef, exploredTilesRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     shieldRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
-    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setLogs, setLootNotif, setPhase,
+    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
     setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
@@ -593,6 +609,9 @@ const log = useCallback((msg: string) => {
             transitioning={transitioning}
             currentLocation={currentLocation}
             locationEmoji={LOCATION_META[currentLocation].emoji}
+            exploredTiles={exploredTiles}
+            minimapVisible={minimapVisible}
+            onToggleMinimap={() => setMinimapVisible(v => !v)}
           />
 
           {/* Generic NPC dialog overlay (non-quest NPCs) */}

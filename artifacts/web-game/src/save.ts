@@ -2,6 +2,7 @@
 import type { Item } from './inventory';
 import type { Equipment, EquipBonuses } from './equipment';
 import type { LocationId, Enemy } from './combat';
+import type { ExploredTiles } from './world/locations';
 import type { QuestProgress } from './quests/quests';
 import type { SkillProgress } from './skills/skillTree';
 import type { BossState } from './boss/boss';
@@ -46,6 +47,8 @@ export interface SaveData {
   skillPoints?:    number;
   /** Optional — missing in old saves; defaults to INITIAL_BOSS_STATE on load. */
   bossState?:      BossState;
+  /** Optional — missing in pre-minimap saves; defaults to fully-unexplored on load. */
+  exploredTiles?:  ExploredTiles;
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';

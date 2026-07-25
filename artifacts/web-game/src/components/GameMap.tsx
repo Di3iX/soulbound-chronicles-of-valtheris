@@ -1,7 +1,8 @@
 import React from 'react';
-import { VP_COLS, VP_ROWS } from '../world/locations';
+import { VP_COLS, VP_ROWS, ExploredTiles } from '../world/locations';
 import { Enemy, LocationId } from '../combat';
 import { FloatingNum } from '../types/ui';
+import Minimap from './Minimap';
 
 interface GameMapProps {
   camCol: number;
@@ -22,6 +23,10 @@ interface GameMapProps {
   transitioning: boolean;
   currentLocation: LocationId;
   locationEmoji: string;
+
+  exploredTiles: ExploredTiles;
+  minimapVisible: boolean;
+  onToggleMinimap: () => void;
 }
 
 /**
@@ -34,7 +39,8 @@ export default function GameMap({
   camCol, camRow, currentMap, renderTileContent,
   phase, playerHp, playerMaxHp, playerPos, activeEnemy, bossId,
   floatingNums, bossAppearNotif,
-  transitioning, locationEmoji,
+  transitioning, currentLocation, locationEmoji,
+  exploredTiles, minimapVisible, onToggleMinimap,
 }: GameMapProps) {
   return (
     <>
@@ -53,6 +59,19 @@ export default function GameMap({
           })
         )}
       </div>
+
+      {/* Minimap with fog of war — hidden during combat to avoid clutter */}
+      {phase !== 'combat' && (
+        <Minimap
+          currentMap={currentMap}
+          exploredTiles={exploredTiles[currentLocation]}
+          playerPos={playerPos}
+          camCol={camCol}
+          camRow={camRow}
+          visible={minimapVisible}
+          onToggle={onToggleMinimap}
+        />
+      )}
 
       {/* Map HP bars — camera-relative */}
       {phase === 'combat' && playerHp > 0 && (
