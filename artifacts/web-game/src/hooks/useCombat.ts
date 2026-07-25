@@ -31,6 +31,7 @@ export interface CombatCtx {
   equipBonusesRef:   MutableRefObject<EquipBonuses>;
   inventoryRef:      MutableRefObject<Item[]>;
   levelHpBonusRef:   MutableRefObject<number>;
+  levelMpBonusRef:   MutableRefObject<number>;
   phaseRef:          MutableRefObject<Phase>;
   playerAttackTimeout: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   playerBonusDmgRef: MutableRefObject<number>;
@@ -38,6 +39,8 @@ export interface CombatCtx {
   playerHpRef:       MutableRefObject<number>;
   playerLevelRef:    MutableRefObject<number>;
   playerMaxHpRef:    MutableRefObject<number>;
+  playerMpRef:       MutableRefObject<number>;
+  playerMaxMpRef:    MutableRefObject<number>;
   playerPosRef:      MutableRefObject<{ x: number; y: number }>;
   playerXpRef:       MutableRefObject<number>;
   questProgressRef:  MutableRefObject<QuestProgress>;
@@ -62,6 +65,7 @@ export interface CombatCtx {
   setInventory: Dispatch<SetStateAction<Item[]>>;
   setLastKillReward: (v: KillReward) => void;
   setLevelHpBonus: (v: number) => void;
+  setLevelMpBonus: (v: number) => void;
   setLootNotif: (v: string | null) => void;
   setPhase: (v: Phase) => void;
   setPlayerBonusDmg: (v: number) => void;
@@ -69,6 +73,8 @@ export interface CombatCtx {
   setPlayerHp: (v: number) => void;
   setPlayerLevel: (v: number) => void;
   setPlayerMaxHp: (v: number) => void;
+  setPlayerMp: (v: number) => void;
+  setPlayerMaxMp: (v: number) => void;
   setPlayerPos: (v: { x: number; y: number }) => void;
   setPlayerXp: (v: number) => void;
   setQuestProgress: (v: QuestProgress) => void;
@@ -95,14 +101,15 @@ export function useCombat(ctx: CombatCtx) {
     phase, skillsCd,
     activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, inventoryRef,
-    levelHpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
-    playerHpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef, questProgressRef,
+    levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
+    playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
+    playerPosRef, playerXpRef, questProgressRef,
     shieldRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat,
     setActiveEnemyId, setBossAppearNotif, setBossDefeatedThisVisit, setBossRewardInfo,
     setBossSpawnedThisVisit, setBossState, setEnemies, setInventory, setLastKillReward,
-    setLevelHpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
-    setPlayerLevel, setPlayerMaxHp, setPlayerPos, setPlayerXp, setQuestProgress,
+    setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
+    setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   } = ctx;
 
@@ -126,24 +133,29 @@ export function useCombat(ctx: CombatCtx) {
   const grantXp = useCallback((xpGained: number) => {
     const result = applyXpGain(
       playerXpRef.current, playerLevelRef.current,
-      playerBonusDmgRef.current, levelHpBonusRef.current,
+      playerBonusDmgRef.current, levelHpBonusRef.current, levelMpBonusRef.current,
       xpGained,
     );
 
-    const newMaxHp = computeStats({
-      base: statsRef.current, levelHpBonus: result.levelHpBonus,
+    const newStats = computeStats({
+      base: statsRef.current, levelHpBonus: result.levelHpBonus, levelMpBonus: result.levelMpBonus,
       bonusDmg: result.bonusDmg, equip: equipBonusesRef.current,
       skills: skillBonusesRef.current,
-    }).maxHp;
+    });
+    const newMaxHp = newStats.maxHp;
+    const newMaxMp = newStats.maxMp;
 
     playerLevelRef.current    = result.level;
     playerBonusDmgRef.current = result.bonusDmg;
     levelHpBonusRef.current   = result.levelHpBonus;
+    levelMpBonusRef.current   = result.levelMpBonus;
     playerMaxHpRef.current    = newMaxHp;
+    playerMaxMpRef.current    = newMaxMp;
     playerXpRef.current       = result.xp;
 
     setPlayerXp(result.xp); setXpToNext(result.xpToNext); setPlayerLevel(result.level);
     setPlayerBonusDmg(result.bonusDmg); setLevelHpBonus(result.levelHpBonus); setPlayerMaxHp(newMaxHp);
+    setLevelMpBonus(result.levelMpBonus); setPlayerMaxMp(newMaxMp);
 
     if (result.statPointsGained > 0) {
       statPointsRef.current += result.statPointsGained;
@@ -157,7 +169,8 @@ export function useCombat(ctx: CombatCtx) {
     }
     if (result.leveledUp) {
       playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp);
-      log(`🌟 Новый уровень ${result.level}! HP восстановлено!`);
+      playerMpRef.current = newMaxMp; setPlayerMp(newMaxMp);
+      log(`🌟 Новый уровень ${result.level}! HP и MP восстановлены!`);
     }
 
     return result;
@@ -320,7 +333,7 @@ export function useCombat(ctx: CombatCtx) {
 
       // Compute all character stats from central module (pure, cheap)
       const _cs = computeStats({
-        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
         skills: skillBonusesRef.current,
       });
@@ -343,7 +356,7 @@ export function useCombat(ctx: CombatCtx) {
     };
 
     const _firstCs = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
       skills: skillBonusesRef.current,
     });
@@ -357,7 +370,7 @@ export function useCombat(ctx: CombatCtx) {
 
       // Compute defensive stats
       const _defCs = computeStats({
-        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
         skills: skillBonusesRef.current,
       });
@@ -414,10 +427,33 @@ export function useCombat(ctx: CombatCtx) {
     }, 100);
     return () => clearInterval(t);
   }, [phase]);
+
+  // ── Mana regeneration (5 MP/sec while in combat) ────────────────────────────
+  useEffect(() => {
+    if (phase !== 'combat') return;
+    const t = setInterval(() => {
+      const max = playerMaxMpRef.current;
+      if (playerMpRef.current >= max) return;
+      const newMp = Math.min(max, playerMpRef.current + 5);
+      playerMpRef.current = newMp;
+      setPlayerMp(newMp);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [phase]);
   const useSkill = useCallback((skill: typeof SKILLS[0]) => {
     if (phaseRef.current !== 'combat') return;
     if (skillsCd[skill.id] > 0) return;
+    if (skill.manaCost > 0 && playerMpRef.current < skill.manaCost) {
+      log('🔷 Недостаточно маны!');
+      return;
+    }
     setSkillsCd(prev => ({ ...prev, [skill.id]: skill.maxCd }));
+
+    if (skill.manaCost > 0) {
+      const newMp = playerMpRef.current - skill.manaCost;
+      playerMpRef.current = newMp;
+      setPlayerMp(newMp);
+    }
 
     if (skill.damage > 0) {
       const id = activeEnemyIdRef.current;

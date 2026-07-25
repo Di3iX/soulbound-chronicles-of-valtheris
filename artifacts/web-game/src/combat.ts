@@ -23,11 +23,11 @@ export interface KillReward {
 
 // ── Skills ────────────────────────────────────────────────────────────────────
 export const SKILLS = [
-  { id: 1, name: 'Удар',    emoji: '⚔️', damage: 28, healSelf: 0,  maxCd: 25 },
-  { id: 2, name: 'Огонь',   emoji: '🔥', damage: 42, healSelf: 0,  maxCd: 45 },
-  { id: 3, name: 'Лечение', emoji: '💚', damage: 0,  healSelf: 30, maxCd: 55 },
-  { id: 4, name: 'Молния',  emoji: '⚡', damage: 38, healSelf: 0,  maxCd: 40 },
-  { id: 5, name: 'Щит',     emoji: '🛡️', damage: 0,  healSelf: 0,  maxCd: 35 },
+  { id: 1, name: 'Удар',    emoji: '⚔️', damage: 28, healSelf: 0,  maxCd: 25, manaCost: 0  },
+  { id: 2, name: 'Огонь',   emoji: '🔥', damage: 42, healSelf: 0,  maxCd: 45, manaCost: 25 },
+  { id: 3, name: 'Лечение', emoji: '💚', damage: 0,  healSelf: 30, maxCd: 55, manaCost: 20 },
+  { id: 4, name: 'Молния',  emoji: '⚡', damage: 38, healSelf: 0,  maxCd: 40, manaCost: 20 },
+  { id: 5, name: 'Щит',     emoji: '🛡️', damage: 0,  healSelf: 0,  maxCd: 35, manaCost: 15 },
 ];
 
 // ── Progression constants ─────────────────────────────────────────────────────
@@ -68,6 +68,7 @@ export interface LevelUpResult {
   level:              number;
   bonusDmg:           number;  // cumulative +2/level flat damage bonus
   levelHpBonus:       number;  // cumulative +20/level max-HP bonus
+  levelMpBonus:       number;  // cumulative +5/level max-MP bonus
   xpToNext:           number;  // XP required at `level` to reach `level + 1`
   statPointsGained:   number;  // stat points earned THIS call (0 if no level-up)
   skillPointsGained:  number;  // skill points earned THIS call (0 if no level-up)
@@ -85,12 +86,14 @@ export function applyXpGain(
   currentLevel: number,
   currentBonusDmg: number,
   currentLevelHpBonus: number,
+  currentLevelMpBonus: number,
   xpGained: number,
 ): LevelUpResult {
   let xp           = currentXp + xpGained;
   let level        = currentLevel;
   let bonusDmg     = currentBonusDmg;
   let levelHpBonus = currentLevelHpBonus;
+  let levelMpBonus = currentLevelMpBonus;
   let statPointsGained  = 0;
   let skillPointsGained = 0;
   let leveledUp = false;
@@ -101,13 +104,14 @@ export function applyXpGain(
     level++;
     bonusDmg          += 2;
     levelHpBonus      += 20;
+    levelMpBonus      += 5;
     statPointsGained  += STAT_POINTS_PER_LEVEL;
     skillPointsGained += SKILL_POINTS_PER_LEVEL;
     needed = xpRequired(level);
     leveledUp = true;
   }
 
-  return { xp, level, bonusDmg, levelHpBonus, xpToNext: needed, statPointsGained, skillPointsGained, leveledUp };
+  return { xp, level, bonusDmg, levelHpBonus, levelMpBonus, xpToNext: needed, statPointsGained, skillPointsGained, leveledUp };
 }
 
 // ── Enemy factory ─────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import {
   xpRequired, makeLocationEnemies,
 } from '../combat';
 import {
-  INITIAL_HP, INITIAL_BASE_STATS, BaseStats,
+  INITIAL_HP, INITIAL_MP, INITIAL_BASE_STATS, BaseStats,
 } from '../stats';
 import { Item } from '../inventory';
 import { Equipment, EquipBonuses, EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES } from '../equipment';
@@ -31,11 +31,14 @@ export interface ResetCtx {
   equipmentRef: MutableRefObject<Equipment>;
   inventoryRef: MutableRefObject<Item[]>;
   levelHpBonusRef: MutableRefObject<number>;
+  levelMpBonusRef: MutableRefObject<number>;
   phaseRef: MutableRefObject<Phase>;
   playerAttackTimeout: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   playerBonusDmgRef: MutableRefObject<number>;
   playerGoldRef: MutableRefObject<number>;
   playerHpRef: MutableRefObject<number>;
+  playerMpRef: MutableRefObject<number>;
+  playerMaxMpRef: MutableRefObject<number>;
   playerLevelRef: MutableRefObject<number>;
   playerMaxHpRef: MutableRefObject<number>;
   playerPosRef: MutableRefObject<{ x: number; y: number }>;
@@ -58,14 +61,17 @@ export interface ResetCtx {
   setInventory: Dispatch<SetStateAction<Item[]>>;
   setLastKillReward: (v: KillReward | null) => void;
   setLevelHpBonus: (v: number) => void;
+  setLevelMpBonus: (v: number) => void;
   setLogs: (v: LogEntry[]) => void;
   setLootNotif: (v: string | null) => void;
   setPhase: (v: Phase) => void;
   setPlayerBonusDmg: (v: number) => void;
   setPlayerGold: (v: number) => void;
   setPlayerHp: (v: number) => void;
+  setPlayerMp: (v: number) => void;
   setPlayerLevel: (v: number) => void;
   setPlayerMaxHp: (v: number) => void;
+  setPlayerMaxMp: (v: number) => void;
   setPlayerPos: (v: { x: number; y: number }) => void;
   setPlayerXp: (v: number) => void;
   setSelectedItem: (v: Item | null) => void;
@@ -94,13 +100,13 @@ export function useReset(ctx: ResetCtx) {
   const {
     activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
-    inventoryRef, levelHpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
-    playerGoldRef, playerHpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
+    inventoryRef, levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
+    playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     shieldRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
-    setInventory, setLastKillReward, setLevelHpBonus, setLogs, setLootNotif, setPhase,
-    setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerLevel, setPlayerMaxHp,
+    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setLogs, setLootNotif, setPhase,
+    setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
     setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setXpToNext,
@@ -115,12 +121,14 @@ export function useReset(ctx: ResetCtx) {
     const fresh = makeLocationEnemies(loc);
     const spawn = LOCATION_SPAWN[loc];
 
-    // Max HP is based on current level, stats and equipment — nothing changes here
+    // Max HP/MP is based on current level, stats and equipment — nothing changes here
     const fullHp = playerMaxHpRef.current;
+    const fullMp = playerMaxMpRef.current;
 
     // Run-level state
     phaseRef.current         = 'explore';
     playerHpRef.current      = fullHp;
+    playerMpRef.current      = fullMp;
     shieldRef.current        = false;
     playerPosRef.current     = spawn;
     enemiesRef.current       = fresh;
@@ -129,6 +137,7 @@ export function useReset(ctx: ResetCtx) {
     setPhase('explore');
     setPlayerPos(spawn);
     setPlayerHp(fullHp);
+    setPlayerMp(fullMp);
     setEnemies(fresh);
     setActiveEnemyId(null);
     setShieldActive(false);
@@ -145,8 +154,8 @@ export function useReset(ctx: ResetCtx) {
     setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
 
     // ── Character progress intentionally NOT reset: ──────────────────────────
-    // level, XP, statPoints, stats, playerBonusDmg, levelHpBonus,
-    // gold, inventory, equipment, equipBonuses, playerMaxHp
+    // level, XP, statPoints, stats, playerBonusDmg, levelHpBonus, levelMpBonus,
+    // gold, inventory, equipment, equipBonuses, playerMaxHp, playerMaxMp
   }, []);
 
   // ── Full reset — wipes save, returns to Lv.1 in city ("Играть снова") ──────
@@ -157,10 +166,13 @@ export function useReset(ctx: ResetCtx) {
     clearSave();
 
     const initMaxHp = INITIAL_HP + INITIAL_BASE_STATS.vitality * 10;
+    const initMaxMp = INITIAL_MP;
 
     // Reset refs immediately so any in-flight callbacks see correct values
     playerHpRef.current        = initMaxHp;
     playerMaxHpRef.current     = initMaxHp;
+    playerMpRef.current        = initMaxMp;
+    playerMaxMpRef.current     = initMaxMp;
     phaseRef.current           = 'explore';
     shieldRef.current          = false;
     playerPosRef.current       = LOCATION_SPAWN.village;
@@ -168,6 +180,7 @@ export function useReset(ctx: ResetCtx) {
     activeEnemyIdRef.current   = null;
     playerBonusDmgRef.current  = 0;
     levelHpBonusRef.current    = 0;
+    levelMpBonusRef.current    = 0;
     playerLevelRef.current     = INITIAL_PLAYER_LVL;
     playerXpRef.current        = 0;
     xpToNextRef.current        = xpRequired(INITIAL_PLAYER_LVL);
@@ -187,6 +200,8 @@ export function useReset(ctx: ResetCtx) {
     setPlayerPos(LOCATION_SPAWN.village);
     setPlayerHp(initMaxHp);
     setPlayerMaxHp(initMaxHp);
+    setPlayerMp(initMaxMp);
+    setPlayerMaxMp(initMaxMp);
     setEnemies([]);
     setActiveEnemyId(null);
     setShieldActive(false);
@@ -199,6 +214,7 @@ export function useReset(ctx: ResetCtx) {
     setPlayerGold(0);
     setPlayerBonusDmg(0);
     setLevelHpBonus(0);
+    setLevelMpBonus(0);
     setStats({ ...INITIAL_BASE_STATS });
     setStatPoints(0);
     setSkillProgress({});

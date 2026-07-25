@@ -9,27 +9,33 @@ export interface EquipmentCtx {
   equipBonusesRef: MutableRefObject<EquipBonuses>;
   statsRef:        MutableRefObject<BaseStats>;
   levelHpBonusRef: MutableRefObject<number>;
+  levelMpBonusRef: MutableRefObject<number>;
   playerBonusDmgRef: MutableRefObject<number>;
   skillBonusesRef: MutableRefObject<SkillBonuses>;
   playerMaxHpRef:  MutableRefObject<number>;
   playerHpRef:     MutableRefObject<number>;
+  playerMaxMpRef:  MutableRefObject<number>;
+  playerMpRef:     MutableRefObject<number>;
 
   setEquipment:    (v: Equipment) => void;
   setInventory:    Dispatch<SetStateAction<Item[]>>;
   setEquipBonuses: (v: EquipBonuses) => void;
   setPlayerMaxHp:  (v: number) => void;
   setPlayerHp:     (v: number) => void;
+  setPlayerMaxMp:  (v: number) => void;
+  setPlayerMp:     (v: number) => void;
   setSelectedItem: (v: Item | null) => void;
 
   log: (msg: string) => void;
 }
 
-/** Equip/unequip: swaps gear, recalcs equipment bonuses and max HP from scratch each time (no double-counting). */
+/** Equip/unequip: swaps gear, recalcs equipment bonuses and max HP/MP from scratch each time (no double-counting). */
 export function useEquipment(ctx: EquipmentCtx) {
   const {
-    equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, playerBonusDmgRef,
-    skillBonusesRef, playerMaxHpRef, playerHpRef,
-    setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp, setSelectedItem,
+    equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef,
+    setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
+    setPlayerMaxMp, setPlayerMp, setSelectedItem,
     log,
   } = ctx;
 
@@ -54,14 +60,18 @@ export function useEquipment(ctx: EquipmentCtx) {
     equipBonusesRef.current = newBonuses;
     setEquipBonuses(newBonuses);
 
-    // Recalc max HP via central stats module
-    const newMaxHp = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+    // Recalc max HP/MP via central stats module
+    const newStats = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
       skills: skillBonusesRef.current,
-    }).maxHp;
+    });
+    const newMaxHp = newStats.maxHp;
+    const newMaxMp = newStats.maxMp;
     playerMaxHpRef.current = newMaxHp;
     setPlayerMaxHp(newMaxHp);
+    playerMaxMpRef.current = newMaxMp;
+    setPlayerMaxMp(newMaxMp);
 
     // Increase current HP by the positive HP delta (first equip of HP item)
     const hpDelta = newBonuses.hp - oldBonuses.hp;
@@ -69,6 +79,14 @@ export function useEquipment(ctx: EquipmentCtx) {
       const newHp = Math.min(newMaxHp, playerHpRef.current + hpDelta);
       playerHpRef.current = newHp;
       setPlayerHp(newHp);
+    }
+
+    // Increase current MP by the positive MP delta (first equip of a mana item)
+    const mpDelta = newBonuses.mana - oldBonuses.mana;
+    if (mpDelta > 0) {
+      const newMp = Math.min(newMaxMp, playerMpRef.current + mpDelta);
+      playerMpRef.current = newMp;
+      setPlayerMp(newMp);
     }
 
     setSelectedItem(null);
@@ -92,14 +110,18 @@ export function useEquipment(ctx: EquipmentCtx) {
     equipBonusesRef.current = newBonuses;
     setEquipBonuses(newBonuses);
 
-    // Recalc max HP via central stats module
-    const newMaxHp = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+    // Recalc max HP/MP via central stats module
+    const newStats = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
       skills: skillBonusesRef.current,
-    }).maxHp;
+    });
+    const newMaxHp = newStats.maxHp;
+    const newMaxMp = newStats.maxMp;
     playerMaxHpRef.current = newMaxHp;
     setPlayerMaxHp(newMaxHp);
+    playerMaxMpRef.current = newMaxMp;
+    setPlayerMaxMp(newMaxMp);
 
     // Clamp current HP to new (lower) max if necessary
     const hpDelta = newBonuses.hp - oldBonuses.hp; // will be negative or zero
@@ -108,6 +130,16 @@ export function useEquipment(ctx: EquipmentCtx) {
       if (clampedHp !== playerHpRef.current) {
         playerHpRef.current = clampedHp;
         setPlayerHp(clampedHp);
+      }
+    }
+
+    // Clamp current MP to new (lower) max if necessary
+    const mpDelta = newBonuses.mana - oldBonuses.mana; // will be negative or zero
+    if (mpDelta < 0) {
+      const clampedMp = Math.min(playerMpRef.current, newMaxMp);
+      if (clampedMp !== playerMpRef.current) {
+        playerMpRef.current = clampedMp;
+        setPlayerMp(clampedMp);
       }
     }
 

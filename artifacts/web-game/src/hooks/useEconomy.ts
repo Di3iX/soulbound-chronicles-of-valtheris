@@ -3,7 +3,7 @@ import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { Item } from '../inventory';
 import { Equipment, EquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
-import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL } from '../shop/shop';
+import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL, CONSUMABLE_MANA } from '../shop/shop';
 import { ALL_SKILLS_MAP } from '../skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from '../skills/skillTree';
 import { FloatingNum } from '../types/ui';
@@ -15,21 +15,26 @@ export interface EconomyCtx {
   equipBonusesRef:   MutableRefObject<EquipBonuses>;
   playerHpRef:       MutableRefObject<number>;
   playerMaxHpRef:    MutableRefObject<number>;
+  playerMpRef:       MutableRefObject<number>;
+  playerMaxMpRef:    MutableRefObject<number>;
   playerPosRef:      MutableRefObject<{ x: number; y: number }>;
   skillProgressRef:  MutableRefObject<SkillProgress>;
   skillPointsRef:    MutableRefObject<number>;
   skillBonusesRef:   MutableRefObject<SkillBonuses>;
   statsRef:          MutableRefObject<BaseStats>;
   levelHpBonusRef:   MutableRefObject<number>;
+  levelMpBonusRef:   MutableRefObject<number>;
   playerBonusDmgRef: MutableRefObject<number>;
 
   setPlayerGold:    (v: number) => void;
   setInventory:     Dispatch<SetStateAction<Item[]>>;
   setPlayerHp:      (v: number) => void;
+  setPlayerMp:      (v: number) => void;
   setSelectedItem:  (v: Item | null) => void;
   setSkillProgress: (v: SkillProgress) => void;
   setSkillPoints:   Dispatch<SetStateAction<number>>;
   setPlayerMaxHp:   (v: number) => void;
+  setPlayerMaxMp:   (v: number) => void;
 
   log: (msg: string) => void;
   spawnFloat: (value: string, col: number, row: number, type: FloatingNum['type']) => void;
@@ -43,10 +48,11 @@ export interface EconomyCtx {
 export function useEconomy(ctx: EconomyCtx) {
   const {
     playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
+    playerMpRef, playerMaxMpRef,
     playerPosRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
-    levelHpBonusRef, playerBonusDmgRef,
-    setPlayerGold, setInventory, setPlayerHp, setSelectedItem, setSkillProgress,
-    setSkillPoints, setPlayerMaxHp,
+    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    setPlayerGold, setInventory, setPlayerHp, setPlayerMp, setSelectedItem, setSkillProgress,
+    setSkillPoints, setPlayerMaxHp, setPlayerMaxMp,
     log, spawnFloat,
   } = ctx;
 
@@ -85,19 +91,34 @@ export function useEconomy(ctx: EconomyCtx) {
   // ── Consumable: use ───────────────────────────────────────────────────────
   const handleUseItem = useCallback((item: Item) => {
     const healAmt = CONSUMABLE_HEAL[item.key];
-    if (!healAmt) return;
-    const currentHp = playerHpRef.current;
-    const maxHp     = playerMaxHpRef.current;
-    if (currentHp >= maxHp) { log('❤️ HP уже максимально!'); return; }
-    const newHp  = Math.min(maxHp, currentHp + healAmt);
-    const healed = newHp - currentHp;
-    playerHpRef.current = newHp;
-    setPlayerHp(newHp);
+    const manaAmt = CONSUMABLE_MANA[item.key];
+    if (!healAmt && !manaAmt) return;
+
+    if (healAmt) {
+      const currentHp = playerHpRef.current;
+      const maxHp     = playerMaxHpRef.current;
+      if (currentHp >= maxHp) { log('❤️ HP уже максимально!'); return; }
+      const newHp  = Math.min(maxHp, currentHp + healAmt);
+      const healed = newHp - currentHp;
+      playerHpRef.current = newHp;
+      setPlayerHp(newHp);
+      spawnFloat(`+${healed}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
+      log(`🧪 Использовано ${item.name}: +${healed} HP!`);
+    } else if (manaAmt) {
+      const currentMp = playerMpRef.current;
+      const maxMp     = playerMaxMpRef.current;
+      if (currentMp >= maxMp) { log('🔷 MP уже максимально!'); return; }
+      const newMp    = Math.min(maxMp, currentMp + manaAmt);
+      const restored = newMp - currentMp;
+      playerMpRef.current = newMp;
+      setPlayerMp(newMp);
+      spawnFloat(`+${restored}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
+      log(`🔷 Использовано ${item.name}: +${restored} MP!`);
+    }
+
     inventoryRef.current = inventoryRef.current.filter(i => i.id !== item.id);
     setInventory(prev => prev.filter(i => i.id !== item.id));
     setSelectedItem(null);
-    log(`🧪 Использовано ${item.name}: +${healed} HP!`);
-    spawnFloat(`+${healed}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
   }, [log, spawnFloat]);
 
   // ── Skill upgrade ─────────────────────────────────────────────────────────
@@ -122,12 +143,23 @@ export function useEconomy(ctx: EconomyCtx) {
     // Iron Skin — recalculate max HP immediately
     if (skillId === 'iron_skin') {
       const newMaxHp = computeStats({
-        base: statsRef.current, levelHpBonus: levelHpBonusRef.current,
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
         skills: newBonuses,
       }).maxHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
+    }
+
+    // Arcane Knowledge — recalculate max MP immediately
+    if (skillId === 'arcane_knowledge') {
+      const newMaxMp = computeStats({
+        base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        skills: newBonuses,
+      }).maxMp;
+      playerMaxMpRef.current = newMaxMp;
+      setPlayerMaxMp(newMaxMp);
     }
 
     log(`⬆️ ${def.name}: уровень ${newLevel}`);

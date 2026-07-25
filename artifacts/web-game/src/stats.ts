@@ -8,6 +8,7 @@ import type { SkillBonuses }  from './skills/skillTree';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 export const INITIAL_HP              = 100;
+export const INITIAL_MP              = 50;
 const        BASE_DMG_MIN            = 8;
 const        BASE_DMG_MAX            = 16;
 const        BASE_ATTACK_INTERVAL_MS = 1500;
@@ -39,6 +40,8 @@ export interface ComputedStats {
 
   // HP
   maxHp:         number;
+  // MP
+  maxMp:         number;
 
   // Offense
   dmgMin:        number;
@@ -60,6 +63,7 @@ export interface ComputedStats {
 export interface StatsInput {
   base:         BaseStats;
   levelHpBonus: number;   // HP gained from level-ups
+  levelMpBonus: number;   // MP gained from level-ups
   bonusDmg:     number;   // flat damage gained from level-ups
   equip:        EquipBonuses;
   skills:       SkillBonuses;
@@ -76,7 +80,7 @@ function clamp(v: number, lo: number, hi: number): number {
  * Pure function — no side-effects, safe to call every render.
  */
 export function computeStats(input: StatsInput): ComputedStats {
-  const { base, levelHpBonus, bonusDmg, equip, skills } = input;
+  const { base, levelHpBonus, levelMpBonus, bonusDmg, equip, skills } = input;
 
   // ── Effective totals ───────────────────────────────────────────────────────
   const totalStrength     = base.strength     + (equip.strength     ?? 0);
@@ -90,6 +94,12 @@ export function computeStats(input: StatsInput): ComputedStats {
     + totalVitality * 10
     + (equip.hp ?? 0)
     + skills.bonusHp;
+
+  // ── MP ────────────────────────────────────────────────────────────────────
+  const maxMp = INITIAL_MP
+    + levelMpBonus
+    + (equip.mana ?? 0)
+    + skills.bonusMana;
 
   // ── Damage ────────────────────────────────────────────────────────────────
   const intBonus  = 1 + totalIntelligence * 0.005;  // +0.5% per INT

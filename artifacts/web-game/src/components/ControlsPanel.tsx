@@ -5,11 +5,12 @@ interface ControlsPanelProps {
   phase: Phase;
   movePlayer: (dx: number, dy: number) => void;
   skillsCd: Record<number, number>;
+  playerMp: number;
   useSkill: (skill: typeof SKILLS[0]) => void;
 }
 
 /** Bottom action controls: 4-way D-pad (explore only) + skill bar with cooldowns (combat only). */
-export default function ControlsPanel({ phase, movePlayer, skillsCd, useSkill }: ControlsPanelProps) {
+export default function ControlsPanel({ phase, movePlayer, skillsCd, playerMp, useSkill }: ControlsPanelProps) {
   return (
     <>
       {/* ══ D-PAD ══ */}
@@ -42,13 +43,17 @@ export default function ControlsPanel({ phase, movePlayer, skillsCd, useSkill }:
         {SKILLS.map(skill => {
           const cd = skillsCd[skill.id] || 0;
           const isOnCd = cd > 0;
-          const isUsable = phase === 'combat' && !isOnCd;
+          const notEnoughMana = skill.manaCost > 0 && playerMp < skill.manaCost;
+          const isUsable = phase === 'combat' && !isOnCd && !notEnoughMana;
           return (
             <button key={skill.id} disabled={!isUsable} onClick={() => useSkill(skill)}
               className={`relative flex flex-col items-center justify-center w-[60px] h-[60px] rounded bg-[#1e1e28] border
                 ${isUsable ? 'border-skill shadow-[0_0_10px_rgba(26,74,139,0.5)] cursor-pointer active:scale-95 transition-all' : 'border-tile-border opacity-60 cursor-not-allowed'}`}>
               <span className="text-xl mb-1">{skill.emoji}</span>
               <span className="text-[10px] font-bold text-white/80">{skill.name}</span>
+              {skill.manaCost > 0 && (
+                <span className={`text-[9px] font-mono ${notEnoughMana ? 'text-destructive' : 'text-[#3a8fc4]'}`}>🔷{skill.manaCost}</span>
+              )}
               {isOnCd && (
                 <div className="absolute inset-0 bg-black/70 rounded flex items-center justify-center">
                   <span className="text-white font-mono font-bold text-sm">{(cd / 10).toFixed(1)}</span>

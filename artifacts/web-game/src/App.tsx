@@ -21,7 +21,7 @@ import {
   xpRequired, makeLocationEnemies,
 } from './combat';
 import {
-  BaseStats, ComputedStats, INITIAL_BASE_STATS, INITIAL_HP,
+  BaseStats, ComputedStats, INITIAL_BASE_STATS, INITIAL_HP, INITIAL_MP,
   computeStats, StatsInput,
 } from './stats';
 import {
@@ -65,6 +65,8 @@ export default function App() {
   const [playerPos, setPlayerPos]         = useState(sv?.playerPos        ?? LOCATION_SPAWN.village);
   const [playerHp, setPlayerHp]           = useState(sv?.playerHp         ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
   const [playerMaxHp, setPlayerMaxHp]     = useState(sv?.playerMaxHp      ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
+  const [playerMp, setPlayerMp]           = useState(sv?.playerMp         ?? INITIAL_MP);
+  const [playerMaxMp, setPlayerMaxMp]     = useState(sv?.playerMaxMp      ?? INITIAL_MP);
   const [enemies, setEnemies]             = useState<Enemy[]>(sv?.enemies  ?? []);
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
   const [shieldActive, setShieldActive]   = useState(false);
@@ -79,6 +81,7 @@ export default function App() {
   const [playerGold, setPlayerGold]         = useState(sv?.playerGold      ?? 0);
   const [playerBonusDmg, setPlayerBonusDmg] = useState(sv?.playerBonusDmg ?? 0);
   const [levelHpBonus, setLevelHpBonus]     = useState(sv?.levelHpBonus    ?? 0);
+  const [levelMpBonus, setLevelMpBonus]     = useState(sv?.levelMpBonus    ?? 0);
   const [lastKillReward, setLastKillReward] = useState<KillReward | null>(null);
 
   // ── Stats state ────────────────────────────────────────────────────────────
@@ -116,6 +119,8 @@ export default function App() {
   // ── Refs (initialised from save so callbacks see correct values immediately) ─
   const playerHpRef        = useRef(sv?.playerHp    ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
   const playerMaxHpRef     = useRef(sv?.playerMaxHp ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
+  const playerMpRef        = useRef(sv?.playerMp    ?? INITIAL_MP);
+  const playerMaxMpRef     = useRef(sv?.playerMaxMp ?? INITIAL_MP);
   const shieldRef          = useRef(false);
   const phaseRef           = useRef<Phase>('explore');
   const playerPosRef       = useRef(sv?.playerPos         ?? LOCATION_SPAWN.village);
@@ -124,6 +129,7 @@ export default function App() {
   const statsRef           = useRef<BaseStats>(sv?.stats  ?? { ...INITIAL_BASE_STATS });
   const playerBonusDmgRef  = useRef(sv?.playerBonusDmg   ?? 0);
   const levelHpBonusRef    = useRef(sv?.levelHpBonus      ?? 0);
+  const levelMpBonusRef    = useRef(sv?.levelMpBonus      ?? 0);
   const playerLevelRef     = useRef(sv?.playerLevel       ?? INITIAL_PLAYER_LVL);
   const playerXpRef        = useRef(sv?.playerXp          ?? 0);
   const playerGoldRef      = useRef(sv?.playerGold        ?? 0);
@@ -148,6 +154,8 @@ export default function App() {
   // Keep refs in sync
   useSyncedRef(playerHpRef, playerHp);
   useSyncedRef(playerMaxHpRef, playerMaxHp);
+  useSyncedRef(playerMpRef, playerMp);
+  useSyncedRef(playerMaxMpRef, playerMaxMp);
   useSyncedRef(shieldRef, shieldActive);
   useSyncedRef(phaseRef, phase);
   useSyncedRef(playerPosRef, playerPos);
@@ -158,6 +166,7 @@ export default function App() {
   useSyncedRef(statsRef, stats);
   useSyncedRef(playerBonusDmgRef, playerBonusDmg);
   useSyncedRef(levelHpBonusRef, levelHpBonus);
+  useSyncedRef(levelMpBonusRef, levelMpBonus);
   useSyncedRef(playerLevelRef, playerLevel);
   useSyncedRef(playerXpRef, playerXp);
   useSyncedRef(playerGoldRef, playerGold);
@@ -206,7 +215,7 @@ const log = useCallback((msg: string) => {
     setStatPoints(p => p - 1);
     if (stat === 'vitality') {
       const newMaxHp = computeStats({
-        base: newStats, levelHpBonus: levelHpBonusRef.current,
+        base: newStats, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
         skills: skillBonusesRef.current,
       }).maxHp;
@@ -217,19 +226,21 @@ const log = useCallback((msg: string) => {
 
   // ── Equipment ─────────────────────────────────────────────────────────────
   const { equipItem, unequipItem } = useEquipment({
-    equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, playerBonusDmgRef,
-    skillBonusesRef, playerMaxHpRef, playerHpRef,
-    setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp, setSelectedItem,
+    equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef,
+    setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
+    setPlayerMaxMp, setPlayerMp, setSelectedItem,
     log,
   });
 
   // ── Shop, consumables, skill-point spending ─────────────────────────────────
   const { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill } = useEconomy({
     playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
+    playerMpRef, playerMaxMpRef,
     playerPosRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
-    levelHpBonusRef, playerBonusDmgRef,
-    setPlayerGold, setInventory, setPlayerHp, setSelectedItem, setSkillProgress,
-    setSkillPoints, setPlayerMaxHp,
+    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    setPlayerGold, setInventory, setPlayerHp, setPlayerMp, setSelectedItem, setSkillProgress,
+    setSkillPoints, setPlayerMaxHp, setPlayerMaxMp,
     log, spawnFloat,
   });
 
@@ -238,14 +249,15 @@ const log = useCallback((msg: string) => {
     phase, skillsCd,
     activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, inventoryRef,
-    levelHpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
-    playerHpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef, questProgressRef,
+    levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
+    playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
+    playerPosRef, playerXpRef, questProgressRef,
     shieldRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat,
     setActiveEnemyId, setBossAppearNotif, setBossDefeatedThisVisit, setBossRewardInfo,
     setBossSpawnedThisVisit, setBossState, setEnemies, setInventory, setLastKillReward,
-    setLevelHpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
-    setPlayerLevel, setPlayerMaxHp, setPlayerPos, setPlayerXp, setQuestProgress,
+    setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
+    setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   });
 
@@ -428,13 +440,13 @@ const log = useCallback((msg: string) => {
   const { resetCurrentMap, resetCharacter } = useReset({
     activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
-    inventoryRef, levelHpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
-    playerGoldRef, playerHpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
+    inventoryRef, levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
+    playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     shieldRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
-    setInventory, setLastKillReward, setLevelHpBonus, setLogs, setLootNotif, setPhase,
-    setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerLevel, setPlayerMaxHp,
+    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setLogs, setLootNotif, setPhase,
+    setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
     setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setXpToNext,
@@ -448,7 +460,7 @@ const log = useCallback((msg: string) => {
   // All derived character stats — single source of truth from stats.ts
   const skillBonuses = calcSkillBonuses(skillProgress);
   const cs: ComputedStats = computeStats({
-    base: stats, levelHpBonus, bonusDmg: playerBonusDmg,
+    base: stats, levelHpBonus, levelMpBonus, bonusDmg: playerBonusDmg,
     equip: equipBonuses, skills: skillBonuses,
   });
 
@@ -532,6 +544,8 @@ const log = useCallback((msg: string) => {
         playerLevel={playerLevel}
         playerHp={playerHp}
         playerMaxHp={playerMaxHp}
+        playerMp={playerMp}
+        playerMaxMp={playerMaxMp}
         activeEnemy={activeEnemy}
         bossId={BOSS_ID}
         currentLocation={currentLocation}
@@ -714,6 +728,7 @@ const log = useCallback((msg: string) => {
             <CharacterPanel
               playerLevel={playerLevel}
               playerHp={playerHp}
+              playerMp={playerMp}
               cs={cs}
               stats={stats}
               equipBonuses={equipBonuses}
@@ -802,7 +817,7 @@ const log = useCallback((msg: string) => {
       )}
 
       {/* ══ 3-4. MOVEMENT + SKILL BAR ══ */}
-      <ControlsPanel phase={phase} movePlayer={movePlayer} skillsCd={skillsCd} useSkill={useSkill} />
+      <ControlsPanel phase={phase} movePlayer={movePlayer} skillsCd={skillsCd} playerMp={playerMp} useSkill={useSkill} />
 
       {/* ══ 5. COMBAT LOG ══ */}
       <CombatLog logs={logs} />

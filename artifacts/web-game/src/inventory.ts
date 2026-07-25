@@ -16,6 +16,7 @@ export interface ItemBonuses {
   critChance?:      number; // flat % added to crit chance
   critDamage?:      number; // flat % added to crit damage bonus
   dodgeChance?:     number; // flat % added to dodge chance
+  mana?:            number; // flat MP bonus
 }
 
 export interface Item {
@@ -31,6 +32,8 @@ export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
   // Consumables
   healing_potion:         { key: 'healing_potion',         name: 'Зелье лечения',        type: 'consumable', rarity: 'common',    bonuses: {} },
   greater_healing_potion: { key: 'greater_healing_potion', name: 'Большое зелье лечения', type: 'consumable', rarity: 'uncommon',  bonuses: {} },
+  mana_potion:            { key: 'mana_potion',            name: 'Зелье маны',            type: 'consumable', rarity: 'common',    bonuses: {} },
+  greater_mana_potion:    { key: 'greater_mana_potion',    name: 'Большое зелье маны',    type: 'consumable', rarity: 'uncommon',  bonuses: {} },
   // Weapons
   rusty_sword:      { key: 'rusty_sword',      name: 'Ржавый меч',         type: 'weapon',  rarity: 'common',    bonuses: { damage: 2 } },
   iron_sword:       { key: 'iron_sword',       name: 'Железный меч',       type: 'weapon',  rarity: 'uncommon',  bonuses: { damage: 5 } },
@@ -108,7 +111,7 @@ export const AFFIX_TABLE: Record<string, AffixRange> = {
   // ── Helmets ───────────────────────────────────────────────────────────────────
   leather_helm:    { hp: [10, 20]                                 },  // spec: +10–20
   iron_helm:       { hp: [16, 25]                                 },
-  mage_hood:       { hp: [22, 38], strength: [1, 2]              },
+  mage_hood:       { hp: [22, 38], strength: [1, 2], mana: [10, 20] },
   // ── Armor ─────────────────────────────────────────────────────────────────────
   leather_armor:   { hp: [20, 40]                                 },  // spec: +20–40
   chainmail:       { hp: [32, 50]                                 },
@@ -123,7 +126,7 @@ export const AFFIX_TABLE: Record<string, AffixRange> = {
   scout_boots:     { agility: [1, 3]                              },  // spec: +1–3
   wind_walkers:    { agility: [4,  6], hp: [10, 20]              },
   // ── Magic weapons ────────────────────────────────────────────────────────────
-  arcane_staff:    { damage: [6, 10], hp: [15, 25]               },
+  arcane_staff:    { damage: [6, 10], hp: [15, 25], mana: [15, 25] },
 };
 
 function randInt(min: number, max: number): number {
@@ -167,6 +170,7 @@ export function formatBonuses(b: ItemBonuses): string[] {
   const lines: string[] = [];
   if (b.damage)          lines.push(`+${b.damage} урона`);
   if (b.hp)              lines.push(`+${b.hp} HP`);
+  if (b.mana)            lines.push(`+${b.mana} MP`);
   if (b.strength)        lines.push(`+${b.strength} Сила`);
   if (b.agility)         lines.push(`+${b.agility} Ловкость`);
   if (b.vitality)        lines.push(`+${b.vitality} Живучесть`);

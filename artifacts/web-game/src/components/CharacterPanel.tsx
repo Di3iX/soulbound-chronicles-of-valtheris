@@ -5,6 +5,7 @@ import { EquipBonuses } from '../equipment';
 interface CharacterPanelProps {
   playerLevel: number;
   playerHp: number;
+  playerMp: number;
   cs: ComputedStats;
   stats: BaseStats;
   equipBonuses: EquipBonuses;
@@ -16,7 +17,7 @@ interface CharacterPanelProps {
 
 /** Full-screen character sheet overlay: level/HP, allocatable stats, combat stats, reset. */
 export default function CharacterPanel({
-  playerLevel, playerHp, cs, stats, equipBonuses, statPoints,
+  playerLevel, playerHp, playerMp, cs, stats, equipBonuses, statPoints,
   spendStat, onClose, onResetCharacter,
 }: CharacterPanelProps) {
   return (
@@ -42,6 +43,10 @@ export default function CharacterPanel({
         <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
           <span className="text-[13px] text-[#888]">HP</span>
           <span className="text-[13px] font-bold text-white font-mono">{Math.round(playerHp)} / {cs.maxHp}</span>
+        </div>
+        <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+          <span className="text-[13px] text-[#888]">MP</span>
+          <span className="text-[13px] font-bold text-[#3a8fc4] font-mono">{Math.round(playerMp)} / {cs.maxMp}</span>
         </div>
 
         {/* ── Allocatable stats ── */}
@@ -140,6 +145,12 @@ export default function CharacterPanel({
           <span className="text-[13px] text-[#888]">Максимальное HP</span>
           <span className="text-[13px] font-bold text-white font-mono">
             {cs.maxHp}{equipBonuses.hp > 0 ? <span className="text-green-400 text-[10px] ml-1">+{equipBonuses.hp} экип.</span> : ''}
+          </span>
+        </div>
+        <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+          <span className="text-[13px] text-[#888]">Максимальное MP</span>
+          <span className="text-[13px] font-bold text-[#3a8fc4] font-mono">
+            {cs.maxMp}{equipBonuses.mana > 0 ? <span className="text-green-400 text-[10px] ml-1">+{equipBonuses.mana} экип.</span> : ''}
           </span>
         </div>
 

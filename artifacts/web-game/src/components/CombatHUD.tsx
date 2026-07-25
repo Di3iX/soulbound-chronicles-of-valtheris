@@ -7,6 +7,8 @@ interface CombatHUDProps {
   playerLevel:    number;
   playerHp:       number;
   playerMaxHp:    number;
+  playerMp:       number;
+  playerMaxMp:    number;
   activeEnemy:    Enemy | null;
   bossId:         number;
   currentLocation: LocationId;
@@ -43,7 +45,7 @@ interface CombatHUDProps {
  * by the caller (App.tsx) inside the on-toggle callbacks.
  */
 export default function CombatHUD({
-  shieldActive, playerLevel, playerHp, playerMaxHp,
+  shieldActive, playerLevel, playerHp, playerMaxHp, playerMp, playerMaxMp,
   activeEnemy, bossId, currentLocation, locationMeta,
   livingEnemiesCount, totalEnemiesCount,
   xpPct, playerXp, xpToNext, playerGold,
@@ -69,6 +71,14 @@ export default function CombatHUD({
           <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
             <div className="h-full bg-primary transition-all duration-300"
               style={{ width: `${Math.round((playerHp / playerMaxHp) * 100)}%` }} />
+          </div>
+          <div className="flex justify-between items-end mt-1 mb-[2px]">
+            <span className="text-[10px] text-[#3a8fc4] font-mono">MP</span>
+            <span className="text-[10px] text-[#3a8fc4] font-mono">{playerMp}/{playerMaxMp}</span>
+          </div>
+          <div className="h-[4px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border">
+            <div className="h-full bg-[#3a8fc4] transition-all duration-300"
+              style={{ width: `${Math.round((playerMp / playerMaxMp) * 100)}%` }} />
           </div>
         </div>
 

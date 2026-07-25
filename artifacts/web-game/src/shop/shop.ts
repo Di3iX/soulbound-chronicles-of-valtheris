@@ -9,6 +9,8 @@ export interface ShopItem {
 export const MERCHANT_ITEMS: ShopItem[] = [
   { key: 'healing_potion',         price: 25  },
   { key: 'greater_healing_potion', price: 75  },
+  { key: 'mana_potion',            price: 25  },
+  { key: 'greater_mana_potion',    price: 75  },
   { key: 'rusty_sword',            price: 100 },
   { key: 'leather_helm',           price: 80  },
   { key: 'leather_armor',          price: 120 },
@@ -23,6 +25,12 @@ export const SHOP_BUY_PRICE: Record<string, number> = Object.fromEntries(
 export const CONSUMABLE_HEAL: Record<string, number> = {
   healing_potion:         50,
   greater_healing_potion: 150,
+};
+
+/** How much MP each consumable restores when used. */
+export const CONSUMABLE_MANA: Record<string, number> = {
+  mana_potion:         30,
+  greater_mana_potion: 90,
 };
 
 /** Rarity fallback sell values for items not sold by the merchant. */

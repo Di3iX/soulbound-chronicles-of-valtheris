@@ -24,12 +24,13 @@ export interface EquipBonuses {
   critChance:      number;
   critDamage:      number;
   dodgeChance:     number;
+  mana:            number;
 }
 
 export const EMPTY_EQUIPMENT: Equipment = { weapon: null, helmet: null, armor: null, gloves: null, boots: null };
 export const ZERO_EQUIP_BONUSES: EquipBonuses = {
   damage: 0, hp: 0, strength: 0, agility: 0, atkSpeedPenalty: 0,
-  vitality: 0, intelligence: 0, defense: 0, critChance: 0, critDamage: 0, dodgeChance: 0,
+  vitality: 0, intelligence: 0, defense: 0, critChance: 0, critDamage: 0, dodgeChance: 0, mana: 0,
 };
 
 export const SLOT_META: Record<keyof Equipment, { label: string; icon: string }> = {
@@ -55,6 +56,7 @@ export function calcEquipBonuses(eq: Equipment): EquipBonuses {
       critChance:      acc.critChance      + (item.bonuses.critChance      ?? 0),
       critDamage:      acc.critDamage      + (item.bonuses.critDamage      ?? 0),
       dodgeChance:     acc.dodgeChance     + (item.bonuses.dodgeChance     ?? 0),
+      mana:            acc.mana            + (item.bonuses.mana           ?? 0),
     }),
     { ...ZERO_EQUIP_BONUSES }
   );

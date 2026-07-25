@@ -24,6 +24,12 @@ export interface SaveData {
   levelHpBonus:    number;
   playerHp:        number;
   playerMaxHp:     number;
+  /** Optional — missing in pre-mana saves; defaults to INITIAL_MP on load. */
+  playerMp?:       number;
+  /** Optional — missing in pre-mana saves; defaults to INITIAL_MP on load. */
+  playerMaxMp?:    number;
+  /** Optional — missing in pre-mana saves; defaults to 0 on load. */
+  levelMpBonus?:   number;
   stats:           Stats;
   statPoints:      number;
   inventory:       Item[];
@@ -48,7 +54,7 @@ const SAVE_VERSION = 2;   // keep at 2; migrations handled inline
 /** Zero-defaults for EquipBonuses — used during save migration. */
 const ZERO_EB = {
   damage: 0, hp: 0, strength: 0, agility: 0, atkSpeedPenalty: 0,
-  vitality: 0, intelligence: 0, defense: 0, critChance: 0, critDamage: 0, dodgeChance: 0,
+  vitality: 0, intelligence: 0, defense: 0, critChance: 0, critDamage: 0, dodgeChance: 0, mana: 0,
 };
 
 export function saveGame(data: Omit<SaveData, 'version'>): void {
