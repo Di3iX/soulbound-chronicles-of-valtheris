@@ -1,5 +1,5 @@
 import React from 'react';
-import { Enemy, LocationId } from '../combat';
+import { Enemy, LocationId, StatusEffect, STATUS_EFFECT_DEFS } from '../combat';
 import { QuestProgress } from '../quests/quests';
 
 interface CombatHUDProps {
@@ -9,6 +9,7 @@ interface CombatHUDProps {
   playerMaxHp:    number;
   playerMp:       number;
   playerMaxMp:    number;
+  playerStatusEffects: StatusEffect[];
   activeEnemy:    Enemy | null;
   bossId:         number;
   currentLocation: LocationId;
@@ -45,7 +46,7 @@ interface CombatHUDProps {
  * by the caller (App.tsx) inside the on-toggle callbacks.
  */
 export default function CombatHUD({
-  shieldActive, playerLevel, playerHp, playerMaxHp, playerMp, playerMaxMp,
+  shieldActive, playerLevel, playerHp, playerMaxHp, playerMp, playerMaxMp, playerStatusEffects,
   activeEnemy, bossId, currentLocation, locationMeta,
   livingEnemiesCount, totalEnemiesCount,
   xpPct, playerXp, xpToNext, playerGold,
@@ -54,6 +55,23 @@ export default function CombatHUD({
   onToggleCharPanel, onToggleInventory, onToggleWorldMap, onToggleQuestPanel, onToggleSkillPanel,
 }: CombatHUDProps) {
   const meta = locationMeta[currentLocation];
+
+  /** Small icon row with countdown — used for both player and enemy status effects. */
+  const StatusIcons = ({ effects, align }: { effects: StatusEffect[]; align: 'start' | 'end' }) => (
+    effects.length === 0 ? null : (
+      <div className={`flex gap-1 ${align === 'end' ? 'justify-end' : 'justify-start'}`}>
+        {effects.map(e => {
+          const def = STATUS_EFFECT_DEFS[e.type];
+          return (
+            <span key={e.type} title={def.label}
+              className="flex items-center gap-[1px] text-[9px] font-mono bg-black/40 rounded px-[3px] py-[1px] border border-tile-border/50">
+              {def.icon}{Math.ceil(e.remainingMs / 1000)}
+            </span>
+          );
+        })}
+      </div>
+    )
+  );
 
   return (
     <div className="shrink-0 border-b border-tile-border bg-[#111116]">
@@ -80,6 +98,7 @@ export default function CombatHUD({
             <div className="h-full bg-[#3a8fc4] transition-all duration-300"
               style={{ width: `${Math.round((playerMp / playerMaxMp) * 100)}%` }} />
           </div>
+          <div className="mt-1"><StatusIcons effects={playerStatusEffects} align="start" /></div>
         </div>
 
         <div className="text-sm font-bold text-[#444] text-center w-[10%]">VS</div>
@@ -100,6 +119,7 @@ export default function CombatHUD({
                 <div className={`h-full transition-all duration-300 ${activeEnemy.id === bossId ? 'bg-red-600' : 'bg-destructive'}`}
                   style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
               </div>
+              <div className="mt-1"><StatusIcons effects={activeEnemy.statusEffects ?? []} align="end" /></div>
             </>
           ) : (
             <>

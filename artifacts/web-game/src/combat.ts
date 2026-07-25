@@ -14,12 +14,79 @@ export interface Enemy {
   hp: number; maxHp: number;
   attackInterval: number; dmgMin: number; dmgMax: number;
   dead: boolean;
+  statusEffects?: StatusEffect[];
 }
 
 export interface KillReward {
   xp: number; gold: number; leveledUp: boolean;
   newLevel: number; statPtsGained: number; droppedItem?: Item;
 }
+
+// ── Status effects ───────────────────────────────────────────────────────────
+export type StatusEffectType = 'poison' | 'burn' | 'slow' | 'stun';
+
+export interface StatusEffect {
+  type: StatusEffectType;
+  remainingMs: number;
+  tickDamage?: number;   // poison / burn — damage dealt every 1000ms
+  slowPct?: number;      // slow — % increase to attack interval
+}
+
+interface StatusEffectDef {
+  durationMs: number;
+  tickDamage?: number;
+  slowPct?: number;
+  icon: string;
+  label: string;
+}
+
+export const STATUS_EFFECT_DEFS: Record<StatusEffectType, StatusEffectDef> = {
+  poison: { durationMs: 3000, tickDamage: 5,  icon: '🐍', label: 'Яд' },
+  burn:   { durationMs: 3000, tickDamage: 10, icon: '🔥', label: 'Поджог' },
+  slow:   { durationMs: 4000, slowPct: 30,    icon: '🐌', label: 'Замедление' },
+  stun:   { durationMs: 1500,                 icon: '💫', label: 'Оглушение' },
+};
+
+/** Which enemies inflict which effect on a successful hit, and how often. */
+export const ENEMY_EFFECT_ON_HIT: Record<string, { effect: StatusEffectType; chance: number }> = {
+  'Гигантский паук': { effect: 'poison', chance: 0.35 },
+  'Орк':             { effect: 'stun',   chance: 0.20 },
+  'Тролль':          { effect: 'slow',   chance: 0.35 },
+};
+
+/** Which player skills inflict which effect on a successful hit (id → effect). */
+export const SKILL_EFFECT_ON_HIT: Partial<Record<number, StatusEffectType>> = {
+  2: 'burn', // Огонь
+  4: 'stun', // Молния
+};
+
+/** Add (or refresh — no stacking) a status effect on the given effect list. */
+export function addStatusEffect(effects: StatusEffect[], type: StatusEffectType): StatusEffect[] {
+  const def = STATUS_EFFECT_DEFS[type];
+  const fresh: StatusEffect = { type, remainingMs: def.durationMs, tickDamage: def.tickDamage, slowPct: def.slowPct };
+  return [...effects.filter(e => e.type !== type), fresh];
+}
+
+/** Advance all effects by one 1000ms tick. Returns the surviving effects and total tick damage dealt. */
+export function tickStatusEffects(effects: StatusEffect[]): { next: StatusEffect[]; damage: number } {
+  let damage = 0;
+  const next: StatusEffect[] = [];
+  for (const e of effects) {
+    if (e.type === 'poison' || e.type === 'burn') damage += e.tickDamage ?? 0;
+    const remaining = e.remainingMs - 1000;
+    if (remaining > 0) next.push({ ...e, remainingMs: remaining });
+  }
+  return { next, damage };
+}
+
+export const hasStatusEffect = (effects: StatusEffect[] | undefined, type: StatusEffectType): boolean =>
+  (effects ?? []).some(e => e.type === type);
+
+/** Attack-interval multiplier from an active Slow effect (1 = unaffected). */
+export const slowMultiplier = (effects: StatusEffect[] | undefined): number => {
+  const slow = (effects ?? []).find(e => e.type === 'slow');
+  return slow ? 1 + (slow.slowPct ?? 0) / 100 : 1;
+};
 
 // ── Skills ────────────────────────────────────────────────────────────────────
 export const SKILLS = [

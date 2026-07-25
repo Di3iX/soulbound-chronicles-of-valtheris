@@ -17,7 +17,7 @@ import {
   EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES,
 } from './equipment';
 import {
-  LocationId, Phase, Enemy, KillReward,
+  LocationId, Phase, Enemy, KillReward, StatusEffect,
   xpRequired, makeLocationEnemies,
 } from './combat';
 import {
@@ -71,6 +71,7 @@ export default function App() {
   const [enemies, setEnemies]             = useState<Enemy[]>(sv?.enemies  ?? []);
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
   const [shieldActive, setShieldActive]   = useState(false);
+  const [playerStatusEffects, setPlayerStatusEffects] = useState<StatusEffect[]>([]);
   const [skillsCd, setSkillsCd]           = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const [logs, setLogs]                   = useState<LogEntry[]>([{ id: 0, msg: sv ? '💾 Игра загружена!' : 'Тёмные подземелья ждут...' }]);
   const [floatingNums, setFloatingNums]   = useState<FloatingNum[]>([]);
@@ -125,6 +126,7 @@ export default function App() {
   const playerMpRef        = useRef(sv?.playerMp    ?? INITIAL_MP);
   const playerMaxMpRef     = useRef(sv?.playerMaxMp ?? INITIAL_MP);
   const shieldRef          = useRef(false);
+  const playerStatusEffectsRef = useRef<StatusEffect[]>([]);
   const phaseRef           = useRef<Phase>('explore');
   const playerPosRef       = useRef(sv?.playerPos         ?? LOCATION_SPAWN.village);
   const enemiesRef         = useRef<Enemy[]>(sv?.enemies  ?? []);
@@ -161,6 +163,7 @@ export default function App() {
   useSyncedRef(playerMpRef, playerMp);
   useSyncedRef(playerMaxMpRef, playerMaxMp);
   useSyncedRef(shieldRef, shieldActive);
+  useSyncedRef(playerStatusEffectsRef, playerStatusEffects);
   useSyncedRef(phaseRef, phase);
   useSyncedRef(playerPosRef, playerPos);
   useSyncedRef(enemiesRef, enemies);
@@ -268,13 +271,13 @@ const log = useCallback((msg: string) => {
     levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
-    shieldRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
+    shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat,
     setActiveEnemyId, setBossAppearNotif, setBossDefeatedThisVisit, setBossRewardInfo,
     setBossSpawnedThisVisit, setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
-    setShieldActive, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
+    setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   });
 
   // ── Location transition ───────────────────────────────────────────────────
@@ -458,12 +461,12 @@ const log = useCallback((msg: string) => {
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
     inventoryRef, levelHpBonusRef, levelMpBonusRef, exploredTilesRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
-    shieldRef, statPointsRef, statsRef, xpToNextRef,
+    shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
-    setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setShowBossVictory,
+    setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setXpToNext,
   });
@@ -562,6 +565,7 @@ const log = useCallback((msg: string) => {
         playerMaxHp={playerMaxHp}
         playerMp={playerMp}
         playerMaxMp={playerMaxMp}
+        playerStatusEffects={playerStatusEffects}
         activeEnemy={activeEnemy}
         bossId={BOSS_ID}
         currentLocation={currentLocation}

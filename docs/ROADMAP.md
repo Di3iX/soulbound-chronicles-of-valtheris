@@ -58,7 +58,7 @@
 - ✅ Critical Hits
 - ✅ Dodge
 - ⬜ Block
-- ⬜ Status Effects
+- ✅ Status Effects
 - ⬜ Damage Types
 
 ## Equipment
@@ -80,10 +80,10 @@
 - ⬜ Boss Loot Tables
 
 ## Maps
-- ⬜ Minimap
-- ⬜ Full World Map
-- ⬜ Fog of War
-- ⬜ Persistent Exploration
+- ✅ Minimap
+- ✅ Full World Map
+- ✅ Fog of War
+- ✅ Persistent Exploration
 - ⬜ Map Markers
 - ⬜ Secret Areas
 - ⬜ Exploration Progress

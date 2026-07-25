@@ -4,6 +4,28 @@ All notable changes to this project will be documented here.
 
 ---
 
+# v0.1.9
+
+### Added
+
+- Status effects: Poison, Burn, Slow, Stun — bidirectional (enemies ↔ player)
+- Giant Spider inflicts Poison, Orc inflicts Stun, Troll inflicts Slow on hit
+- Fire skill inflicts Burn, Lightning skill inflicts Stun on enemies
+- Status effect icons with countdown in the combat HUD (player and enemy)
+- Poison/Burn can kill on their own, triggering normal death/reward or defeat flow
+
+---
+
+# v0.1.8
+
+### Added
+
+- Minimap with fog of war (top-right corner, toggleable)
+- Per-location exploration tracking, persisted across sessions
+- Exploration progress kept across death/respawn, reset on New Game
+
+---
+
 # v0.1.7
 
 ### Added

@@ -3,6 +3,8 @@ import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import {
   Enemy, KillReward, LocationId, Phase, SKILLS,
   REWARD_TABLE, applyXpGain,
+  StatusEffect, STATUS_EFFECT_DEFS, ENEMY_EFFECT_ON_HIT, SKILL_EFFECT_ON_HIT,
+  addStatusEffect, tickStatusEffects, hasStatusEffect, slowMultiplier,
 } from '../combat';
 import { Item, DROP_TABLES, makeItem } from '../inventory';
 import { EquipBonuses } from '../equipment';
@@ -45,6 +47,7 @@ export interface CombatCtx {
   playerXpRef:       MutableRefObject<number>;
   questProgressRef:  MutableRefObject<QuestProgress>;
   shieldRef:         MutableRefObject<boolean>;
+  playerStatusEffectsRef: MutableRefObject<StatusEffect[]>;
   skillBonusesRef:   MutableRefObject<SkillBonuses>;
   skillPointsRef:    MutableRefObject<number>;
   statPointsRef:     MutableRefObject<number>;
@@ -79,6 +82,7 @@ export interface CombatCtx {
   setPlayerXp: (v: number) => void;
   setQuestProgress: (v: QuestProgress) => void;
   setShieldActive: (v: boolean) => void;
+  setPlayerStatusEffects: (v: StatusEffect[]) => void;
   setShowBossVictory: (v: boolean) => void;
   setSkillPoints: Dispatch<SetStateAction<number>>;
   setSkillsCd: Dispatch<SetStateAction<Record<number, number>>>;
@@ -104,13 +108,13 @@ export function useCombat(ctx: CombatCtx) {
     levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
-    shieldRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
+    shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat,
     setActiveEnemyId, setBossAppearNotif, setBossDefeatedThisVisit, setBossRewardInfo,
     setBossSpawnedThisVisit, setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
-    setShieldActive, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
+    setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   } = ctx;
 
   // ── Loot drop (called from applyRewards) ──────────────────────────────────
@@ -331,6 +335,14 @@ export function useCombat(ctx: CombatCtx) {
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
 
+      if (hasStatusEffect(playerStatusEffectsRef.current, 'stun')) {
+        log('💫 Вы оглушены и пропускаете атаку!');
+        if (phaseRef.current === 'combat') {
+          playerAttackTimeout.current = setTimeout(doPlayerAttack, 1000);
+        }
+        return;
+      }
+
       // Compute all character stats from central module (pure, cheap)
       const _cs = computeStats({
         base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
@@ -351,7 +363,8 @@ export function useCombat(ctx: CombatCtx) {
 
       // Same stats as above — nothing changed them in between, so no need to recompute.
       if (phaseRef.current === 'combat') {
-        playerAttackTimeout.current = setTimeout(doPlayerAttack, _cs.attackInterval);
+        const interval = Math.floor(_cs.attackInterval * slowMultiplier(playerStatusEffectsRef.current));
+        playerAttackTimeout.current = setTimeout(doPlayerAttack, interval);
       }
     };
 
@@ -367,6 +380,14 @@ export function useCombat(ctx: CombatCtx) {
       const id = activeEnemyIdRef.current;
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
+
+      if (hasStatusEffect(enemy.statusEffects, 'stun')) {
+        log(`💫 ${enemy.name} оглушён и пропускает атаку!`);
+        if (phaseRef.current === 'combat') {
+          enemyAttackTimeout.current = setTimeout(doEnemyAttack, 1000);
+        }
+        return;
+      }
 
       // Compute defensive stats
       const _defCs = computeStats({
@@ -397,12 +418,23 @@ export function useCombat(ctx: CombatCtx) {
       const newHp  = Math.max(0, prevHp - dmg);
       playerHpRef.current = newHp; setPlayerHp(newHp);
 
+      // Status effect on hit (e.g. spider poison, orc stun, troll slow) — only if the player survived
+      const onHit = ENEMY_EFFECT_ON_HIT[enemy.name];
+      if (onHit && newHp > 0 && Math.random() < onHit.chance) {
+        const nextEffects = addStatusEffect(playerStatusEffectsRef.current, onHit.effect);
+        playerStatusEffectsRef.current = nextEffects;
+        setPlayerStatusEffects(nextEffects);
+        const def = STATUS_EFFECT_DEFS[onHit.effect];
+        log(`${def.icon} Вы получаете эффект «${def.label}»!`);
+      }
+
       if (prevHp > 0 && newHp === 0) {
         phaseRef.current = 'defeat'; setPhase('defeat');
         log('☠️ Вы погибли...'); return;
       }
       if (phaseRef.current === 'combat') {
-        enemyAttackTimeout.current = setTimeout(doEnemyAttack, enemy.attackInterval);
+        const interval = Math.floor(enemy.attackInterval * slowMultiplier(enemy.statusEffects));
+        enemyAttackTimeout.current = setTimeout(doEnemyAttack, interval);
       }
     };
 
@@ -413,6 +445,49 @@ export function useCombat(ctx: CombatCtx) {
       if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
       if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
     };
+  }, [phase, log, spawnFloat, handleEnemyDeath]);
+
+  // ── Status effect ticking (poison/burn damage, countdown for all effects) ──
+  useEffect(() => {
+    if (phase !== 'combat') return;
+    const t = setInterval(() => {
+      // Player
+      const { next: nextPlayerEffects, damage: playerDmg } = tickStatusEffects(playerStatusEffectsRef.current);
+      playerStatusEffectsRef.current = nextPlayerEffects;
+      setPlayerStatusEffects(nextPlayerEffects);
+      if (playerDmg > 0 && phaseRef.current === 'combat') {
+        const prevHp = playerHpRef.current;
+        const newHp  = Math.max(0, prevHp - playerDmg);
+        playerHpRef.current = newHp; setPlayerHp(newHp);
+        const pp = playerPosRef.current;
+        spawnFloat(playerDmg.toString(), pp.x, pp.y, 'player-dmg');
+        log(`☣️ Вы получаете ${playerDmg} урона от эффекта!`);
+        if (prevHp > 0 && newHp === 0) {
+          phaseRef.current = 'defeat'; setPhase('defeat');
+          log('☠️ Вы погибли от эффекта...');
+        }
+      }
+
+      // Enemies
+      let killed: { id: number; x: number; y: number; name: string } | null = null;
+      const nextEnemies = enemiesRef.current.map(e => {
+        if (e.dead || e.hp <= 0 || !e.statusEffects?.length) return e;
+        const { next, damage } = tickStatusEffects(e.statusEffects);
+        if (damage <= 0) return { ...e, statusEffects: next };
+        const newHp = Math.max(0, e.hp - damage);
+        spawnFloat(damage.toString(), e.x, e.y, 'enemy-dmg');
+        if (newHp === 0 && !killed) killed = { id: e.id, x: e.x, y: e.y, name: e.name };
+        return { ...e, hp: newHp, statusEffects: next };
+      });
+      enemiesRef.current = nextEnemies;
+      setEnemies(nextEnemies);
+      if (killed) {
+        const k = killed as { id: number; x: number; y: number; name: string };
+        log(`☣️ ${k.name} погибает от эффекта!`);
+        handleEnemyDeath(k.id, k.x, k.y, k.name);
+      }
+    }, 1000);
+    return () => clearInterval(t);
   }, [phase, log, spawnFloat, handleEnemyDeath]);
 
   // ── Skill cooldowns ───────────────────────────────────────────────────────
@@ -461,8 +536,17 @@ export function useCombat(ctx: CombatCtx) {
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
       const newHp = Math.max(0, enemy.hp - skill.damage);
-      enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
-      setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
+
+      let statusEffects = enemy.statusEffects ?? [];
+      const inflict = SKILL_EFFECT_ON_HIT[skill.id];
+      if (inflict && newHp > 0) {
+        statusEffects = addStatusEffect(statusEffects, inflict);
+        const def = STATUS_EFFECT_DEFS[inflict];
+        log(`${def.icon} ${enemy.name} получает эффект «${def.label}»!`);
+      }
+
+      enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp, statusEffects } : e);
+      setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp, statusEffects } : e));
       spawnFloat(skill.damage.toString(), enemy.x, enemy.y, 'enemy-dmg');
       log(`✨ Воин использует ${skill.name} на ${skill.damage} урона!`);
       if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name);

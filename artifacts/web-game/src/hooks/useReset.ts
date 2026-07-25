@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import {
-  Phase, Enemy, LocationId, KillReward,
+  Phase, Enemy, LocationId, KillReward, StatusEffect,
   xpRequired, makeLocationEnemies,
 } from '../combat';
 import {
@@ -45,6 +45,7 @@ export interface ResetCtx {
   playerPosRef: MutableRefObject<{ x: number; y: number }>;
   playerXpRef: MutableRefObject<number>;
   shieldRef: MutableRefObject<boolean>;
+  playerStatusEffectsRef: MutableRefObject<StatusEffect[]>;
   statPointsRef: MutableRefObject<number>;
   statsRef: MutableRefObject<BaseStats>;
   xpToNextRef: MutableRefObject<number>;
@@ -78,6 +79,7 @@ export interface ResetCtx {
   setPlayerXp: (v: number) => void;
   setSelectedItem: (v: Item | null) => void;
   setShieldActive: (v: boolean) => void;
+  setPlayerStatusEffects: (v: StatusEffect[]) => void;
   setShowBossVictory: (v: boolean) => void;
   setShowCharPanel: (v: boolean) => void;
   setShowInventory: (v: boolean) => void;
@@ -104,12 +106,12 @@ export function useReset(ctx: ResetCtx) {
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
     inventoryRef, levelHpBonusRef, levelMpBonusRef, exploredTilesRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
-    shieldRef, statPointsRef, statsRef, xpToNextRef,
+    shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
-    setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setShowBossVictory,
+    setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setXpToNext,
   } = ctx;
@@ -132,6 +134,7 @@ export function useReset(ctx: ResetCtx) {
     playerHpRef.current      = fullHp;
     playerMpRef.current      = fullMp;
     shieldRef.current        = false;
+    playerStatusEffectsRef.current = [];
     playerPosRef.current     = spawn;
     enemiesRef.current       = fresh;
     activeEnemyIdRef.current = null;
@@ -143,6 +146,7 @@ export function useReset(ctx: ResetCtx) {
     setEnemies(fresh);
     setActiveEnemyId(null);
     setShieldActive(false);
+    setPlayerStatusEffects([]);
     setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setFloatingNums([]);
     setLastKillReward(null);
@@ -177,6 +181,7 @@ export function useReset(ctx: ResetCtx) {
     playerMaxMpRef.current     = initMaxMp;
     phaseRef.current           = 'explore';
     shieldRef.current          = false;
+    playerStatusEffectsRef.current = [];
     playerPosRef.current       = LOCATION_SPAWN.village;
     enemiesRef.current         = [];
     activeEnemyIdRef.current   = null;
@@ -208,6 +213,7 @@ export function useReset(ctx: ResetCtx) {
     setEnemies([]);
     setActiveEnemyId(null);
     setShieldActive(false);
+    setPlayerStatusEffects([]);
     setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setFloatingNums([]);
     setLastKillReward(null);
