@@ -101,7 +101,7 @@ export default function CharacterPanel({
         <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
           <div className="flex flex-col">
             <span className="text-[13px] text-white font-medium">Живучесть</span>
-            <span className="text-[10px] text-[#555]">+10 макс. HP/очко{equipBonuses.vitality > 0 ? ` (+${equipBonuses.vitality} экип.)` : ''}</span>
+            <span className="text-[10px] text-[#555]">+10 макс. HP/очко · +0.3% блок{equipBonuses.vitality > 0 ? ` (+${equipBonuses.vitality} экип.)` : ''}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[14px] font-bold text-white font-mono w-12 text-right">
@@ -134,6 +134,10 @@ export default function CharacterPanel({
         <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
           <span className="text-[13px] text-[#888]">Уклонение</span>
           <span className="text-[13px] font-bold text-white font-mono">{cs.dodgeChance.toFixed(1)}%</span>
+        </div>
+        <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+          <span className="text-[13px] text-[#888]">Блок</span>
+          <span className="text-[13px] font-bold text-white font-mono">{cs.blockChance.toFixed(1)}%</span>
         </div>
         <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
           <span className="text-[13px] text-[#888]">Скорость атаки</span>

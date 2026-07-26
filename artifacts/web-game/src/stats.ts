@@ -53,6 +53,7 @@ export interface ComputedStats {
   // Defense
   defense:       number;    // flat; applied as dmg × 100/(100+defense)
   dodgeChance:   number;    // 0–60 %
+  blockChance:   number;    // 0–50 % — halves incoming damage when it triggers
 
   // Speed
   attackInterval:    number; // ms
@@ -126,6 +127,12 @@ export function computeStats(input: StatsInput): ComputedStats {
     0, 60,
   );
 
+  // ── Block ─────────────────────────────────────────────────────────────────
+  const blockChance = clamp(
+    5 + totalVitality * 0.3 + (equip.blockChance ?? 0),
+    0, 50,
+  );
+
   // ── Attack speed ──────────────────────────────────────────────────────────
   const baseInt    = Math.max(MIN_ATTACK_INTERVAL_MS, Math.floor(BASE_ATTACK_INTERVAL_MS * (1 - 0.03 * totalAgility)));
   const penalized  = Math.floor(baseInt * (1 + (equip.atkSpeedPenalty ?? 0) / 100));
@@ -140,6 +147,7 @@ export function computeStats(input: StatsInput): ComputedStats {
     critDamageMult,
     defense,
     dodgeChance:   Math.round(dodgeChance  * 10) / 10,
+    blockChance:   Math.round(blockChance  * 10) / 10,
     attackInterval,
     attackIntervalSec: (attackInterval / 1000).toFixed(1),
   };

@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import {
   Enemy, KillReward, LocationId, Phase, SKILLS,
-  REWARD_TABLE, applyXpGain,
+  REWARD_TABLE, applyXpGain, RESPAWN_MS, reviveEnemy,
   StatusEffect, STATUS_EFFECT_DEFS, ENEMY_EFFECT_ON_HIT, SKILL_EFFECT_ON_HIT,
   addStatusEffect, tickStatusEffects, hasStatusEffect, slowMultiplier,
 } from '../combat';
@@ -13,6 +13,7 @@ import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, QUEST_DEFS } from '../quests/quests';
 import {
   BOSS_ID, CAVE_BOSS_DEF, BOSS_REWARD, BOSS_RARE_CHANCE, BOSS_RARE_LOOT, BOSS_COMMON_LOOT,
+  BOSS_RESPAWN_MS,
   BossState, BossRewardInfo, makeBossTrophy,
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
@@ -24,8 +25,6 @@ export interface CombatCtx {
 
   // ── Refs (mutable, stable identity — safe to read/write directly) ─────────
   activeEnemyIdRef:  MutableRefObject<number | null>;
-  bossDefeatedThisVisitRef: MutableRefObject<boolean>;
-  bossSpawnedThisVisitRef:  MutableRefObject<boolean>;
   bossStateRef:      MutableRefObject<BossState>;
   currentLocationRef: MutableRefObject<LocationId>;
   enemiesRef:        MutableRefObject<Enemy[]>;
@@ -60,9 +59,7 @@ export interface CombatCtx {
   // ── Setters ────────────────────────────────────────────────────────────────
   setActiveEnemyId: (v: number | null) => void;
   setBossAppearNotif: (v: boolean) => void;
-  setBossDefeatedThisVisit: (v: boolean) => void;
   setBossRewardInfo: (v: BossRewardInfo) => void;
-  setBossSpawnedThisVisit: (v: boolean) => void;
   setBossState: (v: BossState) => void;
   setEnemies: Dispatch<SetStateAction<Enemy[]>>;
   setInventory: Dispatch<SetStateAction<Item[]>>;
@@ -103,15 +100,15 @@ export interface CombatCtx {
 export function useCombat(ctx: CombatCtx) {
   const {
     phase, skillsCd,
-    activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
+    activeEnemyIdRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, inventoryRef,
     levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat,
-    setActiveEnemyId, setBossAppearNotif, setBossDefeatedThisVisit, setBossRewardInfo,
-    setBossSpawnedThisVisit, setBossState, setEnemies, setInventory, setLastKillReward,
+    setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
+    setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
@@ -200,8 +197,6 @@ export function useCombat(ctx: CombatCtx) {
   // ── Cave Boss: spawn after all normal enemies die ─────────────────────────
   const spawnCaveBoss = useCallback(() => {
     const bossEnemy: Enemy = { ...CAVE_BOSS_DEF, id: BOSS_ID };
-    bossSpawnedThisVisitRef.current = true;
-    setBossSpawnedThisVisit(true);
     enemiesRef.current = [...enemiesRef.current, bossEnemy];
     setEnemies(prev => [...prev, bossEnemy]);
     phaseRef.current = 'explore';
@@ -248,19 +243,15 @@ export function useCombat(ctx: CombatCtx) {
       inventoryRef.current = [...inventoryRef.current, trophyItem];
       setInventory(prev => [...prev, trophyItem!]);
       log('🏆 Получен трофей: Трофей главаря гоблинов!');
-      const newBS: BossState = { caveChief: { firstKillDone: true } };
-      bossStateRef.current = newBS;
-      setBossState(newBS);
       log('🏛️ Руины разблокированы! Путь на восток открыт.');
     }
 
-    // Flags
-    bossDefeatedThisVisitRef.current = true;
-    setBossDefeatedThisVisit(true);
+    // Start the respawn timer — boss reappears in BOSS_RESPAWN_MS
+    const newBS: BossState = { caveChief: { firstKillDone: true, deadAt: Date.now() } };
+    bossStateRef.current = newBS;
+    setBossState(newBS);
 
     // Show boss victory overlay
-    phaseRef.current = 'final-victory';
-    setPhase('final-victory');
     setActiveEnemyId(null);
     activeEnemyIdRef.current = null;
     setBossRewardInfo({ xp: xpGained, gold: BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
@@ -273,8 +264,9 @@ export function useCombat(ctx: CombatCtx) {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
-    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e);
-    setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0 } : e));
+    const deadAt = Date.now();
+    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e);
+    setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e));
     playerPosRef.current = { x: ex, y: ey };
     setPlayerPos({ x: ex, y: ey });
     log(`💀 ${name} повержен!`);
@@ -305,25 +297,15 @@ export function useCombat(ctx: CombatCtx) {
     }
 
     const allDead = enemiesRef.current.every(e => e.dead);
-    if (allDead) {
-      // Cave: spawn the boss after all normal enemies die (once per visit)
-      if (currentLocationRef.current === 'cave' && !bossSpawnedThisVisitRef.current) {
-        spawnCaveBoss();
-      } else {
-        phaseRef.current = 'final-victory'; setPhase('final-victory');
+    if (allDead) log('🏆 Локация зачищена! Враги возродятся через некоторое время.');
+    setPhase('victory');
+    setTimeout(() => {
+      if (phaseRef.current === 'victory') {
+        phaseRef.current = 'explore'; setPhase('explore');
         setActiveEnemyId(null); activeEnemyIdRef.current = null;
-        log('🏆 Все враги побеждены!');
       }
-    } else {
-      setPhase('victory');
-      setTimeout(() => {
-        if (phaseRef.current === 'victory') {
-          phaseRef.current = 'explore'; setPhase('explore');
-          setActiveEnemyId(null); activeEnemyIdRef.current = null;
-        }
-      }, 1500);
-    }
-  }, [log, applyRewards, handleBossDeath, spawnCaveBoss]);
+    }, 1500);
+  }, [log, applyRewards, handleBossDeath]);
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'combat') return;
@@ -407,12 +389,14 @@ export function useCombat(ctx: CombatCtx) {
       }
 
       let dmg = Math.floor(Math.random() * (enemy.dmgMax - enemy.dmgMin + 1)) + enemy.dmgMin;
+      const isBlocked = Math.random() * 100 < _defCs.blockChance;
+      if (isBlocked) dmg = Math.ceil(dmg / 2);
       if (shieldRef.current) dmg = Math.ceil(dmg / 2);
       // Defense mitigation: dmg × 100/(100+defense)
       if (_defCs.defense > 0) dmg = Math.max(1, Math.floor(dmg * 100 / (100 + _defCs.defense)));
 
-      spawnFloat(dmg.toString(), pp.x, pp.y, 'player-dmg');
-      log(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!`);
+      spawnFloat(isBlocked ? `🛡️${dmg}` : dmg.toString(), pp.x, pp.y, 'player-dmg');
+      log(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!${isBlocked ? ' (блок!)' : ''}`);
 
       const prevHp = playerHpRef.current;
       const newHp  = Math.max(0, prevHp - dmg);
@@ -489,6 +473,40 @@ export function useCombat(ctx: CombatCtx) {
     }, 1000);
     return () => clearInterval(t);
   }, [phase, log, spawnFloat, handleEnemyDeath]);
+
+  // ── Enemy & boss respawn — runs continuously, independent of combat phase ──
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = Date.now();
+
+      // Normal enemies: revive any that have been dead long enough, in place.
+      let changed = false;
+      const revived = enemiesRef.current.map(e => {
+        if (e.id === BOSS_ID) return e;
+        if (e.dead && e.deadAt !== undefined && now - e.deadAt >= RESPAWN_MS) {
+          changed = true;
+          return reviveEnemy(e);
+        }
+        return e;
+      });
+      if (changed) {
+        enemiesRef.current = revived;
+        setEnemies(revived);
+      }
+
+      // Cave boss: reappears once its cooldown has passed, same "area is clear" flavor as the first encounter.
+      if (currentLocationRef.current === 'cave') {
+        const bossAbsent = !enemiesRef.current.some(e => e.id === BOSS_ID);
+        const deadAt = bossStateRef.current.caveChief.deadAt;
+        const offCooldown = deadAt === undefined || now - deadAt >= BOSS_RESPAWN_MS;
+        const areaClear = enemiesRef.current.every(e => e.id === BOSS_ID || e.dead);
+        if (bossAbsent && offCooldown && areaClear) {
+          spawnCaveBoss();
+        }
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [spawnCaveBoss]);
 
   // ── Skill cooldowns ───────────────────────────────────────────────────────
   useEffect(() => {

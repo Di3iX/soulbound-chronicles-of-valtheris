@@ -16,6 +16,7 @@ export interface ItemBonuses {
   critChance?:      number; // flat % added to crit chance
   critDamage?:      number; // flat % added to crit damage bonus
   dodgeChance?:     number; // flat % added to dodge chance
+  blockChance?:     number; // flat % added to block chance
   mana?:            number; // flat MP bonus
 }
 
@@ -110,11 +111,11 @@ export const AFFIX_TABLE: Record<string, AffixRange> = {
   dragon_fang:     { damage: [20, 30], strength: [2, 4]          },
   // ── Helmets ───────────────────────────────────────────────────────────────────
   leather_helm:    { hp: [10, 20]                                 },  // spec: +10–20
-  iron_helm:       { hp: [16, 25]                                 },
+  iron_helm:       { hp: [16, 25], blockChance: [2, 4]                },
   mage_hood:       { hp: [22, 38], strength: [1, 2], mana: [10, 20] },
   // ── Armor ─────────────────────────────────────────────────────────────────────
   leather_armor:   { hp: [20, 40]                                 },  // spec: +20–40
-  chainmail:       { hp: [32, 50]                                 },
+  chainmail:       { hp: [32, 50], blockChance: [3, 6]                },
   plate_armor:     { hp: [48, 72]                                 },
   void_plate:      { hp: [70, 110], strength: [1, 3]             },
   // ── Gloves ───────────────────────────────────────────────────────────────────
@@ -179,6 +180,7 @@ export function formatBonuses(b: ItemBonuses): string[] {
   if (b.critChance)      lines.push(`+${b.critChance}% крит.`);
   if (b.critDamage)      lines.push(`+${b.critDamage}% крит.урон`);
   if (b.dodgeChance)     lines.push(`+${b.dodgeChance}% уклон.`);
+  if (b.blockChance)     lines.push(`+${b.blockChance}% блок`);
   if (b.atkSpeedPenalty) lines.push(`−${b.atkSpeedPenalty}% скор.`);
   return lines;
 }
