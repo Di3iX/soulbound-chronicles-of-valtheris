@@ -21,8 +21,6 @@ const INITIAL_PLAYER_LVL = 1;
 export interface ResetCtx {
   // Refs
   activeEnemyIdRef: MutableRefObject<number | null>;
-  bossDefeatedThisVisitRef: MutableRefObject<boolean>;
-  bossSpawnedThisVisitRef: MutableRefObject<boolean>;
   bossStateRef: MutableRefObject<BossState>;
   currentLocationRef: MutableRefObject<LocationId>;
   enemiesRef: MutableRefObject<Enemy[]>;
@@ -52,8 +50,6 @@ export interface ResetCtx {
 
   // Setters
   setActiveEnemyId: (v: number | null) => void;
-  setBossDefeatedThisVisit: (v: boolean) => void;
-  setBossSpawnedThisVisit: (v: boolean) => void;
   setBossState: (v: BossState) => void;
   setCurrentLocation: (v: LocationId) => void;
   setEnemies: Dispatch<SetStateAction<Enemy[]>>;
@@ -102,12 +98,12 @@ export interface ResetCtx {
  */
 export function useReset(ctx: ResetCtx) {
   const {
-    activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
+    activeEnemyIdRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
     inventoryRef, levelHpBonusRef, levelMpBonusRef, exploredTilesRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
-    setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
+    setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
@@ -200,8 +196,6 @@ export function useReset(ctx: ResetCtx) {
     inventoryRef.current       = [];
     currentLocationRef.current           = 'village';
     bossStateRef.current                  = INITIAL_BOSS_STATE;
-    bossSpawnedThisVisitRef.current       = false;
-    bossDefeatedThisVisitRef.current      = false;
 
     // Reset state
     setPhase('explore');
@@ -230,8 +224,6 @@ export function useReset(ctx: ResetCtx) {
     setSkillProgress({});
     setSkillPoints(0);
     setBossState(INITIAL_BOSS_STATE);
-    setBossSpawnedThisVisit(false);
-    setBossDefeatedThisVisit(false);
     setShowBossVictory(false);
     setEquipment({ ...EMPTY_EQUIPMENT });
     setInventory([]);

@@ -6,7 +6,7 @@ import { SKILL_POINTS_PER_LEVEL } from './skills/skills';
 export type LocationId = 'village' | 'forest' | 'cave' | 'ruins' | 'swamp';
 
 // ── Combat-specific types ─────────────────────────────────────────────────────
-export type Phase = 'explore' | 'combat' | 'victory' | 'final-victory' | 'defeat';
+export type Phase = 'explore' | 'combat' | 'victory' | 'defeat';
 
 export interface Enemy {
   id: number; name: string; emoji: string;
@@ -14,7 +14,16 @@ export interface Enemy {
   hp: number; maxHp: number;
   attackInterval: number; dmgMin: number; dmgMax: number;
   dead: boolean;
+  deadAt?: number;           // Date.now() timestamp when it died — drives respawn timing
   statusEffects?: StatusEffect[];
+}
+
+/** How long (ms) a slain normal enemy stays dead before respawning at its spot. */
+export const RESPAWN_MS = 30_000;
+
+/** Reset a dead enemy back to full health at its original spot. Everything else (position, stats) is unchanged. */
+export function reviveEnemy(enemy: Enemy): Enemy {
+  return { ...enemy, dead: false, hp: enemy.maxHp, statusEffects: [], deadAt: undefined };
 }
 
 export interface KillReward {

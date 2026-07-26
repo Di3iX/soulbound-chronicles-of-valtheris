@@ -28,6 +28,9 @@ export const BOSS_RARE_CHANCE = 0.25;          // 25% chance for a rare item
 export const BOSS_COMMON_LOOT = ['iron_sword', 'orc_axe', 'iron_helm', 'chainmail', 'battle_gloves', 'scout_boots'] as const;
 export const BOSS_RARE_LOOT   = ['shadow_blade', 'void_plate', 'titan_gauntlets'] as const;
 
+/** How long (ms) the boss stays dead before respawning at its spot. */
+export const BOSS_RESPAWN_MS = 10 * 60 * 1000;
+
 // ── Trophy — first kill only ──────────────────────────────────────────────────
 const GOBLIN_CHIEF_TROPHY: Omit<Item, 'id'> = {
   key:     'goblin_chief_trophy',
@@ -48,6 +51,7 @@ export function makeBossTrophy(): Item {
 export interface BossState {
   caveChief: {
     firstKillDone: boolean;   // trophy given + ruins permanently unlocked
+    deadAt?: number;          // Date.now() of last defeat — drives the respawn timer
   };
 }
 

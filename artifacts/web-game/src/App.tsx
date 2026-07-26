@@ -114,8 +114,6 @@ export default function App() {
   const [skillPoints, setSkillPoints]         = useState(sv?.skillPoints ?? 0);
   const [showSkillPanel, setShowSkillPanel]   = useState(false);
   const [bossState, setBossState]             = useState<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
-  const [bossSpawnedThisVisit, setBossSpawnedThisVisit]   = useState<boolean>(() => (sv?.enemies ?? []).some(e => e.id === BOSS_ID));
-  const [bossDefeatedThisVisit, setBossDefeatedThisVisit] = useState<boolean>(() => (sv?.enemies ?? []).find(e => e.id === BOSS_ID)?.dead === true);
   const [bossAppearNotif, setBossAppearNotif] = useState(false);
   const [showBossVictory, setShowBossVictory] = useState(false);
   const [bossRewardInfo, setBossRewardInfo]   = useState<BossRewardInfo | null>(null);
@@ -152,8 +150,6 @@ export default function App() {
   const skillPointsRef     = useRef(sv?.skillPoints ?? 0);
   const skillBonusesRef    = useRef<SkillBonuses>(calcSkillBonuses(sv?.skillProgress ?? {}));
   const bossStateRef              = useRef<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
-  const bossSpawnedThisVisitRef   = useRef<boolean>((sv?.enemies ?? []).some(e => e.id === BOSS_ID));
-  const bossDefeatedThisVisitRef  = useRef<boolean>((sv?.enemies ?? []).find(e => e.id === BOSS_ID)?.dead === true);
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -199,8 +195,6 @@ export default function App() {
     }
   }, [playerPos, currentLocation]);
   useSyncedRef(bossStateRef, bossState);
-  useSyncedRef(bossSpawnedThisVisitRef, bossSpawnedThisVisit);
-  useSyncedRef(bossDefeatedThisVisitRef, bossDefeatedThisVisit);
 
   // ── Auto-save: writes to localStorage on every meaningful state change ─────
   usePersistence({
@@ -266,15 +260,15 @@ const log = useCallback((msg: string) => {
   // ── Combat: loot, XP/level-up, enemy & boss death, auto-attack loop, skills ─
   const { grantXp, useSkill } = useCombat({
     phase, skillsCd,
-    activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
+    activeEnemyIdRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, inventoryRef,
     levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat,
-    setActiveEnemyId, setBossAppearNotif, setBossDefeatedThisVisit, setBossRewardInfo,
-    setBossSpawnedThisVisit, setBossState, setEnemies, setInventory, setLastKillReward,
+    setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
+    setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
@@ -305,13 +299,6 @@ const log = useCallback((msg: string) => {
       setFloatingNums([]);
       setTransitioning(false);
       log(`📍 Вы прибыли: ${LOCATION_META[to].label}`);
-      // Cave: reset boss visit flags on (re-)entry so the boss can spawn again
-      if (to === 'cave') {
-        bossSpawnedThisVisitRef.current = false;
-        setBossSpawnedThisVisit(false);
-        bossDefeatedThisVisitRef.current = false;
-        setBossDefeatedThisVisit(false);
-      }
       // Restore full HP when entering a safe zone
       if (getLocation(to).isSafeZone) {
         const fullHp = playerMaxHpRef.current;
@@ -457,12 +444,12 @@ const log = useCallback((msg: string) => {
 
   // ── Reset flows: respawn-in-place after death, and full "New Game" wipe ────
   const { resetCurrentMap, resetCharacter } = useReset({
-    activeEnemyIdRef, bossDefeatedThisVisitRef, bossSpawnedThisVisitRef, bossStateRef,
+    activeEnemyIdRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
     inventoryRef, levelHpBonusRef, levelMpBonusRef, exploredTilesRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
-    setActiveEnemyId, setBossDefeatedThisVisit, setBossSpawnedThisVisit, setBossState,
+    setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
@@ -700,26 +687,7 @@ const log = useCallback((msg: string) => {
             </div>
           )}
 
-          {/* Final victory (normal — boss victory handled by BossVictoryPanel below) */}
-          {phase === 'final-victory' && !showBossVictory && (
-            <div className="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 text-center rounded backdrop-blur-sm animate-in fade-in duration-500">
-              <h2 className="text-3xl font-bold text-primary mb-2 drop-shadow-lg">🏆 ПОБЕДА!</h2>
-              <p className="text-white/80 mb-1 font-medium">Все враги повержены!</p>
-              <p className="text-[#666] text-sm mb-3">Уровень {playerLevel} · 💰 {playerGold}</p>
-              {lastKillReward && (
-                <div className="mb-4 flex gap-3 text-sm">
-                  <span className="text-[#38bdf8] font-bold">+{lastKillReward.xp} опыта</span>
-                  <span className="text-yellow-400 font-bold">+{lastKillReward.gold} золота</span>
-                </div>
-              )}
-              <button onClick={resetCurrentMap}
-                className="px-6 py-3 bg-[#1e1e28] border-2 border-primary text-primary font-bold rounded-lg shadow-[0_0_15px_rgba(200,150,42,0.3)] active:scale-95 transition-transform">
-                Играть снова
-              </button>
-            </div>
-          )}
-
-          {/* Boss Victory Panel — shown instead of regular final-victory after boss kill */}
+          {/* Boss Victory Panel */}
           {showBossVictory && bossRewardInfo && (
             <BossVictoryPanel
               reward={bossRewardInfo}
