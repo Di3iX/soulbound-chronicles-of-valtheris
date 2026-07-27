@@ -4,6 +4,27 @@ All notable changes to this project will be documented here.
 
 ---
 
+# v0.1.11
+
+### Changed
+
+- Enemies now respawn individually in place 30 seconds after death, instead of requiring a full-location "Play Again" reset
+- Cave boss respawns automatically 10 minutes after defeat (same "area must be clear" trigger as its first appearance)
+- Removed the full-clear "Играть снова" screen — killing the last enemy in a location just logs a message and returns to normal exploration
+- Boss encounter state is now a persisted respawn timer instead of a per-location-visit flag
+
+---
+
+# v0.1.10
+
+### Added
+
+- Block: a defensive stat (base 5% + Vitality×0.3 + equipment bonus, capped 50%) that halves incoming damage when it triggers
+- Block chance rolls on Iron Helm and Chainmail
+- Block % shown in the character panel
+
+---
+
 # v0.1.9
 
 ### Added

@@ -57,7 +57,7 @@
 ## Combat
 - ✅ Critical Hits
 - ✅ Dodge
-- ⬜ Block
+- ✅ Block
 - ✅ Status Effects
 - ⬜ Damage Types
 
@@ -69,7 +69,7 @@
 - ⬜ Equipment Upgrade
 
 ## Enemies
-- ⬜ Elite Monsters
+- ✅ Elite Monsters
 - ⬜ Mage Enemies
 - ⬜ Archer Enemies
 - ⬜ Flying Enemies
