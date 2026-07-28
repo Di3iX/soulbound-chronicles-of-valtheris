@@ -40,7 +40,11 @@ export function useEquipment(ctx: EquipmentCtx) {
   } = ctx;
 
   const equipItem = useCallback((item: Item) => {
-    const slot = item.type as keyof Equipment;
+    // Rings are the only type with more than one slot: fill an empty ring slot
+    // first, falling back to replacing ring1 if both are already occupied.
+    const slot: keyof Equipment = item.type === 'ring'
+      ? (!equipmentRef.current.ring1 ? 'ring1' : !equipmentRef.current.ring2 ? 'ring2' : 'ring1')
+      : (item.type as keyof Equipment);
     const prevItem = equipmentRef.current[slot];
     const oldBonuses = equipBonusesRef.current;
 

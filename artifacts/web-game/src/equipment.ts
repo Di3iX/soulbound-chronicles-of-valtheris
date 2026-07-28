@@ -7,6 +7,9 @@ export interface Equipment {
   armor:   Item | null;
   gloves:  Item | null;
   boots:   Item | null;
+  ring1:   Item | null;
+  ring2:   Item | null;
+  amulet:  Item | null;
 }
 
 /** All bonus fields that equipment can contribute. Extended in v0.1.4. */
@@ -31,7 +34,10 @@ export interface EquipBonuses {
   mana:            number;
 }
 
-export const EMPTY_EQUIPMENT: Equipment = { weapon: null, helmet: null, armor: null, gloves: null, boots: null };
+export const EMPTY_EQUIPMENT: Equipment = {
+  weapon: null, helmet: null, armor: null, gloves: null, boots: null,
+  ring1: null, ring2: null, amulet: null,
+};
 export const ZERO_EQUIP_BONUSES: EquipBonuses = {
   damage: 0, hp: 0, strength: 0, agility: 0, atkSpeedPenalty: 0,
   vitality: 0, intelligence: 0, defense: 0, critChance: 0, critDamage: 0, dodgeChance: 0, blockChance: 0, mana: 0,
@@ -44,7 +50,16 @@ export const SLOT_META: Record<keyof Equipment, { label: string; icon: string }>
   armor:  { label: 'Броня',    icon: '🧥' },
   gloves: { label: 'Перчатки', icon: '🧤' },
   boots:  { label: 'Обувь',    icon: '👟' },
+  ring1:  { label: 'Кольцо 1', icon: '💍' },
+  ring2:  { label: 'Кольцо 2', icon: '💍' },
+  amulet: { label: 'Амулет',   icon: '📿' },
 };
+
+/** Which equipment slot (if any) currently holds this exact item instance. Handles ring1/ring2 correctly. */
+export function findEquippedSlot(eq: Equipment, item: Item): keyof Equipment | null {
+  const entry = (Object.entries(eq) as [keyof Equipment, Item | null][]).find(([, v]) => v?.id === item.id);
+  return entry ? entry[0] : null;
+}
 
 /** Sum all stat bonuses from currently equipped items. */
 export function calcEquipBonuses(eq: Equipment): EquipBonuses {

@@ -1,6 +1,7 @@
 // ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
 import type { Item } from './inventory';
 import type { Equipment, EquipBonuses } from './equipment';
+import { EMPTY_EQUIPMENT } from './equipment';
 import type { LocationId, Enemy } from './combat';
 import type { ExploredTiles } from './world/locations';
 import type { QuestProgress } from './quests/quests';
@@ -92,6 +93,9 @@ export function loadGame(): SaveData | null {
 
     // ── EquipBonuses: fill any missing v0.1.4 fields ──────────────────────────
     data.equipBonuses = { ...ZERO_EB, ...(data.equipBonuses as unknown as Record<string, number>) } as EquipBonuses;
+
+    // ── Equipment: fill any missing v0.1.13 slots (rings/amulet) with null ────
+    data.equipment = { ...EMPTY_EQUIPMENT, ...(data.equipment as unknown as Record<string, Item | null>) } as Equipment;
 
     console.debug('[Save] Loaded — Lv.%d  XP %d  Gold %d', data.playerLevel, data.playerXp, data.playerGold);
     return data;

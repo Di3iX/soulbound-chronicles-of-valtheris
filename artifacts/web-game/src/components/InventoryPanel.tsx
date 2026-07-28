@@ -1,9 +1,9 @@
 import React from 'react';
 import {
-  Item, RARITY_STYLE, TYPE_LABEL, formatBonuses,
+  Item, RARITY_STYLE, TYPE_LABEL, formatBonuses, itemIcon,
 } from '../inventory';
-import { Equipment, SLOT_META } from '../equipment';
-import { CONSUMABLE_HEAL } from '../shop/shop';
+import { Equipment, SLOT_META, findEquippedSlot } from '../equipment';
+import { CONSUMABLE_HEAL, CONSUMABLE_MANA } from '../shop/shop';
 
 interface InventoryPanelProps {
   inventory: Item[];
@@ -16,7 +16,10 @@ interface InventoryPanelProps {
   onClose: () => void;
 }
 
-/** Full-screen inventory overlay: equipped-slot list, item grid, bottom detail sheet. */
+/** Order slots appear in the equipment grid (4 columns × 2 rows). */
+const SLOT_ORDER: (keyof Equipment)[] = ['weapon', 'helmet', 'armor', 'gloves', 'boots', 'ring1', 'ring2', 'amulet'];
+
+/** Full-screen inventory overlay: icon-grid equipment slots, icon-grid items, bottom detail sheet. */
 export default function InventoryPanel({
   inventory, equipment, selectedItem, setSelectedItem,
   equipItem, unequipItem, handleUseItem, onClose,
@@ -35,70 +38,51 @@ export default function InventoryPanel({
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* ── Equipment slots — tappable to select/unequip ── */}
+        {/* ── Equipment slots — icon grid, tappable to select/unequip ── */}
         <div className="px-3 pt-3 pb-2">
-          <p className="text-[10px] uppercase tracking-widest text-[#444] mb-2 font-bold">Экипировка</p>
-          <div className="flex flex-col gap-[6px]">
-            {(Object.entries(SLOT_META) as [keyof Equipment, { label: string; icon: string }][]).map(([slot, meta]) => {
+          <p className="text-[10px] uppercase tracking-widest text-[#444] mb-2 font-bold">Снаряжение</p>
+          <div className="grid grid-cols-4 gap-2">
+            {SLOT_ORDER.map(slot => {
+              const meta = SLOT_META[slot];
               const equipped = equipment[slot];
               const rs = equipped ? RARITY_STYLE[equipped.rarity] : null;
               const isSelected = equipped && selectedItem?.id === equipped.id;
               return equipped ? (
                 <button key={slot}
                   onClick={() => setSelectedItem(isSelected ? null : equipped)}
-                  className={`w-full flex items-center gap-2 p-2 rounded border text-left transition-all active:scale-[0.98]
-                    ${isSelected
-                      ? `${rs!.border} bg-[#1a1a2e] ${rs!.glow} ring-1 ring-inset ring-white/10`
-                      : `${rs!.border} bg-[#141420] ${rs!.glow}`}`}>
-                  <span className="text-base w-6 text-center shrink-0">{meta.icon}</span>
-                  <span className="text-[11px] text-[#666] w-[54px] shrink-0">{meta.label}</span>
-                  <div className="flex-1 min-w-0">
-                    <span className={`text-[12px] font-bold ${rs!.text} truncate block`}>{equipped.name}</span>
-                    <span className="text-[10px] text-[#555]">{formatBonuses(equipped.bonuses).join(' · ')}</span>
-                  </div>
-                  <span className="text-[10px] text-[#444] shrink-0">▸</span>
+                  className={`relative aspect-square flex flex-col items-center justify-center gap-[2px] rounded-lg border-2 transition-all active:scale-95
+                    ${isSelected ? 'ring-2 ring-inset ring-white/30' : ''} ${rs!.border} ${rs!.bg} ${rs!.glow}`}>
+                  <span className="text-[22px] leading-none">{itemIcon(equipped)}</span>
+                  <span className={`text-[7px] font-bold leading-none ${rs!.text} truncate max-w-full px-[2px]`}>{meta.label}</span>
                 </button>
               ) : (
-                <div key={slot} className="flex items-center gap-2 p-2 rounded border border-tile-border/30 bg-[#0f0f14]">
-                  <span className="text-base w-6 text-center shrink-0 opacity-40">{meta.icon}</span>
-                  <span className="text-[11px] text-[#666] w-[54px] shrink-0">{meta.label}</span>
-                  <span className="text-[11px] text-[#383838] italic">— пусто —</span>
+                <div key={slot}
+                  className="aspect-square flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-tile-border/40 bg-[#0f0f14]">
+                  <span className="text-[20px] leading-none opacity-25">{meta.icon}</span>
+                  <span className="text-[7px] text-[#444] font-medium leading-none">{meta.label}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* ── Inventory items grid ── */}
+        {/* ── Inventory items — icon grid ── */}
         <div className="px-3 pt-1 pb-20">
           <p className="text-[10px] uppercase tracking-widest text-[#444] mb-2 font-bold">Предметы</p>
           {inventory.length === 0 ? (
             <p className="text-[12px] text-[#444] italic text-center py-4">Инвентарь пуст</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {inventory.map(item => {
                 const rs = RARITY_STYLE[item.rarity];
                 const isSelected = selectedItem?.id === item.id;
                 return (
                   <button key={item.id}
                     onClick={() => setSelectedItem(isSelected ? null : item)}
-                    className={`text-left p-2 rounded border transition-all active:scale-95
-                      ${isSelected
-                        ? `${rs.border} bg-[#1a1a2e] ${rs.glow} ring-1 ring-inset ring-white/10`
-                        : `${rs.border} bg-[#111118] hover:bg-[#161622] ${rs.glow}`}`}>
-                    <div className="flex items-start justify-between gap-1 mb-1">
-                      <span className={`text-[12px] font-bold ${rs.text} leading-tight`}>{item.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-[10px] text-[#555]">{TYPE_LABEL[item.type]}</span>
-                      <span className="text-[#333]">·</span>
-                      <span className={`text-[10px] font-medium ${rs.text}`}>{rs.label}</span>
-                    </div>
-                    <div className="flex flex-col gap-[1px]">
-                      {formatBonuses(item.bonuses).map((line, i) => (
-                        <span key={i} className="text-[11px] text-[#88c] font-mono">{line}</span>
-                      ))}
-                    </div>
+                    className={`relative aspect-square flex flex-col items-center justify-center gap-[2px] rounded-lg border-2 p-1 transition-all active:scale-95
+                      ${isSelected ? 'ring-2 ring-inset ring-white/30' : ''} ${rs.border} ${rs.bg} ${rs.glow}`}>
+                    <span className="text-[22px] leading-none">{itemIcon(item)}</span>
+                    <span className={`text-[8px] font-bold leading-tight text-center truncate max-w-full px-[2px] ${rs.text}`}>{item.name}</span>
                   </button>
                 );
               })}
@@ -110,12 +94,13 @@ export default function InventoryPanel({
       {/* ── Selected item detail (bottom sheet) ── */}
       {selectedItem && (() => {
         const rs = RARITY_STYLE[selectedItem.rarity];
-        const slot = selectedItem.type as keyof Equipment;
-        const isEquipped = equipment[slot]?.id === selectedItem.id;
+        const equippedSlot = findEquippedSlot(equipment, selectedItem);
+        const isEquipped = equippedSlot !== null;
         return (
           <div className={`absolute bottom-0 inset-x-0 z-10 border-t-2 ${rs.border} ${rs.glow} ${rs.bg} rounded-b p-4 animate-in slide-in-from-bottom duration-200`}>
-            <div className="flex items-start justify-between mb-2">
-              <div>
+            <div className="flex items-start gap-3 mb-2">
+              <span className="text-3xl leading-none shrink-0">{itemIcon(selectedItem)}</span>
+              <div className="flex-1 min-w-0">
                 <h3 className={`text-[15px] font-bold ${rs.text}`}>{selectedItem.name}</h3>
                 <p className="text-[11px] text-[#666]">
                   {TYPE_LABEL[selectedItem.type]} · {rs.label}
@@ -123,7 +108,7 @@ export default function InventoryPanel({
                 </p>
               </div>
               <button onClick={() => setSelectedItem(null)}
-                className="text-[#666] hover:text-white text-lg leading-none px-1">✕</button>
+                className="text-[#666] hover:text-white text-lg leading-none px-1 shrink-0">✕</button>
             </div>
             <div className="flex flex-col gap-[3px] mb-3">
               {formatBonuses(selectedItem.bonuses).map((line, i) => (
@@ -137,6 +122,11 @@ export default function InventoryPanel({
                     ❤️ Восстанавливает {CONSUMABLE_HEAL[selectedItem.key]} HP
                   </p>
                 )}
+                {CONSUMABLE_MANA[selectedItem.key] && (
+                  <p className="text-[12px] text-[#3a8fc4] mb-2">
+                    🔷 Восстанавливает {CONSUMABLE_MANA[selectedItem.key]} MP
+                  </p>
+                )}
                 <button
                   onClick={() => handleUseItem(selectedItem)}
                   className="w-full py-2 rounded border-2 border-green-700 text-green-400 font-bold text-[13px] bg-green-950/20 active:scale-95 transition-transform shadow-[0_0_8px_rgba(34,197,94,0.15)]">
@@ -145,7 +135,7 @@ export default function InventoryPanel({
               </>
             ) : isEquipped ? (
               <button
-                onClick={() => unequipItem(slot)}
+                onClick={() => unequipItem(equippedSlot)}
                 className="w-full py-2 rounded border-2 border-[#555] text-[#aaa] font-bold text-[13px] bg-[#111118] active:scale-95 transition-transform">
                 📤 Снять
               </button>

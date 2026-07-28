@@ -1,6 +1,6 @@
 // ─── INVENTORY / ITEM SYSTEM ──────────────────────────────────────────────────
 
-export type ItemType = 'weapon' | 'helmet' | 'armor' | 'gloves' | 'boots' | 'consumable';
+export type ItemType = 'weapon' | 'helmet' | 'armor' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'consumable';
 export type Rarity   = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface ItemBonuses {
@@ -63,16 +63,29 @@ export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
   wind_walkers:     { key: 'wind_walkers',     name: 'Сапоги ветра',       type: 'boots',   rarity: 'legendary', bonuses: { agility: 5, hp: 15 } },
   // Magic weapons
   arcane_staff:     { key: 'arcane_staff',     name: 'Магический посох',   type: 'weapon',  rarity: 'rare',      bonuses: { damage: 8, hp: 20 } },
+  // Rings
+  copper_ring:      { key: 'copper_ring',      name: 'Медное кольцо',      type: 'ring',    rarity: 'common',    bonuses: { critChance: 1 } },
+  silver_ring:      { key: 'silver_ring',      name: 'Серебряное кольцо',  type: 'ring',    rarity: 'uncommon',  bonuses: { dodgeChance: 2 } },
+  ring_of_vigor:    { key: 'ring_of_vigor',    name: 'Кольцо бодрости',    type: 'ring',    rarity: 'rare',      bonuses: { mana: 15, hp: 5 } },
+  ring_of_phoenix:  { key: 'ring_of_phoenix',  name: 'Кольцо феникса',     type: 'ring',    rarity: 'epic',      bonuses: { critDamage: 8, hp: 10 } },
+  band_of_eternity: { key: 'band_of_eternity', name: 'Обод вечности',      type: 'ring',    rarity: 'legendary', bonuses: { critChance: 6, dodgeChance: 4, hp: 20 } },
+  // Amulets
+  bone_amulet:      { key: 'bone_amulet',      name: 'Костяной амулет',    type: 'amulet',  rarity: 'common',    bonuses: { hp: 10 } },
+  amulet_of_wisdom: { key: 'amulet_of_wisdom', name: 'Амулет мудрости',    type: 'amulet',  rarity: 'uncommon',  bonuses: { mana: 20 } },
+  pendant_of_protection: { key: 'pendant_of_protection', name: 'Кулон защиты', type: 'amulet', rarity: 'rare',    bonuses: { defense: 6, hp: 15 } },
+  amulet_of_dragon: { key: 'amulet_of_dragon', name: 'Амулет дракона',     type: 'amulet',  rarity: 'epic',      bonuses: { damage: 8, fireResist: 5 } },
+  heart_of_mountain:{ key: 'heart_of_mountain',name: 'Сердце горы',        type: 'amulet',  rarity: 'legendary', bonuses: { hp: 45, defense: 8, blockChance: 4 } },
 };
 
 export const DROP_TABLES: Record<string, { chance: number; pool: string[] }> = {
-  'Гоблин':          { chance: 0.20, pool: ['rusty_sword', 'leather_helm', 'leather_armor', 'leather_gloves', 'light_boots'] },
-  'Волк':            { chance: 0.15, pool: ['rusty_sword', 'leather_helm', 'light_boots',   'leather_gloves'] },
-  'Орк':             { chance: 0.50, pool: ['iron_sword',  'orc_axe',      'iron_helm',     'chainmail',     'battle_gloves', 'scout_boots'] },
-  'Кабан':           { chance: 0.25, pool: ['rusty_sword', 'leather_armor', 'light_boots'] },
-  'Гигантский паук': { chance: 0.35, pool: ['iron_sword',  'leather_gloves', 'scout_boots'] },
-  'Скелет':          { chance: 0.30, pool: ['orc_axe',     'iron_helm',      'chainmail'] },
-  'Зомби':           { chance: 0.45, pool: ['iron_sword',  'orc_axe',        'iron_helm',  'chainmail', 'battle_gloves', 'scout_boots', 'arcane_staff'] },
+  'Гоблин':          { chance: 0.20, pool: ['rusty_sword', 'leather_helm', 'leather_armor', 'leather_gloves', 'light_boots', 'copper_ring'] },
+  'Волк':            { chance: 0.15, pool: ['rusty_sword', 'leather_helm', 'light_boots',   'leather_gloves', 'bone_amulet'] },
+  'Орк':             { chance: 0.50, pool: ['iron_sword',  'orc_axe',      'iron_helm',     'chainmail',     'battle_gloves', 'scout_boots', 'silver_ring'] },
+  'Кабан':           { chance: 0.25, pool: ['rusty_sword', 'leather_armor', 'light_boots', 'copper_ring'] },
+  'Гигантский паук': { chance: 0.35, pool: ['iron_sword',  'leather_gloves', 'scout_boots', 'ring_of_vigor'] },
+  'Скелет':          { chance: 0.30, pool: ['orc_axe',     'iron_helm',      'chainmail', 'bone_amulet'] },
+  'Зомби':           { chance: 0.45, pool: ['iron_sword',  'orc_axe',        'iron_helm',  'chainmail', 'battle_gloves', 'scout_boots', 'arcane_staff', 'amulet_of_wisdom'] },
+  'Тролль':          { chance: 0.40, pool: ['orc_axe', 'chainmail', 'pendant_of_protection', 'ring_of_phoenix'] },
 };
 
 export const RARITY_STYLE: Record<Rarity, { label: string; border: string; text: string; glow: string; bg: string }> = {
@@ -84,8 +97,37 @@ export const RARITY_STYLE: Record<Rarity, { label: string; border: string; text:
 };
 
 export const TYPE_LABEL: Record<ItemType, string> = {
-  weapon: 'Оружие', helmet: 'Шлем', armor: 'Броня', gloves: 'Перчатки', boots: 'Обувь', consumable: 'Зелье',
+  weapon: 'Оружие', helmet: 'Шлем', armor: 'Броня', gloves: 'Перчатки', boots: 'Обувь',
+  ring: 'Кольцо', amulet: 'Амулет', consumable: 'Зелье',
 };
+
+/** Default icon per item type — used as a fallback when an item has no unique icon below. */
+export const TYPE_ICON: Record<ItemType, string> = {
+  weapon: '⚔️', helmet: '⛑️', armor: '🧥', gloves: '🧤', boots: '👟',
+  ring: '💍', amulet: '📿', consumable: '🧪',
+};
+
+/** Unique icons for a few standout items; everything else falls back to TYPE_ICON. */
+export const ITEM_EMOJI: Partial<Record<string, string>> = {
+  dragon_fang:       '🐉',
+  shadow_blade:      '🗡️',
+  arcane_staff:      '🪄',
+  void_plate:        '🌌',
+  wind_walkers:      '🌪️',
+  heart_of_mountain: '⛰️',
+  band_of_eternity:  '♾️',
+  ring_of_phoenix:   '🔥',
+  bone_amulet:       '🦴',
+  healing_potion:         '🧪',
+  greater_healing_potion: '🍷',
+  mana_potion:            '🔷',
+  greater_mana_potion:    '💠',
+};
+
+/** The icon (emoji) to show for a given item. */
+export function itemIcon(item: Pick<Item, 'key' | 'type'>): string {
+  return ITEM_EMOJI[item.key] ?? TYPE_ICON[item.type];
+}
 
 // ─── AFFIX SYSTEM ─────────────────────────────────────────────────────────────
 
@@ -131,6 +173,18 @@ export const AFFIX_TABLE: Record<string, AffixRange> = {
   wind_walkers:    { agility: [4,  6], hp: [10, 20], iceResist: [3, 5]  },
   // ── Magic weapons ────────────────────────────────────────────────────────────
   arcane_staff:    { damage: [6, 10], hp: [15, 25], mana: [15, 25] },
+  // ── Rings ────────────────────────────────────────────────────────────────────
+  copper_ring:      { critChance: [1, 2]                            },
+  silver_ring:      { dodgeChance: [2, 3]                            },
+  ring_of_vigor:    { mana: [12, 20], hp: [5, 10]                    },
+  ring_of_phoenix:  { critDamage: [6, 12], hp: [8, 15]                },
+  band_of_eternity: { critChance: [5, 8], dodgeChance: [3, 6], hp: [15, 25] },
+  // ── Amulets ──────────────────────────────────────────────────────────────────
+  bone_amulet:      { hp: [10, 18]                                   },
+  amulet_of_wisdom: { mana: [16, 26]                                 },
+  pendant_of_protection: { defense: [5, 9], hp: [10, 18]              },
+  amulet_of_dragon: { damage: [6, 10], fireResist: [4, 7]             },
+  heart_of_mountain:{ hp: [35, 55], defense: [6, 10], blockChance: [3, 5] },
 };
 
 function randInt(min: number, max: number): number {
