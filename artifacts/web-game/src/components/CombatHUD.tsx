@@ -1,5 +1,5 @@
 import React from 'react';
-import { Enemy, LocationId, StatusEffect, STATUS_EFFECT_DEFS } from '../combat';
+import { Enemy, LocationId, StatusEffect, STATUS_EFFECT_DEFS, ENEMY_RARITY_DEFS } from '../combat';
 import { QuestProgress } from '../quests/quests';
 
 interface CombatHUDProps {
@@ -111,13 +111,29 @@ export default function CombatHUD({
                   <span className="text-[9px] font-black text-red-500 uppercase tracking-widest animate-pulse">👑 БОСС</span>
                 </div>
               )}
+              {activeEnemy.id !== bossId && activeEnemy.rarity !== 'common' && (
+                <div className="flex justify-end mb-[2px]">
+                  <span className="text-[9px] font-black uppercase tracking-widest"
+                    style={{ color: ENEMY_RARITY_DEFS[activeEnemy.rarity].color }}>
+                    {ENEMY_RARITY_DEFS[activeEnemy.rarity].emoji} {ENEMY_RARITY_DEFS[activeEnemy.rarity].label}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-end mb-1">
                 <span className={`text-xs font-mono ${activeEnemy.id === bossId ? 'text-red-400' : 'text-destructive'}`}>{activeEnemy.hp}/{activeEnemy.maxHp}</span>
-                <span className="text-sm font-bold text-white tracking-wide">{activeEnemy.emoji} {activeEnemy.name}</span>
+                <span className="text-sm font-bold tracking-wide"
+                  style={{ color: activeEnemy.id === bossId ? undefined : (activeEnemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[activeEnemy.rarity].color : undefined) }}>
+                  <span className={activeEnemy.id === bossId || activeEnemy.rarity !== 'common' ? '' : 'text-white'}>
+                    {activeEnemy.emoji} {activeEnemy.name}
+                  </span>
+                </span>
               </div>
               <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
                 <div className={`h-full transition-all duration-300 ${activeEnemy.id === bossId ? 'bg-red-600' : 'bg-destructive'}`}
-                  style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
+                  style={{
+                    width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%`,
+                    backgroundColor: activeEnemy.id !== bossId && activeEnemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[activeEnemy.rarity].color : undefined,
+                  }} />
               </div>
               <div className="mt-1"><StatusIcons effects={activeEnemy.statusEffects ?? []} align="end" /></div>
             </>

@@ -58,6 +58,7 @@ const SAVE_VERSION = 2;   // keep at 2; migrations handled inline
 const ZERO_EB = {
   damage: 0, hp: 0, strength: 0, agility: 0, atkSpeedPenalty: 0,
   vitality: 0, intelligence: 0, defense: 0, critChance: 0, critDamage: 0, dodgeChance: 0, blockChance: 0, mana: 0,
+  fireResist: 0, electricResist: 0, iceResist: 0,
 };
 
 export function saveGame(data: Omit<SaveData, 'version'>): void {

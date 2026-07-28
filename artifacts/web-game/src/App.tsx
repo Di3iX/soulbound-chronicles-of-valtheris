@@ -492,17 +492,24 @@ const log = useCallback((msg: string) => {
     const enemy = livingEnemies.find(e => e.x === gx && e.y === gy);
     if (enemy) {
       const isBoss = enemy.id === BOSS_ID;
+      const rarityDef = !isBoss && enemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[enemy.rarity] : null;
       return (
         <div className={[
           'w-full h-full rounded flex items-center justify-center z-10 relative',
           isBoss ? 'text-2xl' : 'text-lg',
           enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle',
           isBoss ? 'ring-2 ring-red-600/60 ring-inset' : '',
-        ].join(' ')}>
+        ].join(' ')}
+          style={rarityDef ? { boxShadow: `inset 0 0 0 2px ${rarityDef.color}` } : undefined}>
           {enemy.emoji}
           {isBoss && (
             <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[7px] font-black text-red-400 whitespace-nowrap uppercase tracking-wider leading-none pointer-events-none drop-shadow">
               БОСС
+            </span>
+          )}
+          {rarityDef && (enemy.rarity === 'elite' || enemy.rarity === 'legendary') && (
+            <span className="absolute -top-1 -right-1 text-[10px] leading-none drop-shadow pointer-events-none">
+              {rarityDef.emoji}
             </span>
           )}
         </div>

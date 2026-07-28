@@ -4,6 +4,17 @@ All notable changes to this project will be documented here.
 
 ---
 
+# v0.1.12
+
+### Added
+
+- Damage types: Physical, Fire, Electric, Ice (Ice has no source yet — ready for a future skill/enemy)
+- Fire skill deals Fire damage, Lightning skill deals Electric damage
+- Per-enemy elemental resistance/weakness (Troll: weak to Fire; Zombie: weak to Electric)
+- Elemental resistance stats on equipment (Plate Armor, Void Plate, Wind Walkers, Titan Gauntlets), shown in the character panel and item tooltips
+
+---
+
 # v0.1.11
 
 ### Changed

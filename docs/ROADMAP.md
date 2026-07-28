@@ -59,7 +59,7 @@
 - ✅ Dodge
 - ✅ Block
 - ✅ Status Effects
-- ⬜ Damage Types
+- ✅ Damage Types
 
 ## Equipment
 - ⬜ Rings

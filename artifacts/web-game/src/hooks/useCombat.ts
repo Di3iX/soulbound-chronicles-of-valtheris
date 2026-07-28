@@ -3,8 +3,10 @@ import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import {
   Enemy, KillReward, LocationId, Phase, SKILLS,
   REWARD_TABLE, applyXpGain, RESPAWN_MS, reviveEnemy,
+  EnemyRarity, ENEMY_RARITY_DEFS,
   StatusEffect, STATUS_EFFECT_DEFS, ENEMY_EFFECT_ON_HIT, SKILL_EFFECT_ON_HIT,
   addStatusEffect, tickStatusEffects, hasStatusEffect, slowMultiplier,
+  DamageType, applyResistance,
 } from '../combat';
 import { Item, DROP_TABLES, makeItem } from '../inventory';
 import { EquipBonuses } from '../equipment';
@@ -115,9 +117,10 @@ export function useCombat(ctx: CombatCtx) {
   } = ctx;
 
   // ── Loot drop (called from applyRewards) ──────────────────────────────────
-  const rollLoot = useCallback((enemyName: string): Item | undefined => {
+  const rollLoot = useCallback((enemyName: string, itemChanceBonus = 0, guaranteed = false): Item | undefined => {
     const table = DROP_TABLES[enemyName];
-    if (!table || Math.random() >= table.chance) return undefined;
+    if (!table) return undefined;
+    if (!guaranteed && Math.random() >= table.chance + itemChanceBonus / 100) return undefined;
     const key = table.pool[Math.floor(Math.random() * table.pool.length)];
     const item = makeItem(key);
     setInventory(prev => [...prev, item]);
@@ -177,20 +180,26 @@ export function useCombat(ctx: CombatCtx) {
     return result;
   }, [log]);
 
-  const applyRewards = useCallback((enemyName: string): KillReward => {
+  const applyRewards = useCallback((enemyName: string, rarity: EnemyRarity): KillReward => {
     const reward = REWARD_TABLE[enemyName] ?? { xp: 10, goldMin: 1, goldMax: 3 };
+    const rarityDef = ENEMY_RARITY_DEFS[rarity];
 
-    const goldGained = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
+    const baseGold = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
+    const goldGained = Math.round(baseGold * rarityDef.goldMult);
     playerGoldRef.current += goldGained;
     setPlayerGold(playerGoldRef.current);
-    log(`💰 Получено ${goldGained} золота!`);
 
-    const xpGained = Math.floor(reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    const xpGained = Math.floor(reward.xp * rarityDef.xpMult * (1 + skillBonusesRef.current.xpBonusPct / 100));
+
+    if (rarity !== 'common') {
+      log(`${rarityDef.emoji} ${rarityDef.label} противник повержен!`);
+    }
+    log(`💰 Получено ${goldGained} золота!`);
     log(`✨ Получено ${xpGained} опыта!`);
 
     const { leveledUp, level: newLevel, statPointsGained } = grantXp(xpGained);
 
-    const droppedItem = rollLoot(enemyName);
+    const droppedItem = rollLoot(enemyName, rarityDef.itemChanceBonus, rarityDef.guaranteedDrop);
     return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: statPointsGained, droppedItem };
   }, [log, rollLoot, grantXp]);
 
@@ -259,7 +268,7 @@ export function useCombat(ctx: CombatCtx) {
   }, [log, grantXp]);
 
   // ── Enemy death ──────────────────────────────────────────────────────────
-  const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string) => {
+  const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string, rarity: EnemyRarity) => {
     phaseRef.current = 'victory';
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
@@ -274,7 +283,7 @@ export function useCombat(ctx: CombatCtx) {
     // Boss intercept — rewards and victory handled separately
     if (id === BOSS_ID) { handleBossDeath(); return; }
 
-    const reward = applyRewards(name);
+    const reward = applyRewards(name, rarity);
     setLastKillReward(reward);
 
     // ── Quest: track goblin kills ────────────────────────────────────────────
@@ -334,6 +343,7 @@ export function useCombat(ctx: CombatCtx) {
       let dmg = Math.floor(Math.random() * (_cs.dmgMax - _cs.dmgMin + 1)) + _cs.dmgMin;
       const isCrit = Math.random() * 100 < _cs.critChance;
       if (isCrit) dmg = Math.floor(dmg * _cs.critDamageMult);
+      dmg = applyResistance(dmg, 'physical', enemy.resistances);
       const newHp = Math.max(0, enemy.hp - dmg);
 
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
@@ -341,7 +351,7 @@ export function useCombat(ctx: CombatCtx) {
       spawnFloat(isCrit ? `💥${dmg}` : dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
       log(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона!`);
 
-      if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name); return; }
+      if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity); return; }
 
       // Same stats as above — nothing changed them in between, so no need to recompute.
       if (phaseRef.current === 'combat') {
@@ -389,11 +399,20 @@ export function useCombat(ctx: CombatCtx) {
       }
 
       let dmg = Math.floor(Math.random() * (enemy.dmgMax - enemy.dmgMin + 1)) + enemy.dmgMin;
+      dmg = Math.round(dmg * ENEMY_RARITY_DEFS[enemy.rarity].dmgMult);
       const isBlocked = Math.random() * 100 < _defCs.blockChance;
       if (isBlocked) dmg = Math.ceil(dmg / 2);
       if (shieldRef.current) dmg = Math.ceil(dmg / 2);
       // Defense mitigation: dmg × 100/(100+defense)
       if (_defCs.defense > 0) dmg = Math.max(1, Math.floor(dmg * 100 / (100 + _defCs.defense)));
+      // Elemental resistance (physical is already covered by defense above)
+      const enemyDmgType: DamageType = enemy.dealsDamageType ?? 'physical';
+      if (enemyDmgType !== 'physical') {
+        const playerResist = enemyDmgType === 'fire' ? _defCs.fireResist
+          : enemyDmgType === 'electric' ? _defCs.electricResist
+          : _defCs.iceResist;
+        dmg = applyResistance(dmg, enemyDmgType, { [enemyDmgType]: playerResist });
+      }
 
       spawnFloat(isBlocked ? `🛡️${dmg}` : dmg.toString(), pp.x, pp.y, 'player-dmg');
       log(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!${isBlocked ? ' (блок!)' : ''}`);
@@ -453,22 +472,22 @@ export function useCombat(ctx: CombatCtx) {
       }
 
       // Enemies
-      let killed: { id: number; x: number; y: number; name: string } | null = null;
+      let killed: { id: number; x: number; y: number; name: string; rarity: EnemyRarity } | null = null;
       const nextEnemies = enemiesRef.current.map(e => {
         if (e.dead || e.hp <= 0 || !e.statusEffects?.length) return e;
         const { next, damage } = tickStatusEffects(e.statusEffects);
         if (damage <= 0) return { ...e, statusEffects: next };
         const newHp = Math.max(0, e.hp - damage);
         spawnFloat(damage.toString(), e.x, e.y, 'enemy-dmg');
-        if (newHp === 0 && !killed) killed = { id: e.id, x: e.x, y: e.y, name: e.name };
+        if (newHp === 0 && !killed) killed = { id: e.id, x: e.x, y: e.y, name: e.name, rarity: e.rarity };
         return { ...e, hp: newHp, statusEffects: next };
       });
       enemiesRef.current = nextEnemies;
       setEnemies(nextEnemies);
       if (killed) {
-        const k = killed as { id: number; x: number; y: number; name: string };
+        const k = killed as { id: number; x: number; y: number; name: string; rarity: EnemyRarity };
         log(`☣️ ${k.name} погибает от эффекта!`);
-        handleEnemyDeath(k.id, k.x, k.y, k.name);
+        handleEnemyDeath(k.id, k.x, k.y, k.name, k.rarity);
       }
     }, 1000);
     return () => clearInterval(t);
@@ -553,7 +572,8 @@ export function useCombat(ctx: CombatCtx) {
       if (id === null) return;
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
-      const newHp = Math.max(0, enemy.hp - skill.damage);
+      const dmg = applyResistance(skill.damage, skill.damageType, enemy.resistances);
+      const newHp = Math.max(0, enemy.hp - dmg);
 
       let statusEffects = enemy.statusEffects ?? [];
       const inflict = SKILL_EFFECT_ON_HIT[skill.id];
@@ -565,9 +585,9 @@ export function useCombat(ctx: CombatCtx) {
 
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp, statusEffects } : e);
       setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp, statusEffects } : e));
-      spawnFloat(skill.damage.toString(), enemy.x, enemy.y, 'enemy-dmg');
-      log(`✨ Воин использует ${skill.name} на ${skill.damage} урона!`);
-      if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name);
+      spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
+      log(`✨ Воин использует ${skill.name} на ${dmg} урона!`);
+      if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity);
     }
     if (skill.healSelf > 0) {
       const pp = playerPosRef.current;

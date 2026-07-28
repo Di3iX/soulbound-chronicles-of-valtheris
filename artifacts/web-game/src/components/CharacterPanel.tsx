@@ -139,6 +139,16 @@ export default function CharacterPanel({
           <span className="text-[13px] text-[#888]">Блок</span>
           <span className="text-[13px] font-bold text-white font-mono">{cs.blockChance.toFixed(1)}%</span>
         </div>
+        {(cs.fireResist !== 0 || cs.electricResist !== 0 || cs.iceResist !== 0) && (
+          <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
+            <span className="text-[13px] text-[#888]">Резисты</span>
+            <span className="text-[12px] font-bold font-mono flex gap-2">
+              {cs.fireResist !== 0 && <span className={cs.fireResist > 0 ? 'text-orange-400' : 'text-destructive'}>🔥{cs.fireResist > 0 ? '+' : ''}{cs.fireResist}%</span>}
+              {cs.electricResist !== 0 && <span className={cs.electricResist > 0 ? 'text-[#3a8fc4]' : 'text-destructive'}>⚡{cs.electricResist > 0 ? '+' : ''}{cs.electricResist}%</span>}
+              {cs.iceResist !== 0 && <span className={cs.iceResist > 0 ? 'text-cyan-300' : 'text-destructive'}>❄️{cs.iceResist > 0 ? '+' : ''}{cs.iceResist}%</span>}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between py-2 border-b border-tile-border/40">
           <span className="text-[13px] text-[#888]">Скорость атаки</span>
           <span className="text-[13px] font-bold text-white font-mono">

@@ -12,18 +12,63 @@ export interface Enemy {
   id: number; name: string; emoji: string;
   x: number; y: number;
   hp: number; maxHp: number;
+  baseMaxHp: number;         // unscaled HP from the enemy definition — rarity multiplies this, never itself
   attackInterval: number; dmgMin: number; dmgMax: number;
   dead: boolean;
   deadAt?: number;           // Date.now() timestamp when it died — drives respawn timing
+  rarity: EnemyRarity;
   statusEffects?: StatusEffect[];
+  /** % resist (positive) or weakness (negative) per damage type this enemy takes. */
+  resistances?: Partial<Record<DamageType, number>>;
+  /** Damage type this enemy deals to the player. Defaults to 'physical' if unset. */
+  dealsDamageType?: DamageType;
 }
 
 /** How long (ms) a slain normal enemy stays dead before respawning at its spot. */
 export const RESPAWN_MS = 30_000;
 
-/** Reset a dead enemy back to full health at its original spot. Everything else (position, stats) is unchanged. */
+// ── Enemy rarity (rolled fresh on every spawn/respawn) ────────────────────────
+export type EnemyRarity = 'common' | 'uncommon' | 'rare' | 'elite' | 'legendary';
+
+export interface EnemyRarityDef {
+  label: string;
+  emoji: string;
+  color: string;            // hex, for name/border tinting
+  chance: number;           // spawn probability — all five sum to 1.0
+  hpMult: number;
+  dmgMult: number;
+  xpMult: number;
+  goldMult: number;
+  itemChanceBonus: number;  // percentage points added to the loot-table roll
+  guaranteedDrop: boolean;
+}
+
+export const ENEMY_RARITY_DEFS: Record<EnemyRarity, EnemyRarityDef> = {
+  common:    { label: 'Обычный',     emoji: '⚪', color: '#9ca3af', chance: 0.70, hpMult: 1,   dmgMult: 1.0, xpMult: 1,    goldMult: 1,    itemChanceBonus: 0,  guaranteedDrop: false },
+  uncommon:  { label: 'Необычный',   emoji: '🟢', color: '#4ade80', chance: 0.18, hpMult: 1.2, dmgMult: 1.1, xpMult: 1.15, goldMult: 1.15, itemChanceBonus: 0,  guaranteedDrop: false },
+  rare:      { label: 'Редкий',      emoji: '🔵', color: '#60a5fa', chance: 0.08, hpMult: 1.5, dmgMult: 1.2, xpMult: 1.35, goldMult: 1.35, itemChanceBonus: 10, guaranteedDrop: false },
+  elite:     { label: 'Элитный',     emoji: '🟣', color: '#c084fc', chance: 0.03, hpMult: 2.0, dmgMult: 1.3, xpMult: 1.75, goldMult: 1.75, itemChanceBonus: 25, guaranteedDrop: false },
+  legendary: { label: 'Легендарный', emoji: '🟠', color: '#fbbf24', chance: 0.01, hpMult: 3.0, dmgMult: 1.6, xpMult: 2.5,  goldMult: 2.5,  itemChanceBonus: 0,  guaranteedDrop: true  },
+};
+
+const RARITY_ORDER: EnemyRarity[] = ['common', 'uncommon', 'rare', 'elite', 'legendary'];
+
+/** Weighted random rarity roll — used for every normal-enemy spawn and respawn. */
+export function rollEnemyRarity(): EnemyRarity {
+  const r = Math.random();
+  let acc = 0;
+  for (const key of RARITY_ORDER) {
+    acc += ENEMY_RARITY_DEFS[key].chance;
+    if (r < acc) return key;
+  }
+  return 'common';
+}
+
+/** Reset a dead enemy back to full health at its original spot, rolling a fresh rarity. */
 export function reviveEnemy(enemy: Enemy): Enemy {
-  return { ...enemy, dead: false, hp: enemy.maxHp, statusEffects: [], deadAt: undefined };
+  const rarity = rollEnemyRarity();
+  const maxHp  = Math.round(enemy.baseMaxHp * ENEMY_RARITY_DEFS[rarity].hpMult);
+  return { ...enemy, dead: false, hp: maxHp, maxHp, rarity, statusEffects: [], deadAt: undefined };
 }
 
 export interface KillReward {
@@ -98,13 +143,22 @@ export const slowMultiplier = (effects: StatusEffect[] | undefined): number => {
 };
 
 // ── Skills ────────────────────────────────────────────────────────────────────
+export type DamageType = 'physical' | 'fire' | 'electric' | 'ice';
+
 export const SKILLS = [
-  { id: 1, name: 'Удар',    emoji: '⚔️', damage: 28, healSelf: 0,  maxCd: 25, manaCost: 0  },
-  { id: 2, name: 'Огонь',   emoji: '🔥', damage: 42, healSelf: 0,  maxCd: 45, manaCost: 25 },
-  { id: 3, name: 'Лечение', emoji: '💚', damage: 0,  healSelf: 30, maxCd: 55, manaCost: 20 },
-  { id: 4, name: 'Молния',  emoji: '⚡', damage: 38, healSelf: 0,  maxCd: 40, manaCost: 20 },
-  { id: 5, name: 'Щит',     emoji: '🛡️', damage: 0,  healSelf: 0,  maxCd: 35, manaCost: 15 },
+  { id: 1, name: 'Удар',    emoji: '⚔️', damage: 28, healSelf: 0,  maxCd: 25, manaCost: 0,  damageType: 'physical' as DamageType },
+  { id: 2, name: 'Огонь',   emoji: '🔥', damage: 42, healSelf: 0,  maxCd: 45, manaCost: 25, damageType: 'fire'     as DamageType },
+  { id: 3, name: 'Лечение', emoji: '💚', damage: 0,  healSelf: 30, maxCd: 55, manaCost: 20, damageType: 'physical' as DamageType },
+  { id: 4, name: 'Молния',  emoji: '⚡', damage: 38, healSelf: 0,  maxCd: 40, manaCost: 20, damageType: 'electric' as DamageType },
+  { id: 5, name: 'Щит',     emoji: '🛡️', damage: 0,  healSelf: 0,  maxCd: 35, manaCost: 15, damageType: 'physical' as DamageType },
 ];
+
+/** Reduces (or, for a negative value, amplifies) damage of a given type. `pct`: positive = resistance, negative = weakness. */
+export function applyResistance(dmg: number, type: DamageType, resistances?: Partial<Record<DamageType, number>>): number {
+  const pct = resistances?.[type] ?? 0;
+  if (pct === 0) return dmg;
+  return Math.max(1, Math.round(dmg * (1 - pct / 100)));
+}
 
 // ── Progression constants ─────────────────────────────────────────────────────
 export const BASE_XP_PER_LEVEL     = 100;
@@ -194,7 +248,7 @@ export function applyXpGain(
 
 /** Instantiate fresh enemy instances for a given location. */
 export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
-  const defs: Record<LocationId, Array<Omit<Enemy, 'id'>>> = {
+  const defs: Record<LocationId, Array<Omit<Enemy, 'id' | 'baseMaxHp' | 'rarity'>>> = {
     village: [],
     forest: [
       { name: 'Гоблин', emoji: '👺', x: 5,  y: 2,  hp: 150, maxHp: 150, attackInterval: 2200, dmgMin: 5,  dmgMax: 12, dead: false },
@@ -223,5 +277,15 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       { name: 'Тролль', emoji: '👾', x: 15, y: 15, hp: 400, maxHp: 400, attackInterval: 4500, dmgMin: 18, dmgMax: 30, dead: false },
     ],
   };
-  return defs[loc].map((d, i) => ({ ...d, id: i + 1 }));
+  return defs[loc].map((d, i) => {
+    const rarity = rollEnemyRarity();
+    const maxHp  = Math.round(d.maxHp * ENEMY_RARITY_DEFS[rarity].hpMult);
+    return { ...d, id: i + 1, baseMaxHp: d.maxHp, maxHp, hp: maxHp, rarity, resistances: ENEMY_RESISTANCES[d.name] };
+  });
+};
+
+/** Elemental resist/weakness examples — % positive = resist, negative = weakness (extra damage taken). */
+const ENEMY_RESISTANCES: Record<string, Partial<Record<DamageType, number>>> = {
+  'Тролль': { fire: -50 },     // trolls regenerate, but fire stops that cold — classic weakness
+  'Зомби':  { electric: -30 }, // decayed flesh conducts poorly, extra damage from shock
 };

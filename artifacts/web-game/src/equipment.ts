@@ -25,6 +25,9 @@ export interface EquipBonuses {
   critDamage:      number;
   dodgeChance:     number;
   blockChance:     number;
+  fireResist:      number;
+  electricResist:  number;
+  iceResist:       number;
   mana:            number;
 }
 
@@ -32,6 +35,7 @@ export const EMPTY_EQUIPMENT: Equipment = { weapon: null, helmet: null, armor: n
 export const ZERO_EQUIP_BONUSES: EquipBonuses = {
   damage: 0, hp: 0, strength: 0, agility: 0, atkSpeedPenalty: 0,
   vitality: 0, intelligence: 0, defense: 0, critChance: 0, critDamage: 0, dodgeChance: 0, blockChance: 0, mana: 0,
+  fireResist: 0, electricResist: 0, iceResist: 0,
 };
 
 export const SLOT_META: Record<keyof Equipment, { label: string; icon: string }> = {
@@ -58,6 +62,9 @@ export function calcEquipBonuses(eq: Equipment): EquipBonuses {
       critDamage:      acc.critDamage      + (item.bonuses.critDamage      ?? 0),
       dodgeChance:     acc.dodgeChance     + (item.bonuses.dodgeChance     ?? 0),
       blockChance:     acc.blockChance     + (item.bonuses.blockChance     ?? 0),
+      fireResist:      acc.fireResist      + (item.bonuses.fireResist     ?? 0),
+      electricResist:  acc.electricResist  + (item.bonuses.electricResist ?? 0),
+      iceResist:       acc.iceResist       + (item.bonuses.iceResist      ?? 0),
       mana:            acc.mana            + (item.bonuses.mana           ?? 0),
     }),
     { ...ZERO_EQUIP_BONUSES }

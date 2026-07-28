@@ -17,6 +17,9 @@ export interface ItemBonuses {
   critDamage?:      number; // flat % added to crit damage bonus
   dodgeChance?:     number; // flat % added to dodge chance
   blockChance?:     number; // flat % added to block chance
+  fireResist?:      number; // flat % reduction of fire damage taken (negative = weakness)
+  electricResist?:  number; // flat % reduction of electric damage taken
+  iceResist?:       number; // flat % reduction of ice damage taken
   mana?:            number; // flat MP bonus
 }
 
@@ -116,16 +119,16 @@ export const AFFIX_TABLE: Record<string, AffixRange> = {
   // ── Armor ─────────────────────────────────────────────────────────────────────
   leather_armor:   { hp: [20, 40]                                 },  // spec: +20–40
   chainmail:       { hp: [32, 50], blockChance: [3, 6]                },
-  plate_armor:     { hp: [48, 72]                                 },
-  void_plate:      { hp: [70, 110], strength: [1, 3]             },
+  plate_armor:     { hp: [48, 72], fireResist: [3, 6]              },
+  void_plate:      { hp: [70, 110], strength: [1, 3], electricResist: [4, 8] },
   // ── Gloves ───────────────────────────────────────────────────────────────────
   leather_gloves:  { strength: [1, 3]                             },  // spec: +1–3
   battle_gloves:   { strength: [1, 3]                             },
-  titan_gauntlets: { strength: [3,  5], hp: [15, 25]             },
+  titan_gauntlets: { strength: [3,  5], hp: [15, 25], fireResist: [2, 4] },
   // ── Boots ────────────────────────────────────────────────────────────────────
   light_boots:     { agility: [1, 2]                              },
   scout_boots:     { agility: [1, 3]                              },  // spec: +1–3
-  wind_walkers:    { agility: [4,  6], hp: [10, 20]              },
+  wind_walkers:    { agility: [4,  6], hp: [10, 20], iceResist: [3, 5]  },
   // ── Magic weapons ────────────────────────────────────────────────────────────
   arcane_staff:    { damage: [6, 10], hp: [15, 25], mana: [15, 25] },
 };
@@ -181,6 +184,9 @@ export function formatBonuses(b: ItemBonuses): string[] {
   if (b.critDamage)      lines.push(`+${b.critDamage}% крит.урон`);
   if (b.dodgeChance)     lines.push(`+${b.dodgeChance}% уклон.`);
   if (b.blockChance)     lines.push(`+${b.blockChance}% блок`);
+  if (b.fireResist)      lines.push(`${b.fireResist > 0 ? '+' : ''}${b.fireResist}% огн.рез.`);
+  if (b.electricResist)  lines.push(`${b.electricResist > 0 ? '+' : ''}${b.electricResist}% электр.рез.`);
+  if (b.iceResist)       lines.push(`${b.iceResist > 0 ? '+' : ''}${b.iceResist}% лед.рез.`);
   if (b.atkSpeedPenalty) lines.push(`−${b.atkSpeedPenalty}% скор.`);
   return lines;
 }
