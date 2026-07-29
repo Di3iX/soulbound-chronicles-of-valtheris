@@ -14,9 +14,12 @@ import { BaseStats, computeStats } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, QUEST_DEFS } from '../quests/quests';
 import {
-  BOSS_ID, CAVE_BOSS_DEF, BOSS_REWARD, BOSS_RARE_CHANCE, BOSS_RARE_LOOT, BOSS_COMMON_LOOT,
-  BOSS_RESPAWN_MS,
-  BossState, BossRewardInfo, makeBossTrophy,
+  BOSS_ID, FIELD_BOSS_ID,
+  CAVE_BOSS_DEF, FIELD_BOSS_DEF,
+  BOSS_REWARD, FIELD_BOSS_REWARD,
+  BOSS_RARE_CHANCE, BOSS_RARE_LOOT, BOSS_COMMON_LOOT,
+  BOSS_RESPAWN_MS, FIELD_BOSS_RESPAWN_MS,
+  BossState, BossRewardInfo, makeBossTrophy, makeFieldBossTrophy,
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
 
@@ -217,6 +220,21 @@ export function useCombat(ctx: CombatCtx) {
     log('⚔️ Появился Босс: Главарь гоблинов!');
   }, [log]);
 
+  // ── Field Mini-Boss: Огромный Кабан ───────────────────────────────────────
+  const spawnFieldBoss = useCallback(() => {
+    if (enemiesRef.current.some(e => e.id === FIELD_BOSS_ID)) return;
+    const bossEnemy: Enemy = { ...FIELD_BOSS_DEF, id: FIELD_BOSS_ID };
+    enemiesRef.current = [...enemiesRef.current, bossEnemy];
+    setEnemies(prev => [...prev, bossEnemy]);
+    phaseRef.current = 'explore';
+    setPhase('explore');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossAppearNotif(true);
+    setTimeout(() => setBossAppearNotif(false), 3500);
+    log('⚔️ Появился мини-босс: Огромный Кабан!');
+  }, [log]);
+
   // ── Cave Boss: handle kill + rewards ──────────────────────────────────────
   const handleBossDeath = useCallback(() => {
     // Enemy already marked dead + player position already set by handleEnemyDeath
@@ -256,7 +274,10 @@ export function useCombat(ctx: CombatCtx) {
     }
 
     // Start the respawn timer — boss reappears in BOSS_RESPAWN_MS
-    const newBS: BossState = { caveChief: { firstKillDone: true, deadAt: Date.now() } };
+    const newBS: BossState = {
+      ...bossStateRef.current,
+      caveChief: { firstKillDone: true, deadAt: Date.now() },
+    };
     bossStateRef.current = newBS;
     setBossState(newBS);
 
@@ -264,6 +285,52 @@ export function useCombat(ctx: CombatCtx) {
     setActiveEnemyId(null);
     activeEnemyIdRef.current = null;
     setBossRewardInfo({ xp: xpGained, gold: BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
+    setShowBossVictory(true);
+  }, [log, grantXp]);
+
+  // ── Field Mini-Boss: handle kill + rewards ────────────────────────────────
+  const handleFieldBossDeath = useCallback(() => {
+    log('🐗 Огромный Кабан повержен!');
+
+    playerGoldRef.current += FIELD_BOSS_REWARD.gold;
+    setPlayerGold(playerGoldRef.current);
+    log(`💰 Получено ${FIELD_BOSS_REWARD.gold} золота!`);
+
+    const xpGained = Math.floor(FIELD_BOSS_REWARD.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    log(`✨ Получено ${xpGained} опыта!`);
+
+    const { leveledUp, level: newLevel } = grantXp(xpGained);
+
+    const isRare    = Math.random() < BOSS_RARE_CHANCE;
+    const dropPool  = isRare ? [...BOSS_RARE_LOOT] : [...BOSS_COMMON_LOOT];
+    const dropKey   = dropPool[Math.floor(Math.random() * dropPool.length)];
+    const dropItem  = makeItem(dropKey);
+    inventoryRef.current = [...inventoryRef.current, dropItem];
+    setInventory(prev => [...prev, dropItem]);
+    setLootNotif(dropItem.name);
+    setTimeout(() => setLootNotif(null), 2500);
+    log(`📦 Получен лут: ${dropItem.name}!`);
+
+    const fieldState = bossStateRef.current.fieldBoar ?? { firstKillDone: false };
+    const wasFirstKill = !fieldState.firstKillDone;
+    let trophyItem: Item | undefined;
+    if (wasFirstKill) {
+      trophyItem = makeFieldBossTrophy();
+      inventoryRef.current = [...inventoryRef.current, trophyItem];
+      setInventory(prev => [...prev, trophyItem!]);
+      log('🏆 Получен трофей: Клык огромного кабана!');
+    }
+
+    const newBS: BossState = {
+      ...bossStateRef.current,
+      fieldBoar: { firstKillDone: true, deadAt: Date.now() },
+    };
+    bossStateRef.current = newBS;
+    setBossState(newBS);
+
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossRewardInfo({ xp: xpGained, gold: FIELD_BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
     setShowBossVictory(true);
   }, [log, grantXp]);
 
@@ -282,6 +349,7 @@ export function useCombat(ctx: CombatCtx) {
 
     // Boss intercept — rewards and victory handled separately
     if (id === BOSS_ID) { handleBossDeath(); return; }
+    if (id === FIELD_BOSS_ID) { handleFieldBossDeath(); return; }
 
     const reward = applyRewards(name, rarity);
     setLastKillReward(reward);
@@ -314,7 +382,7 @@ export function useCombat(ctx: CombatCtx) {
         setActiveEnemyId(null); activeEnemyIdRef.current = null;
       }
     }, 1500);
-  }, [log, applyRewards, handleBossDeath]);
+  }, [log, applyRewards, handleBossDeath, handleFieldBossDeath]);
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'combat') return;
@@ -501,7 +569,7 @@ export function useCombat(ctx: CombatCtx) {
       // Normal enemies: revive any that have been dead long enough, in place.
       let changed = false;
       const revived = enemiesRef.current.map(e => {
-        if (e.id === BOSS_ID) return e;
+        if (e.id === BOSS_ID || e.id === FIELD_BOSS_ID) return e;
         if (e.dead && e.deadAt !== undefined && now - e.deadAt >= RESPAWN_MS) {
           changed = true;
           return reviveEnemy(e);
@@ -523,9 +591,21 @@ export function useCombat(ctx: CombatCtx) {
           spawnCaveBoss();
         }
       }
+
+      // Field mini-boss (Тихие поля): каждые 15 минут
+      if (currentLocationRef.current === 'forest') {
+        const bossAbsent = !enemiesRef.current.some(e => e.id === FIELD_BOSS_ID);
+        const fb = bossStateRef.current.fieldBoar ?? { firstKillDone: false };
+        const deadAt = fb.deadAt;
+        const offCooldown = deadAt === undefined || now - deadAt >= FIELD_BOSS_RESPAWN_MS;
+        const areaClear = enemiesRef.current.every(e => e.id === FIELD_BOSS_ID || e.dead);
+        if (bossAbsent && offCooldown && areaClear) {
+          spawnFieldBoss();
+        }
+      }
     }, 1000);
     return () => clearInterval(t);
-  }, [spawnCaveBoss]);
+  }, [spawnCaveBoss, spawnFieldBoss]);
 
   // ── Skill cooldowns ───────────────────────────────────────────────────────
   useEffect(() => {
