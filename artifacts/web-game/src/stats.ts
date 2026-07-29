@@ -149,6 +149,7 @@ export function computeStats(input: StatsInput): ComputedStats {
   return {
     totalStrength, totalAgility, totalVitality, totalIntelligence,
     maxHp,
+    maxMp,
     dmgMin, dmgMax,
     critChance:    Math.round(critChance    * 10) / 10,
     critDamagePct,
