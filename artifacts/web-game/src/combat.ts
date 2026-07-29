@@ -261,7 +261,7 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       { name: 'Крыса',         emoji: '🐀', x: 5,  y: 2,  hp: 60,  maxHp: 60,  attackInterval: 1600, dmgMin: 2,  dmgMax: 6,  dead: false },
       { name: 'Крыса',         emoji: '🐀', x: 14, y: 5,  hp: 60,  maxHp: 60,  attackInterval: 1600, dmgMin: 2,  dmgMax: 6,  dead: false },
       { name: 'Кролик',        emoji: '🐇', x: 8,  y: 8,  hp: 40,  maxHp: 40,  attackInterval: 2000, dmgMin: 1,  dmgMax: 3,  dead: false },
-      { name: 'Ворон',         emoji: '🐦‍⬛', x: 16, y: 4,  hp: 80,  maxHp: 80,  attackInterval: 1200, dmgMin: 3,  dmgMax: 7,  dead: false },
+      { name: 'Ворон',         emoji: '🐦', x: 16, y: 4,  hp: 80,  maxHp: 80,  attackInterval: 1200, dmgMin: 3,  dmgMax: 7,  dead: false },
       { name: 'Молодой кабан', emoji: '🐗', x: 8,  y: 13, hp: 140, maxHp: 140, attackInterval: 2400, dmgMin: 6,  dmgMax: 12, dead: false },
       { name: 'Полевая змея',  emoji: '🐍', x: 16, y: 14, hp: 110, maxHp: 110, attackInterval: 1800, dmgMin: 5,  dmgMax: 11, dead: false },
       { name: 'Молодой кабан', emoji: '🐗', x: 4,  y: 17, hp: 140, maxHp: 140, attackInterval: 2400, dmgMin: 6,  dmgMax: 12, dead: false },
