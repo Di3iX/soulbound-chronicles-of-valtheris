@@ -18,7 +18,7 @@ import {
 } from './equipment';
 import {
   LocationId, Phase, Enemy, KillReward, StatusEffect,
-  xpRequired, makeLocationEnemies,
+  xpRequired, makeLocationEnemies, ENEMY_RARITY_DEFS,
 } from './combat';
 import {
   BaseStats, ComputedStats, INITIAL_BASE_STATS, INITIAL_HP, INITIAL_MP,
