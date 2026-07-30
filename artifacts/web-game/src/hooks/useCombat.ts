@@ -12,7 +12,7 @@ import { Item, DROP_TABLES, makeItem } from '../inventory';
 import { EquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
-import { QuestProgress, QUEST_DEFS } from '../quests/quests';
+import { QuestProgress, trackKillForQuests } from '../quests/quests';
 import {
   BOSS_ID, FIELD_BOSS_ID,
   CAVE_BOSS_DEF, FIELD_BOSS_DEF,
@@ -354,22 +354,13 @@ export function useCombat(ctx: CombatCtx) {
     const reward = applyRewards(name, rarity);
     setLastKillReward(reward);
 
-    // ── Quest: track goblin kills ────────────────────────────────────────────
-    if (name === 'Гоблин') {
-      const qid   = 'quest_goblin_001';
-      const def   = QUEST_DEFS[qid];
-      const entry = questProgressRef.current[qid] ?? { status: 'inactive' as const, current: 0 };
-      if (entry.status === 'active' && entry.current < def.objective.required) {
-        const newCurrent = entry.current + 1;
-        const updated: QuestProgress = {
-          ...questProgressRef.current,
-          [qid]: { status: 'active' as const, current: newCurrent },
-        };
-        questProgressRef.current = updated;
-        setQuestProgress(updated);
-        log(`📜 Гоблины: ${newCurrent} / ${def.objective.required}`);
-        if (newCurrent >= def.objective.required)
-          log('✅ Цель выполнена! Вернитесь к Старейшине.');
+    // ── Quest progress (any active quest matching this enemy name) ───────────
+    {
+      const { progress: qp, logs: qLogs } = trackKillForQuests(questProgressRef.current, name);
+      if (qLogs.length) {
+        questProgressRef.current = qp;
+        setQuestProgress(qp);
+        for (const msg of qLogs) log(msg);
       }
     }
 
