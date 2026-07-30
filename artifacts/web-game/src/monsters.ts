@@ -35,6 +35,8 @@ export interface MonsterDef {
   hp:       number;
   dmgMin:   number;
   dmgMax:   number;
+  /** Damage type dealt to the player. Default physical. */
+  damageType?: DamageType;
   speed:    SpeedTier;
   xp:       number;
   goldMin:  number;
@@ -124,12 +126,14 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   // ── Ледяные пики (9–15) ───────────────────────────────────────────────────
   'Ледяной волк': {
     name: 'Ледяной волк', emoji: '🐺', level: 10, hp: 250, dmgMin: 12, dmgMax: 20,
+    damageType: 'ice',
     speed: 'fast', xp: 70, goldMin: 15, goldMax: 28,
     dropChance: 0.35, dropPool: ['wolf_hide', 'wolf_fang', 'ice_shard'],
     resists: { fire: -25, ice: 40 },
   },
   'Снежный паук': {
     name: 'Снежный паук', emoji: '🕷️', level: 11, hp: 220, dmgMin: 10, dmgMax: 18,
+    damageType: 'ice',
     speed: 'fast', xp: 75, goldMin: 16, goldMax: 28,
     dropChance: 0.35, dropPool: ['spider_silk', 'ice_shard'],
     ability: { effect: 'slow', chance: 0.30, label: 'Замедление (30%)' },
@@ -137,6 +141,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   },
   'Йети': {
     name: 'Йети', emoji: '👹', level: 14, hp: 450, dmgMin: 20, dmgMax: 32,
+    damageType: 'ice',
     speed: 'slow', xp: 110, goldMin: 25, goldMax: 40,
     dropChance: 0.45, dropPool: ['yeti_fur', 'ice_shard', 'healing_potion'],
     ability: { effect: 'slow', chance: 0.30, label: 'Замедление (30%)' },
@@ -232,6 +237,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   // ── Ледяная крепость (35–40) ──────────────────────────────────────────────
   'Рыцарь льда': {
     name: 'Рыцарь льда', emoji: '🛡️', level: 36, hp: 700, dmgMin: 30, dmgMax: 45,
+    damageType: 'ice',
     speed: 'slow', xp: 220, goldMin: 45, goldMax: 70,
     dropChance: 0.55, dropPool: ['ice_shard', 'plate_armor', 'iron_sword', 'pendant_of_protection'],
     ability: { effect: 'slow', chance: 0.25, label: 'Ледяной удар (25%)' },
@@ -239,6 +245,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   },
   'Маг льда': {
     name: 'Маг льда', emoji: '❄️', level: 38, hp: 450, dmgMin: 28, dmgMax: 42,
+    damageType: 'ice',
     speed: 'normal', xp: 200, goldMin: 40, goldMax: 65,
     dropChance: 0.55, dropPool: ['ice_shard', 'arcane_staff', 'mana_potion', 'amulet_of_wisdom'],
     ability: { effect: 'slow', chance: 0.40, label: 'Мороз (40%)' },
