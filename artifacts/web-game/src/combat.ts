@@ -25,7 +25,7 @@ export interface Enemy {
 }
 
 /** How long (ms) a slain normal enemy stays dead before respawning at its spot. */
-export const RESPAWN_MS = 30_000;
+export const RESPAWN_MS = 90_000;  // 90 sec — enough time to clear a zone
 
 // ── Enemy rarity (rolled fresh on every spawn/respawn) ────────────────────────
 export type EnemyRarity = 'common' | 'uncommon' | 'rare' | 'elite' | 'legendary';
