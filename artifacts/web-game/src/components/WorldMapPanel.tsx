@@ -1,11 +1,13 @@
 import React from 'react';
 import { LocationId, Phase } from '../combat';
 import { getLocation, isConnected } from '../world/locations';
+import { LOCATION_MIN_LEVEL } from '../world/progression';
 
 interface WorldMapPanelProps {
   currentLocation: LocationId;
   phase: Phase;
   transitioning: boolean;
+  playerLevel: number;
   onTravel: (to: LocationId) => void;
   onClose: () => void;
 }
@@ -50,7 +52,7 @@ const EDGES: [number, number, number, number][] = [
 ];
 
 export default function WorldMapPanel({
-  currentLocation, phase, transitioning, onTravel, onClose,
+  currentLocation, phase, transitioning, playerLevel, onTravel, onClose,
 }: WorldMapPanelProps) {
   return (
     <div className="absolute inset-0 z-[60] bg-[#08080d]/97 flex flex-col rounded backdrop-blur-md">
@@ -86,8 +88,10 @@ export default function WorldMapPanel({
         {NODES.map(({ id, cx, cy }) => {
           const loc       = getLocation(id);
           const isCurrent = id === currentLocation;
-          const canTravel = !isCurrent && isConnected(currentLocation, id) && phase === 'explore' && !transitioning;
+          const lvlOk = playerLevel >= (LOCATION_MIN_LEVEL[id] ?? 1);
+          const canTravel = !isCurrent && isConnected(currentLocation, id) && phase === 'explore' && !transitioning && lvlOk;
           const reachable = isCurrent || isConnected(currentLocation, id);
+          const lockedByLevel = reachable && !isCurrent && !lvlOk;
           return (
             <button key={id}
               onClick={() => canTravel && onTravel(id)}
@@ -112,7 +116,9 @@ export default function WorldMapPanel({
               <span className={`text-[9px] font-bold leading-tight ${isCurrent ? 'text-primary' : 'text-[#bbb]'}`}>
                 {loc.name}
               </span>
-              <span className="text-[8px] text-[#555] leading-none font-mono">Ур.{loc.recommendedLevel}</span>
+              <span className={`text-[8px] leading-none font-mono ${lockedByLevel ? 'text-red-400' : 'text-[#555]'}`}>
+                {lockedByLevel ? `с ${LOCATION_MIN_LEVEL[id]} ур.` : `Ур.${loc.recommendedLevel}`}
+              </span>
             </button>
           );
         })}
