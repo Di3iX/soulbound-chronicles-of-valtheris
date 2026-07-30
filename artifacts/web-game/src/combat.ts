@@ -98,8 +98,8 @@ interface StatusEffectDef {
 }
 
 export const STATUS_EFFECT_DEFS: Record<StatusEffectType, StatusEffectDef> = {
-  poison: { durationMs: 3000, tickDamage: 5,  icon: '🐍', label: 'Яд' },
-  burn:   { durationMs: 3000, tickDamage: 10, icon: '🔥', label: 'Поджог' },
+  poison: { durationMs: 4000, tickDamage: 6,  icon: '🐍', label: 'Яд' },
+  burn:   { durationMs: 3000, tickDamage: 10, icon: '🔥', label: 'Горение' },
   slow:   { durationMs: 4000, slowPct: 30,    icon: '🐌', label: 'Замедление' },
   stun:   { durationMs: 1500,                 icon: '💫', label: 'Оглушение' },
 };
@@ -157,6 +157,26 @@ export function applyResistance(dmg: number, type: DamageType, resistances?: Par
   const pct = resistances?.[type] ?? 0;
   if (pct === 0) return dmg;
   return Math.max(1, Math.round(dmg * (1 - pct / 100)));
+}
+
+/** Effect chance multiplier from player resists (0.1–1). */
+export function effectChanceMultiplier(
+  effect: StatusEffectType,
+  resists: { fire?: number; electric?: number; ice?: number },
+): number {
+  const pct =
+    effect === 'burn' ? (resists.fire ?? 0) :
+    effect === 'slow' ? (resists.ice ?? 0) :
+    0;
+  if (pct <= 0) return 1;
+  return Math.max(0.1, 1 - pct / 100);
+}
+
+export const DAMAGE_TYPE_LABEL: Record<DamageType, string> = {
+  physical: 'физ.',
+  fire: 'огонь',
+  electric: 'молния',
+  ice: 'лёд',
 }
 
 // ── Progression constants ─────────────────────────────────────────────────────
@@ -311,6 +331,7 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       dead: false,
       rarity,
       resistances: ENEMY_RESISTANCES[s.name],
+      dealsDamageType: def?.damageType ?? 'physical',
     };
   });
 };
