@@ -6,7 +6,7 @@ import {
   EnemyRarity, ENEMY_RARITY_DEFS,
   StatusEffect, STATUS_EFFECT_DEFS, ENEMY_EFFECT_ON_HIT, SKILL_EFFECT_ON_HIT,
   addStatusEffect, tickStatusEffects, hasStatusEffect, slowMultiplier,
-  DamageType, applyResistance,
+  DamageType, applyResistance, effectChanceMultiplier, DAMAGE_TYPE_LABEL,
 } from '../combat';
 import { Item, DROP_TABLES, makeItem } from '../inventory';
 import { EquipBonuses } from '../equipment';
@@ -411,13 +411,15 @@ export function useCombat(ctx: CombatCtx) {
       let dmg = Math.floor(Math.random() * (_cs.dmgMax - _cs.dmgMin + 1)) + _cs.dmgMin;
       const isCrit = Math.random() * 100 < _cs.critChance;
       if (isCrit) dmg = Math.floor(dmg * _cs.critDamageMult);
+      const rawDmg = dmg;
       dmg = applyResistance(dmg, 'physical', enemy.resistances);
       const newHp = Math.max(0, enemy.hp - dmg);
 
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
       setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
       spawnFloat(isCrit ? `💥${dmg}` : dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
-      log(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона!`);
+      const resistNote = dmg !== rawDmg ? (dmg < rawDmg ? ' (резист)' : ' (слабость)') : '';
+      log(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона${resistNote}!`);
 
       if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity); return; }
 
@@ -473,30 +475,49 @@ export function useCombat(ctx: CombatCtx) {
       if (shieldRef.current) dmg = Math.ceil(dmg / 2);
       // Defense mitigation: dmg × 100/(100+defense)
       if (_defCs.defense > 0) dmg = Math.max(1, Math.floor(dmg * 100 / (100 + _defCs.defense)));
-      // Elemental resistance (physical is already covered by defense above)
+      // Elemental / typed resistance (physical mitigation already applied via defense above)
       const enemyDmgType: DamageType = enemy.dealsDamageType ?? 'physical';
+      let typeNote = '';
       if (enemyDmgType !== 'physical') {
         const playerResist = enemyDmgType === 'fire' ? _defCs.fireResist
           : enemyDmgType === 'electric' ? _defCs.electricResist
           : _defCs.iceResist;
+        const before = dmg;
         dmg = applyResistance(dmg, enemyDmgType, { [enemyDmgType]: playerResist });
+        if (dmg !== before) {
+          typeNote = dmg < before
+            ? ` (−${DAMAGE_TYPE_LABEL[enemyDmgType]} резист)`
+            : ` (+${DAMAGE_TYPE_LABEL[enemyDmgType]} слабость)`;
+        } else if (playerResist) {
+          typeNote = ` [${DAMAGE_TYPE_LABEL[enemyDmgType]}]`;
+        } else {
+          typeNote = ` [${DAMAGE_TYPE_LABEL[enemyDmgType]}]`;
+        }
       }
 
       spawnFloat(isBlocked ? `🛡️${dmg}` : dmg.toString(), pp.x, pp.y, 'player-dmg');
-      log(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!${isBlocked ? ' (блок!)' : ''}`);
+      log(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!${isBlocked ? ' (блок!)' : ''}${typeNote}`);
 
       const prevHp = playerHpRef.current;
       const newHp  = Math.max(0, prevHp - dmg);
       playerHpRef.current = newHp; setPlayerHp(newHp);
 
-      // Status effect on hit (e.g. spider poison, orc stun, troll slow) — only if the player survived
+      // Status effect on hit — chance reduced by matching player resists
       const onHit = ENEMY_EFFECT_ON_HIT[enemy.name];
-      if (onHit && newHp > 0 && Math.random() < onHit.chance) {
-        const nextEffects = addStatusEffect(playerStatusEffectsRef.current, onHit.effect);
-        playerStatusEffectsRef.current = nextEffects;
-        setPlayerStatusEffects(nextEffects);
-        const def = STATUS_EFFECT_DEFS[onHit.effect];
-        log(`${def.icon} Вы получаете эффект «${def.label}»!`);
+      if (onHit && newHp > 0) {
+        const chanceMult = effectChanceMultiplier(onHit.effect, {
+          fire: _defCs.fireResist,
+          electric: _defCs.electricResist,
+          ice: _defCs.iceResist,
+        });
+        const finalChance = onHit.chance * chanceMult;
+        if (Math.random() < finalChance) {
+          const nextEffects = addStatusEffect(playerStatusEffectsRef.current, onHit.effect);
+          playerStatusEffectsRef.current = nextEffects;
+          setPlayerStatusEffects(nextEffects);
+          const def = STATUS_EFFECT_DEFS[onHit.effect];
+          log(`${def.icon} Вы получаете эффект «${def.label}»!`);
+        }
       }
 
       if (prevHp > 0 && newHp === 0) {
@@ -592,14 +613,13 @@ export function useCombat(ctx: CombatCtx) {
         }
       }
 
-      // Field mini-boss (Тихие поля): каждые 15 минут
+      // Field mini-boss (Тихие поля): каждые 15 минут — без обязательной зачистки
       if (currentLocationRef.current === 'forest') {
         const bossAbsent = !enemiesRef.current.some(e => e.id === FIELD_BOSS_ID);
         const fb = bossStateRef.current.fieldBoar ?? { firstKillDone: false };
         const deadAt = fb.deadAt;
         const offCooldown = deadAt === undefined || now - deadAt >= FIELD_BOSS_RESPAWN_MS;
-        const areaClear = enemiesRef.current.every(e => e.id === FIELD_BOSS_ID || e.dead);
-        if (bossAbsent && offCooldown && areaClear) {
+        if (bossAbsent && offCooldown) {
           spawnFieldBoss();
         }
       }
@@ -652,8 +672,10 @@ export function useCombat(ctx: CombatCtx) {
       if (id === null) return;
       const enemy = enemiesRef.current.find(e => e.id === id);
       if (!enemy || enemy.dead || enemy.hp <= 0) return;
+      const rawSkill = skill.damage;
       const dmg = applyResistance(skill.damage, skill.damageType, enemy.resistances);
       const newHp = Math.max(0, enemy.hp - dmg);
+      const skNote = dmg !== rawSkill ? (dmg < rawSkill ? ' (резист)' : ' (слабость!)') : '';
 
       let statusEffects = enemy.statusEffects ?? [];
       const inflict = SKILL_EFFECT_ON_HIT[skill.id];
@@ -666,7 +688,7 @@ export function useCombat(ctx: CombatCtx) {
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp, statusEffects } : e);
       setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp, statusEffects } : e));
       spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
-      log(`✨ Воин использует ${skill.name} на ${dmg} урона!`);
+      log(`✨ Воин использует ${skill.name} (${DAMAGE_TYPE_LABEL[skill.damageType]}) на ${dmg} урона${skNote}!`);
       if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity);
     }
     if (skill.healSelf > 0) {
