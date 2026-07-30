@@ -3,7 +3,7 @@ import { MAP_COLS, MAP_ROWS, VP_COLS, VP_ROWS } from '../world/locations';
 
 interface MinimapProps {
   currentMap: number[][];
-  exploredTiles: boolean[][];
+  exploredTiles: boolean[][] | undefined;
   playerPos: { x: number; y: number };
   camCol: number;
   camRow: number;
@@ -24,12 +24,17 @@ const TILE_COLOR: Record<number, string> = {
  * Small always-on corner minimap with fog of war: tiles the player hasn't
  * walked near yet render as solid black. Shows the player's position and the
  * current camera viewport as a highlighted rectangle.
+ *
+ * Defensive against missing exploredTiles for newly added locations / old saves.
  */
 export default function Minimap({
   currentMap, exploredTiles, playerPos, camCol, camRow, visible, onToggle,
 }: MinimapProps) {
   const CELL = 4; // px per tile
   const SIZE = MAP_COLS * CELL;
+
+  const map = currentMap ?? [];
+  const explored = exploredTiles ?? [];
 
   return (
     <div className="absolute top-2 right-2 z-40">
@@ -44,15 +49,15 @@ export default function Minimap({
         <div
           className="relative bg-black/80 border border-tile-border rounded shadow-lg overflow-hidden"
           style={{ width: SIZE, height: SIZE }}>
-          {currentMap.map((row, gy) =>
-            row.map((tileType, gx) => {
-              const explored = exploredTiles[gy]?.[gx];
+          {map.map((row, gy) =>
+            (row ?? []).map((tileType, gx) => {
+              const isExplored = explored[gy]?.[gx] === true;
               return (
                 <div key={`${gx}-${gy}`}
                   className="absolute"
                   style={{
                     left: gx * CELL, top: gy * CELL, width: CELL, height: CELL,
-                    background: explored ? (TILE_COLOR[tileType] ?? '#2a3a2a') : '#000',
+                    background: isExplored ? (TILE_COLOR[tileType] ?? '#2a3a2a') : '#000',
                   }} />
               );
             })
