@@ -1,6 +1,9 @@
 // ─── COMBAT SYSTEM ────────────────────────────────────────────────────────────
 import type { Item } from './inventory';
 import { SKILL_POINTS_PER_LEVEL } from './skills/skills';
+import {
+  MONSTER_DEFS, SPEED_INTERVAL, buildRewardTable, buildEffectOnHit, buildResistances,
+} from './monsters';
 
 // ── Shared world type (also used by save.ts and world/locations.ts) ───────────
 export type LocationId = 'village' | 'forest' | 'darkforest' | 'wolfcave' | 'mountains' | 'road' | 'ruins' | 'swamp' | 'mine' | 'pass' | 'icefort';
@@ -102,23 +105,7 @@ export const STATUS_EFFECT_DEFS: Record<StatusEffectType, StatusEffectDef> = {
 };
 
 /** Which enemies inflict which effect on a successful hit, and how often. */
-export const ENEMY_EFFECT_ON_HIT: Record<string, { effect: StatusEffectType; chance: number }> = {
-  'Гигантский паук': { effect: 'poison', chance: 0.35 },
-  'Полевая змея':    { effect: 'poison', chance: 0.40 },
-  'Ядовитый паук':   { effect: 'poison', chance: 0.45 },
-  'Снежный паук':    { effect: 'slow',   chance: 0.30 },
-  'Слизень':         { effect: 'slow',   chance: 0.35 },
-  'Орк':             { effect: 'stun',   chance: 0.20 },
-  'Тролль':          { effect: 'slow',   chance: 0.35 },
-  'Горный тролль':   { effect: 'stun',   chance: 0.25 },
-  'Бандит':          { effect: 'stun',   chance: 0.15 },
-  'Разбойник':       { effect: 'stun',   chance: 0.15 },
-  'Наёмник':         { effect: 'stun',   chance: 0.20 },
-  'Йети':            { effect: 'slow',   chance: 0.30 },
-  'Рыцарь льда':     { effect: 'slow',   chance: 0.25 },
-  'Маг льда':        { effect: 'slow',   chance: 0.40 },
-  'Призрак':         { effect: 'slow',   chance: 0.30 },
-};
+export const ENEMY_EFFECT_ON_HIT: Record<string, { effect: StatusEffectType; chance: number }> = buildEffectOnHit();
 
 /** Which player skills inflict which effect on a successful hit (id → effect). */
 export const SKILL_EFFECT_ON_HIT: Partial<Record<number, StatusEffectType>> = {
@@ -181,42 +168,7 @@ export const BASE_ATTACK_INTERVAL = 1500;
 export const MIN_ATTACK_INTERVAL  = 500;
 
 // ── Enemy kill reward table ───────────────────────────────────────────────────
-export const REWARD_TABLE: Record<string, { xp: number; goldMin: number; goldMax: number }> = {
-  'Крыса':           { xp: 12,  goldMin: 2,  goldMax: 5  },
-  'Кролик':          { xp: 8,   goldMin: 1,  goldMax: 3  },
-  'Молодой кабан':   { xp: 28,  goldMin: 5,  goldMax: 10 },
-  'Полевая змея':    { xp: 35,  goldMin: 6,  goldMax: 12 },
-  'Ворон':           { xp: 18,  goldMin: 3,  goldMax: 7  },
-  'Огромный Кабан':  { xp: 120, goldMin: 30, goldMax: 50 },
-  'Гоблин':          { xp: 25,  goldMin: 5,  goldMax: 10 },
-  'Волк':            { xp: 20,  goldMin: 3,  goldMax: 7  },
-  'Бандит':          { xp: 55,  goldMin: 12, goldMax: 22 },
-  'Альфа-волк':      { xp: 85,  goldMin: 18, goldMax: 30 },
-  'Летучая мышь':    { xp: 40,  goldMin: 8,  goldMax: 15 },
-  'Ледяной волк':    { xp: 70,  goldMin: 15, goldMax: 28 },
-  'Снежный паук':    { xp: 75,  goldMin: 16, goldMax: 28 },
-  'Йети':            { xp: 110, goldMin: 25, goldMax: 40 },
-  'Разбойник':       { xp: 65,  goldMin: 14, goldMax: 25 },
-  'Лучник':          { xp: 70,  goldMin: 15, goldMax: 26 },
-  'Наёмник':         { xp: 90,  goldMin: 20, goldMax: 35 },
-  'Скелет':          { xp: 50,  goldMin: 10, goldMax: 18 },
-  'Зомби':           { xp: 80,  goldMin: 20, goldMax: 35 },
-  'Призрак':         { xp: 100, goldMin: 22, goldMax: 38 },
-  'Слизень':         { xp: 95,  goldMin: 18, goldMax: 32 },
-  'Болотник':        { xp: 120, goldMin: 25, goldMax: 42 },
-  'Ядовитый паук':   { xp: 110, goldMin: 22, goldMax: 38 },
-  'Голем':           { xp: 150, goldMin: 30, goldMax: 50 },
-  'Шахтёр-зомби':    { xp: 130, goldMin: 28, goldMax: 45 },
-  'Горный тролль':   { xp: 180, goldMin: 35, goldMax: 55 },
-  'Гарпия':          { xp: 160, goldMin: 32, goldMax: 50 },
-  'Рыцарь льда':     { xp: 220, goldMin: 45, goldMax: 70 },
-  'Маг льда':        { xp: 200, goldMin: 40, goldMax: 65 },
-  // legacy
-  'Орк':             { xp: 60,  goldMin: 15, goldMax: 25 },
-  'Кабан':           { xp: 35,  goldMin: 6,  goldMax: 12 },
-  'Гигантский паук': { xp: 45,  goldMin: 8,  goldMax: 15 },
-  'Тролль':          { xp: 90,  goldMin: 22, goldMax: 38 },
-};
+export const REWARD_TABLE: Record<string, { xp: number; goldMin: number; goldMax: number }> = buildRewardTable();
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -285,99 +237,82 @@ export function applyXpGain(
 // ── Enemy factory ─────────────────────────────────────────────────────────────
 
 /** Instantiate fresh enemy instances for a given location. */
+
+/** Spawn enemies for a location; combat stats come from MONSTER_DEFS. */
 export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
-  const defs: Record<LocationId, Array<Omit<Enemy, 'id' | 'baseMaxHp' | 'rarity'>>> = {
+  type Spawn = { name: string; x: number; y: number };
+  const spawns: Record<LocationId, Spawn[]> = {
     village: [],
     forest: [
-      { name: 'Крыса',         emoji: '🐀', x: 3,  y: 5,  hp: 60,  maxHp: 60,  attackInterval: 1600, dmgMin: 2,  dmgMax: 6,  dead: false },
-      { name: 'Крыса',         emoji: '🐀', x: 12, y: 6,  hp: 60,  maxHp: 60,  attackInterval: 1600, dmgMin: 2,  dmgMax: 6,  dead: false },
-      { name: 'Кролик',        emoji: '🐇', x: 7,  y: 7,  hp: 40,  maxHp: 40,  attackInterval: 2000, dmgMin: 1,  dmgMax: 3,  dead: false },
-      { name: 'Ворон',         emoji: '🐦', x: 11, y: 4,  hp: 80,  maxHp: 80,  attackInterval: 1200, dmgMin: 3,  dmgMax: 7,  dead: false },
-      { name: 'Молодой кабан', emoji: '🐗', x: 5,  y: 12, hp: 140, maxHp: 140, attackInterval: 2400, dmgMin: 6,  dmgMax: 12, dead: false },
-      { name: 'Полевая змея',  emoji: '🐍', x: 13, y: 11, hp: 110, maxHp: 110, attackInterval: 1800, dmgMin: 5,  dmgMax: 11, dead: false },
-      { name: 'Молодой кабан', emoji: '🐗', x: 8,  y: 15, hp: 140, maxHp: 140, attackInterval: 2400, dmgMin: 6,  dmgMax: 12, dead: false },
+      { name: 'Крыса', x: 3, y: 5 }, { name: 'Крыса', x: 12, y: 6 },
+      { name: 'Кролик', x: 7, y: 7 }, { name: 'Ворон', x: 11, y: 4 },
+      { name: 'Молодой кабан', x: 5, y: 12 }, { name: 'Полевая змея', x: 13, y: 11 },
+      { name: 'Молодой кабан', x: 8, y: 15 },
     ],
     darkforest: [
-      { name: 'Гоблин', emoji: '👺', x: 5,  y: 4,  hp: 160, maxHp: 160, attackInterval: 2100, dmgMin: 6,  dmgMax: 13, dead: false },
-      { name: 'Гоблин', emoji: '👺', x: 14, y: 5,  hp: 160, maxHp: 160, attackInterval: 2100, dmgMin: 6,  dmgMax: 13, dead: false },
-      { name: 'Волк',   emoji: '🐺', x: 7,  y: 11, hp: 120, maxHp: 120, attackInterval: 900,  dmgMin: 4,  dmgMax: 10, dead: false },
-      { name: 'Волк',   emoji: '🐺', x: 12, y: 8,  hp: 120, maxHp: 120, attackInterval: 900,  dmgMin: 4,  dmgMax: 10, dead: false },
-      { name: 'Бандит', emoji: '🥷', x: 8,  y: 14, hp: 200, maxHp: 200, attackInterval: 1700, dmgMin: 10, dmgMax: 18, dead: false },
-      { name: 'Бандит', emoji: '🥷', x: 13, y: 15, hp: 200, maxHp: 200, attackInterval: 1700, dmgMin: 10, dmgMax: 18, dead: false },
+      { name: 'Гоблин', x: 5, y: 4 }, { name: 'Гоблин', x: 14, y: 5 },
+      { name: 'Волк', x: 7, y: 11 }, { name: 'Волк', x: 12, y: 8 },
+      { name: 'Бандит', x: 8, y: 14 }, { name: 'Бандит', x: 13, y: 15 },
     ],
     wolfcave: [
-      { name: 'Волк',         emoji: '🐺', x: 5,  y: 5,  hp: 150, maxHp: 150, attackInterval: 950,  dmgMin: 6,  dmgMax: 12, dead: false },
-      { name: 'Волк',         emoji: '🐺', x: 14, y: 6,  hp: 150, maxHp: 150, attackInterval: 950,  dmgMin: 6,  dmgMax: 12, dead: false },
-      { name: 'Летучая мышь', emoji: '🦇', x: 9,  y: 8,  hp: 100, maxHp: 100, attackInterval: 800,  dmgMin: 5,  dmgMax: 11, dead: false },
-      { name: 'Летучая мышь', emoji: '🦇', x: 13, y: 13, hp: 100, maxHp: 100, attackInterval: 800,  dmgMin: 5,  dmgMax: 11, dead: false },
-      { name: 'Альфа-волк',   emoji: '🐺', x: 10, y: 15, hp: 320, maxHp: 320, attackInterval: 1400, dmgMin: 14, dmgMax: 24, dead: false },
+      { name: 'Волк', x: 5, y: 5 }, { name: 'Волк', x: 14, y: 6 },
+      { name: 'Летучая мышь', x: 9, y: 8 }, { name: 'Летучая мышь', x: 13, y: 13 },
+      { name: 'Альфа-волк', x: 10, y: 15 },
     ],
     mountains: [
-      { name: 'Ледяной волк', emoji: '🐺', x: 6,  y: 5,  hp: 250, maxHp: 250, attackInterval: 1100, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Ледяной волк', emoji: '🐺', x: 12, y: 6,  hp: 250, maxHp: 250, attackInterval: 1100, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Снежный паук', emoji: '🕷️', x: 8,  y: 11, hp: 220, maxHp: 220, attackInterval: 1300, dmgMin: 10, dmgMax: 18, dead: false },
-      { name: 'Йети',         emoji: '👹', x: 11, y: 14, hp: 450, maxHp: 450, attackInterval: 3200, dmgMin: 20, dmgMax: 32, dead: false },
-      { name: 'Ледяной волк', emoji: '🐺', x: 7,  y: 16, hp: 250, maxHp: 250, attackInterval: 1100, dmgMin: 12, dmgMax: 20, dead: false },
+      { name: 'Ледяной волк', x: 6, y: 5 }, { name: 'Ледяной волк', x: 12, y: 6 },
+      { name: 'Снежный паук', x: 8, y: 11 }, { name: 'Йети', x: 11, y: 14 },
+      { name: 'Ледяной волк', x: 7, y: 16 },
     ],
     road: [
-      { name: 'Разбойник', emoji: '🗡️', x: 5,  y: 7,  hp: 220, maxHp: 220, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Лучник',    emoji: '🏹', x: 14, y: 8,  hp: 180, maxHp: 180, attackInterval: 1500, dmgMin: 14, dmgMax: 22, dead: false },
-      { name: 'Разбойник', emoji: '🗡️', x: 8,  y: 11, hp: 220, maxHp: 220, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Наёмник',   emoji: '⚔️', x: 15, y: 10, hp: 300, maxHp: 300, attackInterval: 2000, dmgMin: 16, dmgMax: 28, dead: false },
-      { name: 'Лучник',    emoji: '🏹', x: 4,  y: 12, hp: 180, maxHp: 180, attackInterval: 1500, dmgMin: 14, dmgMax: 22, dead: false },
+      { name: 'Разбойник', x: 5, y: 7 }, { name: 'Лучник', x: 14, y: 8 },
+      { name: 'Разбойник', x: 8, y: 11 }, { name: 'Наёмник', x: 15, y: 10 },
+      { name: 'Лучник', x: 4, y: 12 },
     ],
     ruins: [
-      { name: 'Скелет',  emoji: '💀', x: 5,  y: 6,  hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Зомби',   emoji: '🧟', x: 13, y: 5,  hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
-      { name: 'Призрак', emoji: '👻', x: 10, y: 10, hp: 280, maxHp: 280, attackInterval: 1600, dmgMin: 15, dmgMax: 25, dead: false },
-      { name: 'Скелет',  emoji: '💀', x: 7,  y: 13, hp: 200, maxHp: 200, attackInterval: 1800, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Зомби',   emoji: '🧟', x: 14, y: 14, hp: 350, maxHp: 350, attackInterval: 4000, dmgMin: 18, dmgMax: 28, dead: false },
+      { name: 'Скелет', x: 5, y: 6 }, { name: 'Зомби', x: 13, y: 5 },
+      { name: 'Призрак', x: 10, y: 10 }, { name: 'Скелет', x: 7, y: 13 },
+      { name: 'Зомби', x: 14, y: 14 },
     ],
     swamp: [
-      { name: 'Слизень',       emoji: '🟢', x: 4,  y: 5,  hp: 280, maxHp: 280, attackInterval: 2500, dmgMin: 12, dmgMax: 20, dead: false },
-      { name: 'Ядовитый паук', emoji: '🕷️', x: 12, y: 6,  hp: 240, maxHp: 240, attackInterval: 1400, dmgMin: 14, dmgMax: 22, dead: false },
-      { name: 'Болотник',      emoji: '🐸', x: 8,  y: 12, hp: 380, maxHp: 380, attackInterval: 2800, dmgMin: 18, dmgMax: 28, dead: false },
-      { name: 'Слизень',       emoji: '🟢', x: 14, y: 14, hp: 280, maxHp: 280, attackInterval: 2500, dmgMin: 12, dmgMax: 20, dead: false },
+      { name: 'Слизень', x: 4, y: 5 }, { name: 'Ядовитый паук', x: 12, y: 6 },
+      { name: 'Болотник', x: 8, y: 12 }, { name: 'Слизень', x: 14, y: 14 },
     ],
     mine: [
-      { name: 'Летучая мышь', emoji: '🦇', x: 4,  y: 4,  hp: 180, maxHp: 180, attackInterval: 900,  dmgMin: 10, dmgMax: 18, dead: false },
-      { name: 'Шахтёр-зомби', emoji: '🧟', x: 11, y: 5,  hp: 400, maxHp: 400, attackInterval: 3000, dmgMin: 20, dmgMax: 30, dead: false },
-      { name: 'Голем',        emoji: '🗿', x: 8,  y: 9,  hp: 550, maxHp: 550, attackInterval: 4000, dmgMin: 25, dmgMax: 38, dead: false },
-      { name: 'Летучая мышь', emoji: '🦇', x: 15, y: 14, hp: 180, maxHp: 180, attackInterval: 900,  dmgMin: 10, dmgMax: 18, dead: false },
-      { name: 'Шахтёр-зомби', emoji: '🧟', x: 5,  y: 14, hp: 400, maxHp: 400, attackInterval: 3000, dmgMin: 20, dmgMax: 30, dead: false },
+      { name: 'Летучая мышь', x: 4, y: 4 }, { name: 'Шахтёр-зомби', x: 11, y: 5 },
+      { name: 'Голем', x: 8, y: 9 }, { name: 'Летучая мышь', x: 15, y: 14 },
+      { name: 'Шахтёр-зомби', x: 5, y: 14 },
     ],
     pass: [
-      { name: 'Горный тролль', emoji: '👾', x: 9,  y: 5,  hp: 600, maxHp: 600, attackInterval: 3800, dmgMin: 28, dmgMax: 42, dead: false },
-      { name: 'Гарпия',        emoji: '🦅', x: 10, y: 8,  hp: 320, maxHp: 320, attackInterval: 1200, dmgMin: 18, dmgMax: 28, dead: false },
-      { name: 'Голем',         emoji: '🗿', x: 8,  y: 12, hp: 550, maxHp: 550, attackInterval: 4000, dmgMin: 25, dmgMax: 38, dead: false },
-      { name: 'Гарпия',        emoji: '🦅', x: 9,  y: 15, hp: 320, maxHp: 320, attackInterval: 1200, dmgMin: 18, dmgMax: 28, dead: false },
-      { name: 'Горный тролль', emoji: '👾', x: 10, y: 17, hp: 600, maxHp: 600, attackInterval: 3800, dmgMin: 28, dmgMax: 42, dead: false },
+      { name: 'Горный тролль', x: 9, y: 5 }, { name: 'Гарпия', x: 10, y: 8 },
+      { name: 'Голем', x: 8, y: 12 }, { name: 'Гарпия', x: 9, y: 15 },
+      { name: 'Горный тролль', x: 10, y: 17 },
     ],
     icefort: [
-      { name: 'Рыцарь льда', emoji: '🛡️', x: 6,  y: 6,  hp: 700, maxHp: 700, attackInterval: 2500, dmgMin: 30, dmgMax: 45, dead: false },
-      { name: 'Маг льда',    emoji: '❄️', x: 13, y: 7,  hp: 450, maxHp: 450, attackInterval: 1800, dmgMin: 28, dmgMax: 42, dead: false },
-      { name: 'Рыцарь льда', emoji: '🛡️', x: 10, y: 12, hp: 700, maxHp: 700, attackInterval: 2500, dmgMin: 30, dmgMax: 45, dead: false },
-      { name: 'Маг льда',    emoji: '❄️', x: 7,  y: 14, hp: 450, maxHp: 450, attackInterval: 1800, dmgMin: 28, dmgMax: 42, dead: false },
+      { name: 'Рыцарь льда', x: 6, y: 6 }, { name: 'Маг льда', x: 13, y: 7 },
+      { name: 'Рыцарь льда', x: 10, y: 12 }, { name: 'Маг льда', x: 7, y: 14 },
     ],
   };
-  return defs[loc].map((d, i) => {
+
+  return (spawns[loc] ?? []).map((s, i) => {
+    const def = MONSTER_DEFS[s.name];
+    const baseHp = def?.hp ?? 100;
     const rarity = rollEnemyRarity();
-    const maxHp  = Math.round(d.maxHp * ENEMY_RARITY_DEFS[rarity].hpMult);
-    return { ...d, id: i + 1, baseMaxHp: d.maxHp, maxHp, hp: maxHp, rarity, resistances: ENEMY_RESISTANCES[d.name] };
+    const maxHp  = Math.round(baseHp * ENEMY_RARITY_DEFS[rarity].hpMult);
+    return {
+      id: i + 1,
+      name: s.name,
+      emoji: def?.emoji ?? '❓',
+      x: s.x, y: s.y,
+      hp: maxHp, maxHp, baseMaxHp: baseHp,
+      attackInterval: def ? SPEED_INTERVAL[def.speed] : 2000,
+      dmgMin: def?.dmgMin ?? 5,
+      dmgMax: def?.dmgMax ?? 10,
+      dead: false,
+      rarity,
+      resistances: ENEMY_RESISTANCES[s.name],
+    };
   });
 };
 
-/** Elemental resist/weakness examples — % positive = resist, negative = weakness (extra damage taken). */
-const ENEMY_RESISTANCES: Record<string, Partial<Record<DamageType, number>>> = {
-  'Тролль':        { fire: -50 },
-  'Горный тролль': { fire: -40 },
-  'Зомби':         { electric: -30 },
-  'Шахтёр-зомби':  { electric: -25 },
-  'Ледяной волк':  { fire: -25, ice: 40 },
-  'Снежный паук':  { fire: -20, ice: 30 },
-  'Йети':          { fire: -40, ice: 50 },
-  'Рыцарь льда':   { fire: -30, ice: 60 },
-  'Маг льда':      { fire: -35, ice: 50 },
-  'Голем':         { physical: 20, fire: -15 },
-  'Призрак':       { physical: 30, electric: -20 },
-};
+const ENEMY_RESISTANCES: Record<string, Partial<Record<DamageType, number>>> = buildResistances();
