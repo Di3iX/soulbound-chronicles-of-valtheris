@@ -339,6 +339,11 @@ const log = useCallback((msg: string) => {
       const exits = LOCATION_EXITS[currentLocationRef.current];
       const exit = exits?.get(`${nx},${ny}`);
       if (exit) {
+        const gate = canEnterLocation(exit.to, playerLevelRef.current);
+        if (!gate.ok) {
+          log(`⛔ Нужен ${gate.required} уровень, чтобы войти (у вас ${playerLevelRef.current}).`);
+          return;
+        }
         // Block Cave → Ruins until Goblin Chief has been defeated for the first time
         if (currentLocationRef.current === 'cave' && exit.to === 'ruins' && !bossStateRef.current.caveChief.firstKillDone) {
           log('⚠️ Путь заблокирован! Победите Главаря гоблинов, чтобы пройти в Руины.');
@@ -366,9 +371,14 @@ const log = useCallback((msg: string) => {
   const handleWorldMapTravel = useCallback((to: LocationId) => {
     if (phaseRef.current !== 'explore') return;
     if (transitioningRef.current) return;
+    const gate = canEnterLocation(to, playerLevelRef.current);
+    if (!gate.ok) {
+      log(`⛔ Нужен ${gate.required} уровень для «${LOCATION_META[to].label}» (у вас ${playerLevelRef.current}).`);
+      return;
+    }
     setShowWorldMap(false);
     handleLocationTransition(to, LOCATION_SPAWN[to]);
-  }, [handleLocationTransition]);
+  }, [handleLocationTransition, log]);
 
   // ── Quest action handler ──────────────────────────────────────────────────
   const handleQuestAction = useCallback((action: DialogAction) => {
@@ -796,6 +806,7 @@ const log = useCallback((msg: string) => {
               currentLocation={currentLocation}
               phase={phase}
               transitioning={transitioning}
+              playerLevel={playerLevel}
               onTravel={handleWorldMapTravel}
               onClose={() => setShowWorldMap(false)}
             />
