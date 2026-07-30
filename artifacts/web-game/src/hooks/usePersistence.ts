@@ -31,6 +31,6 @@ export function usePersistence(state: SaveablePlayerState): void {
     state.inventory, state.equipment, state.equipBonuses,
     state.playerPos, state.currentLocation, state.enemies,
     state.questProgress, state.skillProgress, state.skillPoints,
-    state.bossState, state.exploredTiles,
+    state.bossState, state.exploredTiles, state.openedChests,
   ]);
 }
