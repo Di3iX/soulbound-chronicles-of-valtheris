@@ -31,6 +31,9 @@ import {
   ExploredTiles, makeInitialExploredTiles, revealAround,
 } from './world/locations';
 import { canEnterLocation } from './world/progression';
+import {
+  CHEST_DEFS, OpenedChests, getChestsAt, getLocationChests, openChest,
+} from './world/chests';
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import ShopPanel from './shop/ShopPanel';
@@ -100,6 +103,7 @@ export default function App() {
   const [selectedItem, setSelectedItem]   = useState<Item | null>(null);
   const [lootNotif, setLootNotif]         = useState<string | null>(null);
   const [showWorldMap, setShowWorldMap]   = useState(false);
+  const [openedChests, setOpenedChests]   = useState<OpenedChests>(sv?.openedChests ?? {});
 
   // ── World map state ─────────────────────────────────────────────────────────
   const [currentLocation, setCurrentLocation] = useState<LocationId>(sv?.currentLocation ?? 'village');
@@ -153,6 +157,7 @@ export default function App() {
   const bossStateRef              = useRef<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openedChestsRef     = useRef<OpenedChests>(sv?.openedChests ?? {});
 
   // Keep refs in sync
   useSyncedRef(playerHpRef, playerHp);
@@ -183,6 +188,7 @@ export default function App() {
   useSyncedRef(exploredTilesRef, exploredTiles);
   useSyncedRef(skillProgressRef, skillProgress);
   useSyncedRef(skillPointsRef, skillPoints);
+  useSyncedRef(openedChestsRef, openedChests);
   useEffect(() => { skillBonusesRef.current    = calcSkillBonuses(skillProgress); }, [skillProgress]);
 
   // ── Fog of war: reveal tiles around the player as they move ────────────────
@@ -208,6 +214,7 @@ export default function App() {
     questProgress,
     skillProgress, skillPoints,
     bossState, exploredTiles,
+    openedChests,
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -334,6 +341,29 @@ const log = useCallback((msg: string) => {
       setActiveEnemyId(hitEnemy.id); setPhase('combat');
       log(`⚔️ Бой с ${hitEnemy.name}!`); return;
     }
+    // Chest intercept
+    {
+      const chest = getChestsAt(currentLocationRef.current, nx, ny, openedChestsRef.current);
+      if (chest) {
+        const loot = openChest(chest);
+        playerGoldRef.current += loot.gold;
+        setPlayerGold(playerGoldRef.current);
+        if (loot.item) {
+          inventoryRef.current = [...inventoryRef.current, loot.item];
+          setInventory(prev => [...prev, loot.item!]);
+          setLootNotif(loot.item.name);
+          setTimeout(() => setLootNotif(null), 2500);
+        }
+        const nextOpened = { ...openedChestsRef.current, [chest.id]: true };
+        openedChestsRef.current = nextOpened;
+        setOpenedChests(nextOpened);
+        for (const msg of loot.logs) log(msg);
+        // встать на клетку сундука
+        playerPosRef.current = { x: nx, y: ny };
+        setPlayerPos({ x: nx, y: ny });
+        return;
+      }
+    }
     // Exit tile intercept
     if (tileType === 4) {
       const exits = LOCATION_EXITS[currentLocationRef.current];
@@ -345,7 +375,7 @@ const log = useCallback((msg: string) => {
           return;
         }
         // Block Cave → Ruins until Goblin Chief has been defeated for the first time
-        if (currentLocationRef.current === 'cave' && exit.to === 'ruins' && !bossStateRef.current.caveChief.firstKillDone) {
+        if (currentLocationRef.current === 'wolfcave' && exit.to === 'ruins' && !bossStateRef.current.caveChief.firstKillDone) {
           log('⚠️ Путь заблокирован! Победите Главаря гоблинов, чтобы пройти в Руины.');
           return;
         }
@@ -528,6 +558,15 @@ const log = useCallback((msg: string) => {
     }
     const npc = currentNpcs.find(n => n.x === gx && n.y === gy);
     if (npc) return <div className="w-full h-full tile-npc flex items-center justify-center text-sm">{npc.emoji}</div>;
+    const chestHere = getLocationChests(currentLocation, openedChests)
+      .find(c => c.x === gx && c.y === gy);
+    if (chestHere) {
+      return (
+        <div className="w-full h-full flex items-center justify-center text-sm" title={chestHere.opened ? 'Пустой сундук' : 'Сундук'}>
+          {chestHere.opened ? '📭' : '📦'}
+        </div>
+      );
+    }
     if (tileType === 4) {
       // Look up which destination this exit leads to, then render themed tile.
       const exitDef = LOCATION_EXITS[currentLocation]?.get(`${gx},${gy}`);
@@ -536,15 +575,15 @@ const log = useCallback((msg: string) => {
       // Dirt road: Village ↔ Forest
       if ((src === 'village' && dest === 'forest') || (src === 'forest' && dest === 'village'))
         return <div className="w-full h-full tile-exit-road  flex items-center justify-center text-sm" title="Дорога в лес">🛤️</div>;
-      // Cave entrance / exit: Forest ↔ Cave
-      if (src === 'forest' && dest === 'cave')
+      // Cave entrance / exit: Forest ↔ Wolfcave
+      if (src === 'forest' && dest === 'wolfcave')
         return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Вход в пещеру">🕳️</div>;
-      if (src === 'cave'   && dest === 'forest')
+      if (src === 'wolfcave' && dest === 'forest')
         return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Выход из пещеры">⛰️</div>;
-      // Stone stairs / ruined gate: Cave ↔ Ruins
-      if (src === 'cave'  && dest === 'ruins')
+      // Stone stairs / ruined gate: Wolfcave ↔ Ruins
+      if (src === 'wolfcave' && dest === 'ruins')
         return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Врата руин">🏛️</div>;
-      if (src === 'ruins' && dest === 'cave')
+      if (src === 'ruins' && dest === 'wolfcave')
         return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Разрушенная лестница">🪜</div>;
       // Wooden bridge / muddy path: Forest ↔ Swamp
       if ((src === 'forest' && dest === 'swamp') || (src === 'swamp' && dest === 'forest'))
