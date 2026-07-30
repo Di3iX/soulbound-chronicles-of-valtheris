@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import { Item } from '../inventory';
+import { Item, makeItem } from '../inventory';
 import { Equipment, EquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL, CONSUMABLE_MANA } from '../shop/shop';
