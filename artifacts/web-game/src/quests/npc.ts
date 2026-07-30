@@ -21,23 +21,24 @@ export interface NpcDialogue {
   buttons: DialogButton[];
 }
 
-function elderDialogue(progress: QuestProgress): NpcDialogue {
-  const QUEST_ID = 'quest_goblin_001';
-  const def      = QUEST_DEFS[QUEST_ID];
-  const entry    = getQuestEntry(progress, QUEST_ID);
-  const base     = { npcId: 'elder', name: 'Староста', emoji: '👴' };
+function questFlow(
+  progress: QuestProgress,
+  questId: string,
+  base: { npcId: string; name: string; emoji: string },
+  intro: string[],
+  activeHint: string[],
+  doneLines: string[],
+): NpcDialogue {
+  const def   = QUEST_DEFS[questId];
+  const entry = getQuestEntry(progress, questId);
 
   if (entry.status === 'inactive') {
     return {
       ...base,
-      lines: [
-        'Добро пожаловать в Дубовую Долину, путник.',
-        'Тихие поля стали опаснее обычного.',
-        'Можешь ли ты расчистить путь — убить 5 крыс или кабанов?',
-      ],
+      lines: intro,
       buttons: [
-        { label: '✅ Принять задание', action: { kind: 'accept_quest', questId: QUEST_ID }, primary: true },
-        { label: 'Уйти',               action: { kind: 'dismiss' } },
+        { label: '✅ Принять задание', action: { kind: 'accept_quest', questId }, primary: true },
+        { label: 'Уйти', action: { kind: 'dismiss' } },
       ],
     };
   }
@@ -47,59 +48,86 @@ function elderDialogue(progress: QuestProgress): NpcDialogue {
       return {
         ...base,
         lines: [
-          'Ты сделал это, герой!',
-          `Все ${required} тварей повержены.`,
-          'Возьми свою заслуженную награду.',
+          'Ты справился!',
+          `Цель выполнена: ${entry.current} / ${required}.`,
+          'Возьми награду.',
         ],
         buttons: [
-          { label: '🏆 Получить награду', action: { kind: 'complete_quest', questId: QUEST_ID }, primary: true },
-          { label: 'Уйти',                action: { kind: 'dismiss' } },
+          { label: '🏆 Получить награду', action: { kind: 'complete_quest', questId }, primary: true },
+          { label: 'Уйти', action: { kind: 'dismiss' } },
         ],
       };
     }
     return {
       ...base,
-      lines: [
-        'Удачи тебе, герой.',
-        'На полях рыщут крысы и кабаны.',
-        `Прогресс: ${entry.current} / ${required}`,
-      ],
+      lines: [...activeHint, `Прогресс: ${entry.current} / ${required}`],
       buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
     };
   }
   return {
     ...base,
-    lines: [
-      'Благодарю тебя, герой.',
-      'Дубовая Долина в безопасности благодаря тебе.',
-    ],
+    lines: doneLines,
     buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
   };
 }
 
-function farmerDialogue(_p: QuestProgress): NpcDialogue {
-  return {
-    npcId: 'farmer', name: 'Фермер', emoji: '👨',
-    lines: [
-      'Здорово, путник. Я обрабатываю эти поля.',
-      'Дорога на восток — к заброшенному тракту, там разбойники.',
-      'На севере Тёмный лес. Туда лучше с оружием.',
+function elderDialogue(progress: QuestProgress): NpcDialogue {
+  return questFlow(
+    progress,
+    'quest_goblin_001',
+    { npcId: 'elder', name: 'Староста', emoji: '👴' },
+    [
+      'Добро пожаловать в Дубовую Долину, путник.',
+      'В Тёмном лесу расплодились гоблины.',
+      'Убей 5 гоблинов — и деревня будет спокойнее.',
     ],
-    buttons: [{ label: 'Понял, спасибо', action: { kind: 'dismiss' }, primary: true }],
-  };
+    ['Удачи. Гоблины живут в Тёмном лесу на севере от полей.'],
+    ['Благодарю тебя. Долина помнит своих защитников.'],
+  );
 }
 
-function hunterDialogue(_p: QuestProgress): NpcDialogue {
-  return {
-    npcId: 'hunter', name: 'Охотник', emoji: '🏹',
-    lines: [
-      'Тише… В этом лесу полно волков и гоблинов.',
-      'На востоке — волчья пещера. Альфа-волк не любит гостей.',
-      'На севере холодные пики, на западе — гнилые болота.',
-      'Бандиты разбили лагерь у перекрёстка. Осторожнее.',
+function farmerDialogue(progress: QuestProgress): NpcDialogue {
+  return questFlow(
+    progress,
+    'quest_fields_001',
+    { npcId: 'farmer', name: 'Фермер', emoji: '👨' },
+    [
+      'Здорово, путник. Крысы и кабаны портят урожай.',
+      'Убей 5 крыс или молодых кабанов на этих полях.',
+      'Награда будет скромная, но честная.',
     ],
-    buttons: [{ label: 'Спасибо за совет', action: { kind: 'dismiss' }, primary: true }],
-  };
+    ['Они всё ещё рыщут по полям. Держись дороги.'],
+    ['Спасибо! Теперь можно сеять спокойно.'],
+  );
+}
+
+function hunterDialogue(progress: QuestProgress): NpcDialogue {
+  return questFlow(
+    progress,
+    'quest_wolf_001',
+    { npcId: 'hunter', name: 'Охотник', emoji: '🏹' },
+    [
+      'Тише… Мне нужны волчьи шкуры.',
+      'Убей 4 волка — обычных, альфу или ледяных, без разницы.',
+      'За это дам хорошую кожаную броню.',
+    ],
+    ['Волки в Тёмном лесу и в пещере на востоке.'],
+    ['Отличная работа. Шкуры пригодятся зимой.'],
+  );
+}
+
+function scoutDialogue(progress: QuestProgress): NpcDialogue {
+  return questFlow(
+    progress,
+    'quest_bandit_001',
+    { npcId: 'scout', name: 'Разведчик', emoji: '🕵️' },
+    [
+      'Эта дорога кишит разбойниками.',
+      'Убери 4 разбойников или наёмников — путь станет безопаснее.',
+    ],
+    ['Они прячутся вдоль тракта. Не дай себя окружить.'],
+    ['Тракт снова дышит. Спасибо, воин.'],
+  );
 }
 
 function hermitDialogue(_p: QuestProgress): NpcDialogue {
@@ -107,29 +135,13 @@ function hermitDialogue(_p: QuestProgress): NpcDialogue {
     npcId: 'hermit', name: 'Отшельник', emoji: '🧙',
     lines: [
       'Мало кто доходит до этих пиков живым.',
-      'Йети бродят по склонам. Огонь — их слабость.',
-      'Дальше на север — Ледяная крепость. Там служат холоду.',
+      'Йети боятся огня. Крепость на севере — вотчина льда.',
     ],
     buttons: [{ label: 'Понял', action: { kind: 'dismiss' }, primary: true }],
   };
 }
 
-function scoutDialogue(_p: QuestProgress): NpcDialogue {
-  return {
-    npcId: 'scout', name: 'Разведчик', emoji: '🕵️',
-    lines: [
-      'Эта дорога давно не охраняется.',
-      'Разбойники берут пошлину с путников — силой.',
-      'Дальше на восток — древние руины. Оттуда веет могильным холодом.',
-    ],
-    buttons: [{ label: 'Уйти', action: { kind: 'dismiss' }, primary: true }],
-  };
-}
-
-export function getNpcDialogue(
-  npcId:    string,
-  progress: QuestProgress,
-): NpcDialogue | null {
+export function getNpcDialogue(npcId: string, progress: QuestProgress): NpcDialogue | null {
   if (npcId === 'elder')  return elderDialogue(progress);
   if (npcId === 'farmer') return farmerDialogue(progress);
   if (npcId === 'hunter') return hunterDialogue(progress);
