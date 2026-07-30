@@ -7,6 +7,7 @@ import type { ExploredTiles } from './world/locations';
 import type { QuestProgress } from './quests/quests';
 import type { SkillProgress } from './skills/skillTree';
 import type { BossState } from './boss/boss';
+import type { OpenedChests } from './world/chests';
 
 /** v0.1.4: endurance renamed to vitality; intelligence added. */
 interface Stats {
@@ -50,6 +51,8 @@ export interface SaveData {
   bossState?:      BossState;
   /** Optional — missing in pre-minimap saves; defaults to fully-unexplored on load. */
   exploredTiles?:  ExploredTiles;
+  /** Optional — missing in pre-chests saves; defaults to {} on load. */
+  openedChests?:   OpenedChests;
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';
