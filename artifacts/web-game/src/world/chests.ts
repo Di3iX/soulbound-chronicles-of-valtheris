@@ -1,6 +1,6 @@
 // ─── WORLD CHESTS ─────────────────────────────────────────────────────────────
-import type { LocationId } from './combat';
-import { makeItem, type Item } from './inventory';
+import type { LocationId } from '../combat';
+import { makeItem, type Item } from '../inventory';
 
 export interface ChestDef {
   /** Unique id — used in save (openedChests). */
