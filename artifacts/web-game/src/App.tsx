@@ -30,6 +30,7 @@ import {
   getLocation, moveToLocation, getAvailableExits,
   ExploredTiles, makeInitialExploredTiles, revealAround,
 } from './world/locations';
+import { canEnterLocation } from './world/progression';
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import ShopPanel from './shop/ShopPanel';
