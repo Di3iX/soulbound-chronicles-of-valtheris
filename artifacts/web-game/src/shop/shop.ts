@@ -11,9 +11,13 @@ export const MERCHANT_ITEMS: ShopItem[] = [
   { key: 'greater_healing_potion', price: 75  },
   { key: 'mana_potion',            price: 25  },
   { key: 'greater_mana_potion',    price: 75  },
+  { key: 'raw_meat',               price: 8   },
   { key: 'rusty_sword',            price: 100 },
+  { key: 'iron_sword',             price: 220 },
   { key: 'leather_helm',           price: 80  },
   { key: 'leather_armor',          price: 120 },
+  { key: 'leather_gloves',         price: 60  },
+  { key: 'light_boots',            price: 60  },
 ];
 
 /** Fast-lookup: buy price by item key. */
@@ -25,6 +29,7 @@ export const SHOP_BUY_PRICE: Record<string, number> = Object.fromEntries(
 export const CONSUMABLE_HEAL: Record<string, number> = {
   healing_potion:         50,
   greater_healing_potion: 150,
+  raw_meat:               20,
 };
 
 /** How much MP each consumable restores when used. */
