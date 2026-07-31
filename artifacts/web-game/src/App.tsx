@@ -329,7 +329,10 @@ const log = useCallback((msg: string) => {
     // NPC intercept
     const npc = (LOCATION_NPCS[currentLocationRef.current] ?? []).find(n => n.x === nx && n.y === ny);
     if (npc) {
-      const dlg = getNpcDialogue(npc.id, questProgressRef.current);
+      const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
+        fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
+        caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+      });
       if (dlg) { setQuestDialogue(dlg); }
       else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
       return;
@@ -476,7 +479,10 @@ const log = useCallback((msg: string) => {
       return;
     }
     // Quest NPCs or generic dialog
-    const dlg = getNpcDialogue(npc.id, questProgressRef.current);
+    const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
+      fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
+      caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+    });
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
   }, []);
