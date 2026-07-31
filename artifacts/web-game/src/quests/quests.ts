@@ -12,6 +12,8 @@ export interface QuestDef {
   /** Enemy names that count toward this quest (any of them). */
   killTargets: string[];
   reward:      { gold: number; xp: number; items?: string[] };
+  /** Optional: another quest that must be completed before this can be offered. */
+  requiresQuest?: string;
 }
 
 export interface QuestEntry {
@@ -31,6 +33,16 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     killTargets: ['Крыса', 'Молодой кабан'],
     reward:      { gold: 40, xp: 60, items: ['healing_potion'] },
   },
+  quest_crystal_001: {
+    id:          'quest_crystal_001',
+    title:       'Чёрные кристаллы',
+    description: 'Староста просит убить Огромного Кабана — тварь, возле которой находят чёрные кристаллы.',
+    npcId:       'elder',
+    objective:   { description: 'Убить Огромного Кабана (мини-босс на полях)', required: 1 },
+    killTargets: ['Огромный Кабан'],
+    reward:      { gold: 80, xp: 100, items: ['greater_healing_potion'] },
+    requiresQuest: 'quest_fields_001',
+  },
   quest_goblin_001: {
     id:          'quest_goblin_001',
     title:       'Тень леса',
@@ -39,6 +51,7 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     objective:   { description: 'Убить гоблинов', required: 5 },
     killTargets: ['Гоблин'],
     reward:      { gold: 100, xp: 150, items: ['rusty_sword'] },
+    requiresQuest: 'quest_crystal_001',
   },
   quest_wolf_001: {
     id:          'quest_wolf_001',
@@ -62,6 +75,18 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
 
 export function getQuestEntry(progress: QuestProgress, questId: string): QuestEntry {
   return progress[questId] ?? { status: 'inactive', current: 0 };
+}
+
+export function isQuestCompleted(progress: QuestProgress, questId: string): boolean {
+  return getQuestEntry(progress, questId).status === 'completed';
+}
+
+export function canOfferQuest(progress: QuestProgress, questId: string): boolean {
+  const def = QUEST_DEFS[questId];
+  if (!def) return false;
+  if (getQuestEntry(progress, questId).status !== 'inactive') return false;
+  if (def.requiresQuest && !isQuestCompleted(progress, def.requiresQuest)) return false;
+  return true;
 }
 
 export function isReadyToComplete(progress: QuestProgress, questId: string): boolean {

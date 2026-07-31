@@ -1,6 +1,8 @@
 // ─── NPC DIALOGUE ─────────────────────────────────────────────────────────────
 import type { QuestProgress } from './quests';
-import { getQuestEntry, QUEST_DEFS } from './quests';
+import {
+  getQuestEntry, QUEST_DEFS, canOfferQuest, isQuestCompleted,
+} from './quests';
 
 export type DialogAction =
   | { kind: 'accept_quest';   questId: string }
@@ -19,6 +21,12 @@ export interface NpcDialogue {
   emoji:   string;
   lines:   string[];
   buttons: DialogButton[];
+}
+
+/** Optional flags from the game world (boss kills, etc.). */
+export interface DialogueFlags {
+  fieldBoarFirstKill?: boolean;
+  caveChiefFirstKill?: boolean;
 }
 
 function questFlow(
@@ -71,81 +79,189 @@ function questFlow(
   };
 }
 
-function elderDialogue(progress: QuestProgress): NpcDialogue {
-  return questFlow(
-    progress,
-    'quest_goblin_001',
-    { npcId: 'elder', name: 'Староста', emoji: '👴' },
-    [
+function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
+  const base = { npcId: 'elder', name: 'Староста', emoji: '👴' };
+
+  // Crystal quest (after fields)
+  const crystal = getQuestEntry(progress, 'quest_crystal_001');
+  if (canOfferQuest(progress, 'quest_crystal_001') || crystal.status === 'active') {
+    if (crystal.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_crystal_001',
+        base,
+        [
+          'Фермер говорил, что ты помог с полями. Спасибо.',
+          'В земле находят чёрные кристаллы. Звери рядом с ними бесятся.',
+          'На полях видели Огромного Кабана — тварь не из этих мест.',
+          'Убей его. Мне нужно понять, откуда идёт порча.',
+        ],
+        [
+          'Кабан бродит по Тихим полям. Говорят, появляется снова и снова.',
+          'Возле него находят те самые чёрные осколки.',
+        ],
+        [
+          'Ты убил зверя… На клыке и в земле — тот же чёрный блеск.',
+          'Это не простая болезнь животных. Что-то будит Тьму на окраине королевства.',
+          'Если готов идти дальше — слушай про лес.',
+        ],
+      );
+    }
+  }
+
+  // Goblin quest (after crystals)
+  const goblin = getQuestEntry(progress, 'quest_goblin_001');
+  if (canOfferQuest(progress, 'quest_goblin_001') || goblin.status === 'active') {
+    if (goblin.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_goblin_001',
+        base,
+        [
+          'К северу от полей — Тёмный лес. Там расплодились гоблины.',
+          'Они тащат в чащу те же чёрные осколки.',
+          'Убей 5 гоблинов. Нам нужна передышка — и зацепка, куда ведёт тропа.',
+        ],
+        ['Гоблины в Тёмном лесу. Осторожнее: лес уже не тот, что в сказках.'],
+        [
+          'Хорошо. Лес чуть притих… но это только начало.',
+          'Если заметишь на руке странную метку — не пугайся вслух при всех.',
+          'Приходи, когда будешь сильнее. Впереди руины и то, о чём молчат хроники.',
+        ],
+      );
+    }
+  }
+
+  if (isQuestCompleted(progress, 'quest_goblin_001')) {
+    const lines = [
+      'Долина пока стоит. Благодаря тебе.',
+      'Чёрные кристаллы, взбесившиеся звери, гоблины с осколками…',
+      'Старые называют это шёпотом Бездны. Я ещё не готов в это верить.',
+      'Но метка, что бывает у таких, как ты, появляется не просто так.',
+      'Иди в лес, к пещере, на дорогу — ищи, откуда растёт тьма.',
+    ];
+    if (flags.fieldBoarFirstKill) {
+      lines.push('Тот кабан был лишь первым стражем. Впереди будут хуже.');
+    }
+    return {
+      ...base,
+      lines,
+      buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+    };
+  }
+
+  return {
+    ...base,
+    lines: [
       'Добро пожаловать в Дубовую Долину, путник.',
-      'В Тёмном лесу расплодились гоблины.',
-      'Убей 5 гоблинов — и деревня будет спокойнее.',
+      'Мы — окраина бывшего королевства. Здесь тихо… пока.',
+      'Поговори с фермером на полях — у него беда с зверьём.',
+      'Когда разберёшься, вернись ко мне.',
     ],
-    ['Удачи. Гоблины живут в Тёмном лесу на севере от полей.'],
-    ['Благодарю тебя. Долина помнит своих защитников.'],
-  );
+    buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+  };
 }
 
-function farmerDialogue(progress: QuestProgress): NpcDialogue {
-  return questFlow(
-    progress,
-    'quest_fields_001',
-    { npcId: 'farmer', name: 'Фермер', emoji: '👨' },
-    [
-      'Здорово, путник. Крысы и кабаны портят урожай.',
-      'Убей 5 крыс или молодых кабанов на этих полях.',
-      'Награда будет скромная, но честная.',
-    ],
-    ['Они всё ещё рыщут по полям. Держись дороги.'],
-    ['Спасибо! Теперь можно сеять спокойно.'],
-  );
+function farmerDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
+  const base = { npcId: 'farmer', name: 'Фермер', emoji: '👨' };
+  const entry = getQuestEntry(progress, 'quest_fields_001');
+
+  if (entry.status !== 'completed') {
+    return questFlow(
+      progress,
+      'quest_fields_001',
+      base,
+      [
+        'Здорово, путник. Крысы и кабаны портят урожай.',
+        'В борозде нашёл чёрный камень — холодный, как ночь.',
+        'Убей 5 крыс или молодых кабанов. Награда скромная, но честная.',
+      ],
+      [
+        'Они всё ещё рыщут по полям. Держись дороги.',
+        'Если увидишь Огромного Кабана — это уже не мой огород.',
+      ],
+      [
+        'Спасибо! Теперь можно сеять спокойно.',
+        'Тот чёрный камень я отнёс старосте. Поговори с ним в деревне.',
+      ],
+    );
+  }
+
+  const lines = [
+    'Поля пока живы. Спасибо ещё раз.',
+    'Староста копается в этих кристаллах — говорит, плохая примета.',
+  ];
+  if (flags.fieldBoarFirstKill) {
+    lines.push('Слышал, ты положил Огромного Кабана. Земля после него пахнет гарью и железом.');
+  }
+  return {
+    ...base,
+    lines,
+    buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+  };
 }
 
-function hunterDialogue(progress: QuestProgress): NpcDialogue {
+function hunterDialogue(progress: QuestProgress, _flags: DialogueFlags): NpcDialogue {
   return questFlow(
     progress,
     'quest_wolf_001',
     { npcId: 'hunter', name: 'Охотник', emoji: '🏹' },
     [
       'Тише… Мне нужны волчьи шкуры.',
-      'Убей 4 волка — обычных, альфу или ледяных, без разницы.',
-      'За это дам хорошую кожаную броню.',
+      'Звери злее обычного — будто кто-то шепчет им в ухо.',
+      'Убей 4 волка: обычных, альфу или ледяных — без разницы.',
     ],
-    ['Волки в Тёмном лесу и в пещере на востоке.'],
-    ['Отличная работа. Шкуры пригодятся зимой.'],
+    ['Волки в Тёмном лесу и в пещере. Не ходи туда ночью… хотя дни теперь не лучше.'],
+    [
+      'Отличная работа. Шкуры пригодятся зимой.',
+      'Если увидишь в чаще чёрный блеск — не бери голыми руками.',
+    ],
   );
 }
 
-function scoutDialogue(progress: QuestProgress): NpcDialogue {
+function scoutDialogue(progress: QuestProgress, _flags: DialogueFlags): NpcDialogue {
   return questFlow(
     progress,
     'quest_bandit_001',
     { npcId: 'scout', name: 'Разведчик', emoji: '🕵️' },
     [
       'Эта дорога кишит разбойниками.',
+      'Некоторые носят осколки чёрного стекла на шее — как талисманы.',
       'Убери 4 разбойников или наёмников — путь станет безопаснее.',
     ],
     ['Они прячутся вдоль тракта. Не дай себя окружить.'],
-    ['Тракт снова дышит. Спасибо, воин.'],
+    [
+      'Тракт снова дышит. Спасибо, воин.',
+      'Те талисманы… лучше сдать старосте, чем продавать в деревне.',
+    ],
   );
 }
 
-function hermitDialogue(_p: QuestProgress): NpcDialogue {
+function hermitDialogue(_p: QuestProgress, _flags: DialogueFlags): NpcDialogue {
   return {
     npcId: 'hermit', name: 'Отшельник', emoji: '🧙',
     lines: [
       'Мало кто доходит до этих пиков живым.',
       'Йети боятся огня. Крепость на севере — вотчина льда.',
+      'Печать слабеет. Ты это уже чувствуешь — иначе не стоял бы здесь.',
     ],
     buttons: [{ label: 'Понял', action: { kind: 'dismiss' }, primary: true }],
   };
 }
 
-export function getNpcDialogue(npcId: string, progress: QuestProgress): NpcDialogue | null {
-  if (npcId === 'elder')  return elderDialogue(progress);
-  if (npcId === 'farmer') return farmerDialogue(progress);
-  if (npcId === 'hunter') return hunterDialogue(progress);
-  if (npcId === 'hermit') return hermitDialogue(progress);
-  if (npcId === 'scout')  return scoutDialogue(progress);
+/**
+ * Resolve dialogue for an NPC.
+ * Pass optional flags (e.g. fieldBoarFirstKill) from App for story branches.
+ */
+export function getNpcDialogue(
+  npcId: string,
+  progress: QuestProgress,
+  flags: DialogueFlags = {},
+): NpcDialogue | null {
+  if (npcId === 'elder')  return elderDialogue(progress, flags);
+  if (npcId === 'farmer') return farmerDialogue(progress, flags);
+  if (npcId === 'hunter') return hunterDialogue(progress, flags);
+  if (npcId === 'hermit') return hermitDialogue(progress, flags);
+  if (npcId === 'scout')  return scoutDialogue(progress, flags);
   return null;
 }
