@@ -286,6 +286,19 @@ export function useCombat(ctx: CombatCtx) {
     activeEnemyIdRef.current = null;
     setBossRewardInfo({ xp: xpGained, gold: BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
     setShowBossVictory(true);
+
+    {
+      const { progress: qp, logs: qLogs } = trackKillForQuests(questProgressRef.current, 'Главарь гоблинов');
+      if (qLogs.length) {
+        questProgressRef.current = qp;
+        setQuestProgress(qp);
+        for (const msg of qLogs) log(msg);
+      }
+    }
+    if (wasFirstKill) {
+      log('🌑 У главаря в мешке — чёрные осколки и карта тропы глубже в руины…');
+      log('📜 Вернись к старосте — ему нужно это услышать.');
+    }
   }, [log, grantXp]);
 
   // ── Field Mini-Boss: handle kill + rewards ────────────────────────────────
@@ -608,7 +621,7 @@ export function useCombat(ctx: CombatCtx) {
       }
 
       // Cave boss: reappears once its cooldown has passed, same "area is clear" flavor as the first encounter.
-      if (currentLocationRef.current === 'cave') {
+      if (currentLocationRef.current === 'wolfcave') {
         const bossAbsent = !enemiesRef.current.some(e => e.id === BOSS_ID);
         const deadAt = bossStateRef.current.caveChief.deadAt;
         const offCooldown = deadAt === undefined || now - deadAt >= BOSS_RESPAWN_MS;
