@@ -27,6 +27,8 @@ export interface NpcDialogue {
 export interface DialogueFlags {
   fieldBoarFirstKill?: boolean;
   caveChiefFirstKill?: boolean;
+  /** How many black_crystal the player carries. */
+  crystalCount?: number;
 }
 
 function questFlow(
@@ -156,6 +158,51 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
           'Отдохни. Когда будешь готов — иди глубже. Долина будет ждать вестей.',
         ],
       );
+    }
+  }
+
+  // Shards deliver quest
+  const shards = getQuestEntry(progress, 'quest_shards_001');
+  if (canOfferQuest(progress, 'quest_shards_001') || shards.status === 'active') {
+    if (shards.status !== 'completed') {
+      const need = QUEST_DEFS.quest_shards_001.deliverItems?.count ?? 3;
+      const have = flags.crystalCount ?? 0;
+      if (shards.status === 'inactive') {
+        return questFlow(
+          progress,
+          'quest_shards_001',
+          base,
+          [
+            'Главарь пал, но кристаллы всё ещё сыплются с тварей.',
+            'Принеси мне 3 чёрных кристалла — сравню с теми, что у главаря.',
+            'Их роняют крысы у порчи, кабаны, гоблины… и сам главарь.',
+          ],
+          [],
+          [],
+        );
+      }
+      // active
+      if (have >= need) {
+        return {
+          ...base,
+          lines: [
+            `У тебя ${have} кристаллов. Этого хватит.`,
+            'Отдай их — я попробую понять, откуда в них холод Бездны.',
+          ],
+          buttons: [
+            { label: '🏆 Отдать кристаллы', action: { kind: 'complete_quest', questId: 'quest_shards_001' }, primary: true },
+            { label: 'Уйти', action: { kind: 'dismiss' } },
+          ],
+        };
+      }
+      return {
+        ...base,
+        lines: [
+          `Нужно ${need} чёрных кристалла. У тебя: ${have}.`,
+          'Ищи на полях, в лесу и в пещере. Они плохо лежат в руке — как лёд.',
+        ],
+        buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+      };
     }
   }
 

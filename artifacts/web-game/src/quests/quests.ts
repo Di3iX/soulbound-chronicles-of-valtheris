@@ -14,6 +14,8 @@ export interface QuestDef {
   reward:      { gold: number; xp: number; items?: string[] };
   /** Optional: another quest that must be completed before this can be offered. */
   requiresQuest?: string;
+  /** Turn in these items to complete (checked at NPC). */
+  deliverItems?: { key: string; count: number };
 }
 
 export interface QuestEntry {
@@ -62,6 +64,17 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     killTargets: ['Главарь гоблинов'],
     reward:      { gold: 200, xp: 250, items: ['greater_healing_potion'] },
     requiresQuest: 'quest_goblin_001',
+  },
+  quest_shards_001: {
+    id:          'quest_shards_001',
+    title:       'Осколки Тьмы',
+    description: 'Староста просит принести 3 чёрных кристалла с полей и из леса.',
+    npcId:       'elder',
+    objective:   { description: 'Принести 3 чёрных кристалла', required: 3 },
+    killTargets: [],
+    reward:      { gold: 150, xp: 180, items: ['greater_mana_potion'] },
+    requiresQuest: 'quest_chief_001',
+    deliverItems: { key: 'black_crystal', count: 3 },
   },
   quest_wolf_001: {
     id:          'quest_wolf_001',
