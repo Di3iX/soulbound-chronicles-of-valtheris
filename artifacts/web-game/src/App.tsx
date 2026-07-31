@@ -605,7 +605,7 @@ const log = useCallback((msg: string) => {
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-[100dvh] w-full max-w-[420px] mx-auto bg-background text-foreground flex flex-col relative select-none">
+    <div className="h-[100dvh] w-full max-w-[420px] mx-auto bg-background text-foreground flex flex-col relative select-none overflow-hidden">
 
       {/* ══ 1. STATUS HEADER ══ */}
       <CombatHUD
@@ -643,8 +643,8 @@ const log = useCallback((msg: string) => {
       />
 
       {/* ══ 2. MAP ══ */}
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] p-2">
-        <div className="relative" style={{ width: 'min(90vw, 360px)', height: 'min(90vw, 360px)' }}>
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2">
+        <div className="relative" style={{ width: 'min(90vw, 60dvh, 360px)', height: 'min(90vw, 60dvh, 360px)' }}>
 
           {/* Tile grid, HP bars, floating numbers, boss/transition overlays */}
           <GameMap
