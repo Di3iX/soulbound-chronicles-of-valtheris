@@ -43,7 +43,7 @@ export const FIELD_BOSS_DEF: Omit<Enemy, 'id'> = {
 export const BOSS_REWARD     = { xp: 500, gold: 300 } as const;
 export const FIELD_BOSS_REWARD = { xp: 120, gold: 50 } as const;
 export const BOSS_RARE_CHANCE = 0.25;
-export const BOSS_COMMON_LOOT = ['iron_sword', 'orc_axe', 'iron_helm', 'chainmail', 'battle_gloves', 'scout_boots', 'silver_ring', 'amulet_of_wisdom'] as const;
+export const BOSS_COMMON_LOOT = ['black_crystal', 'iron_sword', 'orc_axe', 'iron_helm', 'chainmail', 'battle_gloves', 'scout_boots', 'silver_ring', 'amulet_of_wisdom'] as const;
 export const BOSS_RARE_LOOT   = ['shadow_blade', 'void_plate', 'titan_gauntlets', 'band_of_eternity', 'heart_of_mountain'] as const;
 
 /** Cave boss respawn (10 min). */
