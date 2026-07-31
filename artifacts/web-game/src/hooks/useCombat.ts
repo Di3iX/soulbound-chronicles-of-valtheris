@@ -332,6 +332,20 @@ export function useCombat(ctx: CombatCtx) {
     activeEnemyIdRef.current = null;
     setBossRewardInfo({ xp: xpGained, gold: FIELD_BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
     setShowBossVictory(true);
+
+    // Story quest: Чёрные кристаллы
+    {
+      const { progress: qp, logs: qLogs } = trackKillForQuests(questProgressRef.current, 'Огромный Кабан');
+      if (qLogs.length) {
+        questProgressRef.current = qp;
+        setQuestProgress(qp);
+        for (const msg of qLogs) log(msg);
+      }
+    }
+    if (wasFirstKill) {
+      log('🌑 На земле рядом с тушей мерцают чёрные осколки…');
+      log('📜 Стоит рассказать об этом старосте в деревне.');
+    }
   }, [log, grantXp]);
 
   // ── Enemy death ──────────────────────────────────────────────────────────
