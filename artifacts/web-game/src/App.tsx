@@ -510,6 +510,10 @@ const log = useCallback((msg: string) => {
   const livingEnemies = enemies.filter(e => !e.dead);
   const xpPct         = Math.min(100, Math.round((playerXp / xpToNext) * 100));
 
+  const POTION_KEYS = ['healing_potion', 'greater_healing_potion', 'raw_meat'] as const;
+  const potionCount = inventory.filter(i => (POTION_KEYS as readonly string[]).includes(i.key)).length;
+  const canUsePotion = phase === 'combat' && potionCount > 0 && playerHp < playerMaxHp;
+
   // All derived character stats — single source of truth from stats.ts
   const skillBonuses = calcSkillBonuses(skillProgress);
   const cs: ComputedStats = computeStats({
@@ -531,6 +535,24 @@ const log = useCallback((msg: string) => {
         !(n.x === playerPos.x && n.y === playerPos.y),
       ) ?? null
     : null;
+
+  // ── Quick potion (combat) ────────────────────────────────────────────────
+  const handleQuickPotion = useCallback(() => {
+    if (phaseRef.current !== 'combat') return;
+    if (playerHpRef.current >= playerMaxHpRef.current) {
+      log('❤️ HP уже максимально!');
+      return;
+    }
+    const order = ['greater_healing_potion', 'healing_potion', 'raw_meat'];
+    const item = order
+      .map(k => inventoryRef.current.find(i => i.key === k))
+      .find(Boolean);
+    if (!item) {
+      log('🧪 Нет зелий в инвентаре!');
+      return;
+    }
+    handleUseItem(item);
+  }, [log, handleUseItem]);
 
   // ── Tile renderer ─────────────────────────────────────────────────────────
   const renderTileContent = (gx: number, gy: number, tileType: number) => {
@@ -892,7 +914,16 @@ const log = useCallback((msg: string) => {
       </div>
 
       {/* ══ 3-4. MOVEMENT + SKILL BAR ══ */}
-      <ControlsPanel phase={phase} movePlayer={movePlayer} skillsCd={skillsCd} playerMp={playerMp} useSkill={useSkill} />
+      <ControlsPanel
+        phase={phase}
+        movePlayer={movePlayer}
+        skillsCd={skillsCd}
+        playerMp={playerMp}
+        useSkill={useSkill}
+        onUsePotion={handleQuickPotion}
+        potionCount={potionCount}
+        canUsePotion={canUsePotion}
+      />
 
       {/* ══ 5. COMBAT LOG ══ */}
       <CombatLog logs={logs} />
