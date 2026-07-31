@@ -53,6 +53,16 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     reward:      { gold: 100, xp: 150, items: ['rusty_sword'] },
     requiresQuest: 'quest_crystal_001',
   },
+  quest_chief_001: {
+    id:          'quest_chief_001',
+    title:       'Главарь в пещере',
+    description: 'Староста просит сразить Главаря гоблинов в Волчьей пещере.',
+    npcId:       'elder',
+    objective:   { description: 'Победить Главаря гоблинов', required: 1 },
+    killTargets: ['Главарь гоблинов'],
+    reward:      { gold: 200, xp: 250, items: ['greater_healing_potion'] },
+    requiresQuest: 'quest_goblin_001',
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',
