@@ -7,10 +7,13 @@ interface ControlsPanelProps {
   skillsCd: Record<number, number>;
   playerMp: number;
   useSkill: (skill: typeof SKILLS[0]) => void;
+  onUsePotion: () => void;
+  potionCount: number;
+  canUsePotion: boolean;
 }
 
 /** Bottom action controls: 4-way D-pad (explore only) OR skill bar with cooldowns (combat only). */
-export default function ControlsPanel({ phase, movePlayer, skillsCd, playerMp, useSkill }: ControlsPanelProps) {
+export default function ControlsPanel({ phase, movePlayer, skillsCd, playerMp, useSkill, onUsePotion, potionCount, canUsePotion }: ControlsPanelProps) {
   if (phase === 'explore') {
     return (
       /* ══ D-PAD ══ */
@@ -43,6 +46,17 @@ export default function ControlsPanel({ phase, movePlayer, skillsCd, playerMp, u
   return (
     /* ══ SKILL BAR ══ */
     <div className="h-[90px] shrink-0 bg-[#111116] border-t border-tile-border p-2 flex justify-center gap-2 overflow-x-auto">
+      <button disabled={!canUsePotion} onClick={onUsePotion}
+        className={`relative flex flex-col items-center justify-center w-[64px] h-[64px] shrink-0 rounded bg-[#1e1e28] border
+          ${canUsePotion ? 'border-green-600 shadow-[0_0_10px_rgba(34,197,94,0.4)] cursor-pointer active:scale-95 transition-all' : 'border-tile-border opacity-60 cursor-not-allowed'}`}>
+        <span className="text-xl mb-1">🧪</span>
+        <span className="text-[10px] font-bold text-white/80">Зелье</span>
+        {potionCount > 0 && (
+          <span className="absolute -top-1 -right-1 w-[16px] h-[16px] rounded-full bg-green-600 text-white text-[9px] font-black flex items-center justify-center leading-none">
+            {potionCount}
+          </span>
+        )}
+      </button>
       {SKILLS.map(skill => {
         const cd = skillsCd[skill.id] || 0;
         const isOnCd = cd > 0;
