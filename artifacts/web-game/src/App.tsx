@@ -880,15 +880,16 @@ const log = useCallback((msg: string) => {
       </div>
 
       {/* ══ INTERACT BUTTON — shown when adjacent to an NPC in explore mode ══ */}
-      {nearbyNpc && (
-        <div className="shrink-0 flex items-center justify-center py-[5px] border-t border-tile-border/30 bg-[#09090e] animate-in fade-in duration-150">
+      <div className="shrink-0 h-[40px] flex items-center justify-center border-t border-tile-border/30 bg-[#09090e]">
+        {nearbyNpc ? (
           <button
             onClick={() => handleNpcInteract(nearbyNpc)}
-            className="flex items-center gap-2 px-5 py-[5px] rounded-lg border border-primary/50 bg-primary/10 text-primary font-bold text-[12px] active:scale-95 transition-all shadow-[0_0_8px_rgba(200,150,42,0.12)]">
+            className="flex items-center gap-2 px-5 py-[5px] rounded-lg border border-primary/50 bg-primary/10 text-primary font-bold text-[12px] active:scale-95 transition-all shadow-[0_0_8px_rgba(200,150,42,0.12)]"
+          >
             💬 Говорить · {nearbyNpc.emoji} {nearbyNpc.name}
           </button>
-        </div>
-      )}
+        ) : null}
+      </div>
 
       {/* ══ 3-4. MOVEMENT + SKILL BAR ══ */}
       <ControlsPanel phase={phase} movePlayer={movePlayer} skillsCd={skillsCd} playerMp={playerMp} useSkill={useSkill} />
