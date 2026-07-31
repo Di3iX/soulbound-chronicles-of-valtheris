@@ -59,7 +59,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   'Крыса': {
     name: 'Крыса', emoji: '🐀', level: 1, hp: 60, dmgMin: 2, dmgMax: 6,
     speed: 'normal', xp: 12, goldMin: 2, goldMax: 5,
-    dropChance: 0.20, dropPool: ['rat_tail', 'healing_potion'],
+    dropChance: 0.20, dropPool: ['rat_tail', 'healing_potion', 'black_crystal'],
     note: 'Слабая, но кусачая тварь у амбаров.',
   },
   'Кролик': {
@@ -76,7 +76,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   'Молодой кабан': {
     name: 'Молодой кабан', emoji: '🐗', level: 3, hp: 140, dmgMin: 6, dmgMax: 12,
     speed: 'slow', xp: 28, goldMin: 5, goldMax: 10,
-    dropChance: 0.30, dropPool: ['raw_meat', 'boar_hide', 'boar_tusk'],
+    dropChance: 0.30, dropPool: ['raw_meat', 'boar_hide', 'boar_tusk', 'black_crystal'],
   },
   'Полевая змея': {
     name: 'Полевая змея', emoji: '🐍', level: 4, hp: 110, dmgMin: 5, dmgMax: 11,
@@ -87,7 +87,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   'Огромный Кабан': {
     name: 'Огромный Кабан', emoji: '🐗', level: 5, hp: 520, dmgMin: 14, dmgMax: 26,
     speed: 'normal', xp: 120, goldMin: 30, goldMax: 50,
-    dropChance: 0.80, dropPool: ['boar_hide', 'boar_tusk', 'raw_meat', 'iron_sword'],
+    dropChance: 0.80, dropPool: ['boar_hide', 'boar_tusk', 'raw_meat', 'black_crystal', 'iron_sword'],
     note: 'Мини-босс Тихих полей.',
   },
 
@@ -101,12 +101,12 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   'Гоблин': {
     name: 'Гоблин', emoji: '👺', level: 6, hp: 160, dmgMin: 6, dmgMax: 13,
     speed: 'normal', xp: 25, goldMin: 5, goldMax: 10,
-    dropChance: 0.30, dropPool: ['rusty_sword', 'leather_helm', 'copper_ring', 'goblin_ear'],
+    dropChance: 0.30, dropPool: ['rusty_sword', 'leather_helm', 'goblin_ear', 'black_crystal'],
   },
   'Бандит': {
     name: 'Бандит', emoji: '🥷', level: 8, hp: 200, dmgMin: 10, dmgMax: 18,
     speed: 'normal', xp: 55, goldMin: 12, goldMax: 22,
-    dropChance: 0.40, dropPool: ['iron_sword', 'leather_armor', 'silver_ring', 'healing_potion'],
+    dropChance: 0.40, dropPool: ['iron_sword', 'leather_armor', 'black_crystal', 'healing_potion'],
     ability: { effect: 'stun', chance: 0.15, label: 'Оглушение (15%)' },
   },
 

@@ -329,9 +329,11 @@ const log = useCallback((msg: string) => {
     // NPC intercept
     const npc = (LOCATION_NPCS[currentLocationRef.current] ?? []).find(n => n.x === nx && n.y === ny);
     if (npc) {
+      const crystalCount = inventoryRef.current.filter(i => i.key === 'black_crystal').length;
       const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
         fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
         caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+        crystalCount,
       });
       if (dlg) { setQuestDialogue(dlg); }
       else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
@@ -433,6 +435,24 @@ const log = useCallback((msg: string) => {
       const def = QUEST_DEFS[action.questId];
       if (!def) { setQuestDialogue(null); return; }
 
+      // ── Deliver items: consume from inventory (e.g. turn-in quests) ─────────
+      if (def.deliverItems) {
+        const { key, count } = def.deliverItems;
+        let left = count;
+        const nextInv: Item[] = [];
+        for (const it of inventoryRef.current) {
+          if (it.key === key && left > 0) { left -= 1; continue; }
+          nextInv.push(it);
+        }
+        if (left > 0) {
+          log('Не хватает предметов для сдачи!');
+          return;
+        }
+        inventoryRef.current = nextInv;
+        setInventory(nextInv);
+        log(`📦 Сдано: ${count} × ${ITEM_CATALOG[key]?.name ?? key}`);
+      }
+
       // ── Gold reward ────────────────────────────────────────────────────────
       playerGoldRef.current += def.reward.gold;
       setPlayerGold(playerGoldRef.current);
@@ -479,9 +499,11 @@ const log = useCallback((msg: string) => {
       return;
     }
     // Quest NPCs or generic dialog
+    const crystalCount = inventoryRef.current.filter(i => i.key === 'black_crystal').length;
     const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
       fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
       caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+      crystalCount,
     });
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }

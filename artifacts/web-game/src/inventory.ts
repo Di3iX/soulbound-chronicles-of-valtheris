@@ -67,6 +67,7 @@ export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
   amulet_of_dragon: { key: 'amulet_of_dragon', name: 'Амулет дракона',     type: 'amulet',  rarity: 'epic',      bonuses: { damage: 8, fireResist: 5 } },
   heart_of_mountain:{ key: 'heart_of_mountain',name: 'Сердце горы',        type: 'amulet',  rarity: 'legendary', bonuses: { hp: 45, defense: 8, blockChance: 4 } },
   // Materials
+  black_crystal:  { key: 'black_crystal',  name: 'Чёрный кристалл', type: 'consumable', rarity: 'uncommon', bonuses: {} },
   rat_tail:       { key: 'rat_tail',       name: 'Крысиный хвост',   type: 'consumable', rarity: 'common',   bonuses: {} },
   rabbit_fur:     { key: 'rabbit_fur',     name: 'Кроличий мех',     type: 'consumable', rarity: 'common',   bonuses: {} },
   raw_meat:       { key: 'raw_meat',       name: 'Сырое мясо',       type: 'consumable', rarity: 'common',   bonuses: {} },
@@ -112,7 +113,7 @@ export const ITEM_EMOJI: Partial<Record<string, string>> = {
   dragon_fang: '🐉', shadow_blade: '🗡️', arcane_staff: '🪄', void_plate: '🌌',
   wind_walkers: '🌪️', heart_of_mountain: '⛰️', band_of_eternity: '♾️',
   ring_of_phoenix: '🔥', bone_amulet: '🦴',
-  healing_potion: '🧪', greater_healing_potion: '🍷', mana_potion: '🔷', greater_mana_potion: '💠',
+  black_crystal: '🖤', healing_potion: '🧪', greater_healing_potion: '🍷', mana_potion: '🔷', greater_mana_potion: '💠',
   wolf_hide: '🐺', wolf_fang: '🦷', raw_meat: '🥩', boar_hide: '🐗', ice_shard: '❄️',
   spider_silk: '🕸️', golem_core: '🗿', troll_blood: '🩸',
 };
