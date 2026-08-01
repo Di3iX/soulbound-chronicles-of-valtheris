@@ -334,6 +334,7 @@ const log = useCallback((msg: string) => {
       const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
         fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
         caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+        ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
         crystalCount,
       });
       if (dlg) { setQuestDialogue(dlg); }
@@ -437,6 +438,7 @@ const log = useCallback((msg: string) => {
       const dlg = getNpcDialogue('smith', questProgressRef.current, {
         fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
         caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+        ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
         crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
       });
       if (dlg) setQuestDialogue(dlg);
@@ -527,6 +529,7 @@ const log = useCallback((msg: string) => {
     const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
       fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
       caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+      ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
       crystalCount,
     });
     if (dlg) { setQuestDialogue(dlg); }
