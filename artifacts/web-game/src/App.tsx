@@ -49,7 +49,7 @@ import CombatLog from './components/CombatLog';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
 import {
-  BOSS_ID, BossState, BossRewardInfo, INITIAL_BOSS_STATE,
+  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, BossState, BossRewardInfo, INITIAL_BOSS_STATE,
 } from './boss/boss';
 import BossVictoryPanel from './boss/BossVictoryPanel';
 
@@ -688,6 +688,7 @@ const log = useCallback((msg: string) => {
         playerMaxMp={playerMaxMp}
         playerStatusEffects={playerStatusEffects}
         activeEnemy={activeEnemy}
+        bossIds={[BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID]}
         bossId={BOSS_ID}
         currentLocation={currentLocation}
         locationMeta={LOCATION_META}
