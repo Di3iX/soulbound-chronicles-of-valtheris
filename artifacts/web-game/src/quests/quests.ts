@@ -76,6 +76,16 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     requiresQuest: 'quest_chief_001',
     deliverItems: { key: 'black_crystal', count: 3 },
   },
+  quest_ruins_001: {
+    id:          'quest_ruins_001',
+    title:       'Эхо руин',
+    description: 'Староста просит разведать Древние руины и сразить нежить.',
+    npcId:       'elder',
+    objective:   { description: 'Убить скелетов или зомби в руинах', required: 5 },
+    killTargets: ['Скелет', 'Зомби', 'Призрак'],
+    reward:      { gold: 250, xp: 300, items: ['greater_healing_potion', 'silver_ring'] },
+    requiresQuest: 'quest_shards_001',
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',
