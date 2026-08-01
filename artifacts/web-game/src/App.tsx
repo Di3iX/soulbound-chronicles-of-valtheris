@@ -132,6 +132,8 @@ export default function App() {
   const [showInventory, setShowInventory] = useState(false);
   const [selectedItem, setSelectedItem]   = useState<Item | null>(null);
   const [lootNotif, setLootNotif]         = useState<string | null>(null);
+  const [saveFlash, setSaveFlash]         = useState(false);
+  const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showWorldMap, setShowWorldMap]   = useState(false);
   const [openedChests, setOpenedChests]   = useState<OpenedChests>(sv?.openedChests ?? {});
 
@@ -245,6 +247,10 @@ export default function App() {
     skillProgress, skillPoints,
     bossState, exploredTiles,
     openedChests,
+  }, () => {
+    setSaveFlash(true);
+    if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current);
+    saveFlashTimer.current = setTimeout(() => setSaveFlash(false), 1200);
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -907,6 +913,15 @@ const log = useCallback((msg: string) => {
             <div className="absolute top-2 inset-x-2 z-[65] flex items-center gap-2 bg-[#0b1f0e]/95 border border-green-700/70 rounded px-3 py-2 shadow-lg pointer-events-none animate-in fade-in duration-200">
               <span className="text-base shrink-0">📦</span>
               <span className="text-[12px] font-bold text-green-300 leading-tight">Получен предмет: {lootNotif}</span>
+            </div>
+          )}
+
+          {/* "Сохранено" toast */}
+          {saveFlash && (
+            <div className="absolute top-2 right-2 z-[80] pointer-events-none
+              px-2 py-1 rounded bg-black/70 border border-tile-border
+              text-[10px] text-[#8f8] font-mono">
+              💾 Сохранено
             </div>
           )}
 
