@@ -82,7 +82,7 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     description: 'Староста просит разведать Древние руины и сразить нежить.',
     npcId:       'elder',
     objective:   { description: 'Убить скелетов или зомби в руинах', required: 5 },
-    killTargets: ['Скелет', 'Зомби', 'Призрак'],
+    killTargets: ['Скелет', 'Зомби', 'Призрак', 'Хранитель склепа'],
     reward:      { gold: 250, xp: 300, items: ['greater_healing_potion', 'silver_ring'] },
     requiresQuest: 'quest_shards_001',
   },

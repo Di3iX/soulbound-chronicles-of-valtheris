@@ -30,6 +30,7 @@ export interface DialogueFlags {
   caveChiefFirstKill?: boolean;
   /** How many black_crystal the player carries. */
   crystalCount?: number;
+  ruinsKeeperFirstKill?: boolean;
 }
 
 function questFlow(
@@ -235,13 +236,18 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
   }
 
   if (isQuestCompleted(progress, 'quest_ruins_001')) {
+    const lines = [
+      'Долина помнит тебя. Руины не сомкнулись над тобой — уже чудо.',
+      'Бездна шепчет дальше на запад и север. Иди, когда сила позволит.',
+      'Мы будем здесь. С печами, зельями и глупыми надеждами.',
+    ];
+    if (flags.ruinsKeeperFirstKill) {
+      lines.unshift('Ты сразил Хранителя склепа. Печать… настоящая. Холодная.');
+      lines.push('Болота на западе леса — следующий шёпот. Не раньше, чем будешь готов.');
+    }
     return {
       ...base,
-      lines: [
-        'Долина помнит тебя. Руины не сомкнулись над тобой — уже чудо.',
-        'Бездна шепчет дальше на запад и север. Иди, когда сила позволит.',
-        'Мы будем здесь. С печами, зельями и глупыми надеждами.',
-      ],
+      lines,
       buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
     };
   }
