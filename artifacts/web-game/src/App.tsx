@@ -748,19 +748,16 @@ const log = useCallback((msg: string) => {
             </div>
           )}
 
-          {/* ══ NPC QUEST DIALOGUE OVERLAY (z-70) ══════════════════════════════
-              Rich modal: NPC lines + action buttons (Accept / Complete / Dismiss)
-          ═══════════════════════════════════════════════════════════════════ */}
           {questDialogue && (
             <div
-              className="absolute inset-0 z-[70] bg-black/85 flex flex-col justify-end rounded px-3 pb-3 pt-10 backdrop-blur-[2px]"
+              className="absolute inset-0 z-[70] bg-black/85 flex flex-col justify-end rounded px-3 pb-3 pt-8 backdrop-blur-[2px]"
               onClick={() => setQuestDialogue(null)}
             >
               <div
-                className="w-full bg-[#0d0d16] border border-tile-border/80 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85%]"
+                className="w-full bg-[#0d0d16] border border-tile-border/80 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92%]"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Header + always-visible close */}
+                {/* Header */}
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-[#111118] border-b border-tile-border/60 shrink-0">
                   <span className="text-xl leading-none">{questDialogue.emoji}</span>
                   <span className="text-sm font-bold text-primary tracking-wide flex-1">{questDialogue.name}</span>
@@ -774,31 +771,31 @@ const log = useCallback((msg: string) => {
                   </button>
                 </div>
 
-                {/* Scrollable lines */}
-                <div className="px-4 py-3 space-y-1 overflow-y-auto min-h-0 flex-1">
-                  {questDialogue.lines.map((line, i) => (
-                    <p key={i} className="text-[12px] text-[#ccc] leading-relaxed italic">
-                      {i === 0 && '«'}{line}{i === questDialogue.lines.length - 1 && '»'}
-                    </p>
-                  ))}
-                </div>
-
-                {/* Buttons always at bottom */}
-                <div className="px-4 pb-3 pt-1 flex flex-col gap-[6px] shrink-0 border-t border-tile-border/40 bg-[#0d0d16]">
-                  {questDialogue.buttons.map((btn, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleQuestAction(btn.action)}
-                      className={`w-full py-2.5 rounded-lg border font-bold text-[12px] active:scale-95 transition-transform ${
-                        btn.primary
-                          ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_rgba(200,150,42,0.2)]'
-                          : 'border-tile-border bg-[#111118] text-[#ccc]'
-                      }`}
-                    >
-                      {btn.label}
-                    </button>
-                  ))}
+                {/* Текст + кнопки В ОДНОМ скролле */}
+                <div className="overflow-y-auto min-h-0 flex-1 overscroll-contain">
+                  <div className="px-4 py-3 space-y-1">
+                    {questDialogue.lines.map((line, i) => (
+                      <p key={i} className="text-[12px] text-[#ccc] leading-relaxed italic">
+                        {i === 0 && '«'}{line}{i === questDialogue.lines.length - 1 && '»'}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="px-4 pb-3 pt-1 flex flex-col gap-[6px] border-t border-tile-border/40">
+                    {questDialogue.buttons.map((btn, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleQuestAction(btn.action)}
+                        className={`w-full py-2.5 rounded-lg border font-bold text-[12px] active:scale-95 transition-transform ${
+                          btn.primary
+                            ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_rgba(200,150,42,0.2)]'
+                            : 'border-tile-border bg-[#111118] text-[#ccc]'
+                        }`}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
