@@ -7,6 +7,7 @@ export const BOSS_ID       = 9999; // Главарь гоблинов (пеще�
 export const FIELD_BOSS_ID = 9998; // Огромный Кабан (Тихие поля)
 export const RUINS_BOSS_ID = 9997; // Хранитель склепа (Древние руины)
 export const SWAMP_BOSS_ID = 9996; // Трясинный ужас (Гнилые болота)
+export const MINE_BOSS_ID  = 9995; // Каменный страж (Заброшенная шахта)
 
 export const CAVE_BOSS_DEF: Omit<Enemy, 'id'> = {
   name: 'Главарь гоблинов', emoji: '👑', x: 10, y: 10,
@@ -32,10 +33,17 @@ export const SWAMP_BOSS_DEF: Omit<Enemy, 'id'> = {
   attackInterval: 1700, dmgMin: 26, dmgMax: 42, dead: false,
 };
 
+export const MINE_BOSS_DEF: Omit<Enemy, 'id'> = {
+  name: 'Каменный страж', emoji: '🗿', x: 10, y: 10,
+  hp: 1700, maxHp: 1700, baseMaxHp: 1700, rarity: 'common',
+  attackInterval: 1900, dmgMin: 30, dmgMax: 48, dead: false,
+};
+
 export const BOSS_REWARD       = { xp: 500, gold: 300 } as const;
 export const FIELD_BOSS_REWARD = { xp: 120, gold: 50 } as const;
 export const RUINS_BOSS_REWARD = { xp: 650, gold: 400 } as const;
 export const SWAMP_BOSS_REWARD = { xp: 800, gold: 500 } as const;
+export const MINE_BOSS_REWARD  = { xp: 950, gold: 600 } as const;
 export const BOSS_RARE_CHANCE  = 0.25;
 export const BOSS_COMMON_LOOT  = [
   'black_crystal', 'iron_sword', 'orc_axe', 'iron_helm', 'chainmail',
@@ -49,6 +57,7 @@ export const BOSS_RESPAWN_MS       = 10 * 60 * 1000;
 export const FIELD_BOSS_RESPAWN_MS = 15 * 60 * 1000;
 export const RUINS_BOSS_RESPAWN_MS = 12 * 60 * 1000;
 export const SWAMP_BOSS_RESPAWN_MS = 12 * 60 * 1000;
+export const MINE_BOSS_RESPAWN_MS  = 12 * 60 * 1000;
 
 const GOBLIN_CHIEF_TROPHY: Omit<Item, 'id'> = {
   key: 'goblin_chief_trophy', name: 'Трофей главаря гоблинов',
@@ -81,28 +90,39 @@ export function makeSwampBossTrophy(): Item {
   return { ...SWAMP_HORROR_TROPHY, id: `swamp_horror_trophy_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
 }
 
-export const ALL_BOSS_IDS = new Set([BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID]);
+const STONE_GUARDIAN_TROPHY: Omit<Item, 'id'> = {
+  key: 'stone_guardian_trophy', name: 'Осколок ядра голема',
+  type: 'ring', rarity: 'epic', bonuses: { defense: 8, strength: 2, hp: 30 },
+};
+export function makeMineBossTrophy(): Item {
+  return { ...STONE_GUARDIAN_TROPHY, id: `stone_guardian_trophy_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
+}
+
+export const ALL_BOSS_IDS = new Set([BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID]);
 
 export interface BossState {
   caveChief:    { firstKillDone: boolean; deadAt?: number };
   fieldBoar:    { firstKillDone: boolean; deadAt?: number };
   ruinsKeeper:  { firstKillDone: boolean; deadAt?: number };
   swampHorror:  { firstKillDone: boolean; deadAt?: number };
+  mineGuardian: { firstKillDone: boolean; deadAt?: number };
 }
 
 export const INITIAL_BOSS_STATE: BossState = {
-  caveChief:   { firstKillDone: false },
-  fieldBoar:   { firstKillDone: false },
-  ruinsKeeper: { firstKillDone: false },
-  swampHorror: { firstKillDone: false },
+  caveChief:    { firstKillDone: false },
+  fieldBoar:    { firstKillDone: false },
+  ruinsKeeper:  { firstKillDone: false },
+  swampHorror:  { firstKillDone: false },
+  mineGuardian: { firstKillDone: false },
 };
 
 export function normalizeBossState(raw: Partial<BossState> | null | undefined): BossState {
   return {
-    caveChief:   raw?.caveChief   ?? { firstKillDone: false },
-    fieldBoar:   raw?.fieldBoar   ?? { firstKillDone: false },
-    ruinsKeeper: raw?.ruinsKeeper ?? { firstKillDone: false },
-    swampHorror: raw?.swampHorror ?? { firstKillDone: false },
+    caveChief:    raw?.caveChief    ?? { firstKillDone: false },
+    fieldBoar:    raw?.fieldBoar    ?? { firstKillDone: false },
+    ruinsKeeper:  raw?.ruinsKeeper  ?? { firstKillDone: false },
+    swampHorror:  raw?.swampHorror  ?? { firstKillDone: false },
+    mineGuardian: raw?.mineGuardian ?? { firstKillDone: false },
   };
 }
 
