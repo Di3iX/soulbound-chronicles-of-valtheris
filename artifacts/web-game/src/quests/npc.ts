@@ -3,6 +3,8 @@ import type { QuestProgress } from './quests';
 import {
   getQuestEntry, QUEST_DEFS, canOfferQuest, isQuestCompleted,
 } from './quests';
+import type { Item } from '../inventory';
+import { CRAFT_RECIPES, canCraft, recipeRequirementsText } from '../craft';
 
 export type DialogAction =
   | { kind: 'accept_quest';   questId: string }
@@ -14,6 +16,8 @@ export interface DialogButton {
   label:    string;
   action:   DialogAction;
   primary?: boolean;
+  /** If true, button is shown but not clickable (e.g. craft missing mats). */
+  disabled?: boolean;
 }
 
 export interface NpcDialogue {
@@ -541,26 +545,35 @@ function hermitDialogue(_p: QuestProgress, _flags: DialogueFlags): NpcDialogue {
  * Pass optional flags (e.g. fieldBoarFirstKill) from App for story branches.
  */
 
-function smithDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
+function smithDialogue(_progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
   const base = { npcId: 'smith', name: 'Кузнец', emoji: '⚒️' };
-  // Lazy import avoided — recipes listed by id; App validates craft
-  const buttons: DialogButton[] = [
-    { label: '🛡️ Кожаный доспех', action: { kind: 'craft', recipeId: 'craft_leather_patch' }, primary: true },
-    { label: '🦴 Костяной амулет', action: { kind: 'craft', recipeId: 'craft_wolf_charm' } },
-    { label: '🖤 Кулон защиты', action: { kind: 'craft', recipeId: 'craft_crystal_charm' } },
-    { label: '🧪 Полевое зелье', action: { kind: 'craft', recipeId: 'craft_field_ration' } },
-    { label: '⚔️ Клинок с клыком', action: { kind: 'craft', recipeId: 'craft_boar_blade' } },
-    { label: 'Уйти', action: { kind: 'dismiss' } },
-  ];
+  const inv = flags.inventory ?? [];
+
   const lines = [
     'Мех, клыки, кристаллы — таскай сюда. Золота не беру.',
-    'Доспех: 2 шкуры волка + шкура кабана.',
-    'Амулет: 2 клыка + мясо. Кулон: 2 кристалла + серебряное кольцо.',
-    'Зелье: 2 мяса + хвост. Клинок: клык + ржавый меч + кристалл.',
+    'Зелёным отмечено то, что можно скрафтить сейчас.',
   ];
   if (flags.caveChiefFirstKill) {
-    lines.push('Слышал, ты снял главаря. Кристаллы с него — хорошая оправа для кулона.');
+    lines.push('Слышал, ты снял главаря. Кристаллы с него — хорошая оправа.');
   }
+
+  const buttons: DialogButton[] = CRAFT_RECIPES.map((recipe, i) => {
+    const ok = canCraft(recipe, inv);
+    const req = recipeRequirementsText(recipe);
+    return {
+      label: `${ok ? '✅' : '❌'} ${recipe.label}`,
+      action: { kind: 'craft', recipeId: recipe.id },
+      primary: ok && i === 0,
+      disabled: !ok,
+    };
+  });
+  // Tooltip-ish: put requirements into lines for missing ones
+  const missing = CRAFT_RECIPES.filter(r => !canCraft(r, inv));
+  if (missing.length) {
+    lines.push('Не хватает: ' + missing.map(r => `${r.label} (${recipeRequirementsText(r)})`).join('; '));
+  }
+  buttons.push({ label: 'Уйти', action: { kind: 'dismiss' } });
+
   return { ...base, lines, buttons };
 }
 
