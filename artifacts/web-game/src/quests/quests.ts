@@ -201,3 +201,32 @@ export function trackKillForQuests(
 
   return { progress: changed ? next : progress, logs };
 }
+
+/** Active quests for HUD tracker (max few). */
+export function getActiveQuests(progress: QuestProgress): {
+  id: string;
+  title: string;
+  current: number;
+  required: number;
+  ready: boolean;
+}[] {
+  const out: {
+    id: string;
+    title: string;
+    current: number;
+    required: number;
+    ready: boolean;
+  }[] = [];
+  for (const def of Object.values(QUEST_DEFS)) {
+    const e = getQuestEntry(progress, def.id);
+    if (e.status !== 'active') continue;
+    out.push({
+      id: def.id,
+      title: def.title,
+      current: e.current,
+      required: def.objective.required,
+      ready: e.current >= def.objective.required,
+    });
+  }
+  return out;
+}
