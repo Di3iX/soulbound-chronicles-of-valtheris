@@ -7,6 +7,7 @@ import {
 export type DialogAction =
   | { kind: 'accept_quest';   questId: string }
   | { kind: 'complete_quest'; questId: string }
+  | { kind: 'craft';          recipeId: string }
   | { kind: 'dismiss' };
 
 export interface DialogButton {
@@ -338,6 +339,28 @@ function hermitDialogue(_p: QuestProgress, _flags: DialogueFlags): NpcDialogue {
  * Resolve dialogue for an NPC.
  * Pass optional flags (e.g. fieldBoarFirstKill) from App for story branches.
  */
+
+function smithDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
+  const base = { npcId: 'smith', name: 'Кузнец', emoji: '⚒️' };
+  // Lazy import avoided — recipes listed by id; App validates craft
+  const buttons: DialogButton[] = [
+    { label: '🛡️ Кожаный доспех (2 шкуры волка + 1 кабана)', action: { kind: 'craft', recipeId: 'craft_leather_patch' }, primary: true },
+    { label: '🦴 Костяной амулет (2 клыка + мясо)', action: { kind: 'craft', recipeId: 'craft_wolf_charm' } },
+    { label: '🖤 Кулон защиты (2 кристалла + кольцо)', action: { kind: 'craft', recipeId: 'craft_crystal_charm' } },
+    { label: '🧪 Полевое зелье (2 мяса + хвост)', action: { kind: 'craft', recipeId: 'craft_field_ration' } },
+    { label: '⚔️ Клинок с клыком (клык + ржавый меч + кристалл)', action: { kind: 'craft', recipeId: 'craft_boar_blade' } },
+    { label: 'Уйти', action: { kind: 'dismiss' } },
+  ];
+  const lines = [
+    'Мех, клыки, чёрные осколки — таскай сюда.',
+    'Скую доспех, амулет или клинок. Золота не беру: платишь добычей.',
+  ];
+  if (flags.caveChiefFirstKill) {
+    lines.push('Слышал, ты снял главаря. Кристаллы с него — хорошая оправа для кулона.');
+  }
+  return { ...base, lines, buttons };
+}
+
 export function getNpcDialogue(
   npcId: string,
   progress: QuestProgress,
@@ -348,5 +371,6 @@ export function getNpcDialogue(
   if (npcId === 'hunter') return hunterDialogue(progress, flags);
   if (npcId === 'hermit') return hermitDialogue(progress, flags);
   if (npcId === 'scout')  return scoutDialogue(progress, flags);
+  if (npcId === 'smith')  return smithDialogue(progress, flags);
   return null;
 }
