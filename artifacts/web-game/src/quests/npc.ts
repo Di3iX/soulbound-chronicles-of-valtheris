@@ -344,16 +344,18 @@ function smithDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
   const base = { npcId: 'smith', name: 'Кузнец', emoji: '⚒️' };
   // Lazy import avoided — recipes listed by id; App validates craft
   const buttons: DialogButton[] = [
-    { label: '🛡️ Кожаный доспех (2 шкуры волка + 1 кабана)', action: { kind: 'craft', recipeId: 'craft_leather_patch' }, primary: true },
-    { label: '🦴 Костяной амулет (2 клыка + мясо)', action: { kind: 'craft', recipeId: 'craft_wolf_charm' } },
-    { label: '🖤 Кулон защиты (2 кристалла + кольцо)', action: { kind: 'craft', recipeId: 'craft_crystal_charm' } },
-    { label: '🧪 Полевое зелье (2 мяса + хвост)', action: { kind: 'craft', recipeId: 'craft_field_ration' } },
-    { label: '⚔️ Клинок с клыком (клык + ржавый меч + кристалл)', action: { kind: 'craft', recipeId: 'craft_boar_blade' } },
+    { label: '🛡️ Кожаный доспех', action: { kind: 'craft', recipeId: 'craft_leather_patch' }, primary: true },
+    { label: '🦴 Костяной амулет', action: { kind: 'craft', recipeId: 'craft_wolf_charm' } },
+    { label: '🖤 Кулон защиты', action: { kind: 'craft', recipeId: 'craft_crystal_charm' } },
+    { label: '🧪 Полевое зелье', action: { kind: 'craft', recipeId: 'craft_field_ration' } },
+    { label: '⚔️ Клинок с клыком', action: { kind: 'craft', recipeId: 'craft_boar_blade' } },
     { label: 'Уйти', action: { kind: 'dismiss' } },
   ];
   const lines = [
-    'Мех, клыки, чёрные осколки — таскай сюда.',
-    'Скую доспех, амулет или клинок. Золота не беру: платишь добычей.',
+    'Мех, клыки, кристаллы — таскай сюда. Золота не беру.',
+    'Доспех: 2 шкуры волка + шкура кабана.',
+    'Амулет: 2 клыка + мясо. Кулон: 2 кристалла + серебряное кольцо.',
+    'Зелье: 2 мяса + хвост. Клинок: клык + ржавый меч + кристалл.',
   ];
   if (flags.caveChiefFirstKill) {
     lines.push('Слышал, ты снял главаря. Кристаллы с него — хорошая оправа для кулона.');
