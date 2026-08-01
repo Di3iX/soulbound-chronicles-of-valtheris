@@ -10,6 +10,7 @@ export type DialogAction =
   | { kind: 'accept_quest';   questId: string }
   | { kind: 'complete_quest'; questId: string }
   | { kind: 'craft';          recipeId: string }
+  | { kind: 'heal' }
   | { kind: 'dismiss' };
 
 export interface DialogButton {
@@ -592,6 +593,24 @@ function smithDialogue(_progress: QuestProgress, flags: DialogueFlags): NpcDialo
   return { ...base, lines, buttons };
 }
 
+
+function healerDialogue(_p: QuestProgress, _flags: DialogueFlags): NpcDialogue {
+  return {
+    npcId: 'healer',
+    name: 'Лекарь',
+    emoji: '💚',
+    lines: [
+      'Раненый? Садись. Дубовая Долина не бросает своих.',
+      'Я восстановлю силы — бесплатно, пока деревня цела.',
+      'Только не лезь в крепость без зелий. Я не чудотворец.',
+    ],
+    buttons: [
+      { label: '💚 Исцелиться', action: { kind: 'heal' }, primary: true },
+      { label: 'Уйти', action: { kind: 'dismiss' } },
+    ],
+  };
+}
+
 export function getNpcDialogue(
   npcId: string,
   progress: QuestProgress,
@@ -603,5 +622,6 @@ export function getNpcDialogue(
   if (npcId === 'hermit') return hermitDialogue(progress, flags);
   if (npcId === 'scout')  return scoutDialogue(progress, flags);
   if (npcId === 'smith')  return smithDialogue(progress, flags);
+  if (npcId === 'healer') return healerDialogue(progress, flags);
   return null;
 }
