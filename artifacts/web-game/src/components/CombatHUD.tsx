@@ -1,6 +1,7 @@
 import React from 'react';
 import { Enemy, LocationId, StatusEffect, STATUS_EFFECT_DEFS, ENEMY_RARITY_DEFS } from '../combat';
 import { QuestProgress } from '../quests/quests';
+import { MONSTER_DEFS } from '../monsters';
 
 interface CombatHUDProps {
   shieldActive:   boolean;
@@ -11,7 +12,10 @@ interface CombatHUDProps {
   playerMaxMp:    number;
   playerStatusEffects: StatusEffect[];
   activeEnemy:    Enemy | null;
-  bossId:         number;
+  /** @deprecated use bossIds */
+  bossId?:        number;
+  /** All reserved boss enemy ids (cave / field / ruins). */
+  bossIds?:       number[];
   currentLocation: LocationId;
   locationMeta:   Record<LocationId, { emoji: string; label: string; isSafeZone: boolean }>;
   livingEnemiesCount: number;
@@ -47,7 +51,7 @@ interface CombatHUDProps {
  */
 export default function CombatHUD({
   shieldActive, playerLevel, playerHp, playerMaxHp, playerMp, playerMaxMp, playerStatusEffects,
-  activeEnemy, bossId, currentLocation, locationMeta,
+  activeEnemy, bossId, bossIds, currentLocation, locationMeta,
   livingEnemiesCount, totalEnemiesCount,
   xpPct, playerXp, xpToNext, playerGold,
   statPoints, skillPoints, inventoryCount, questProgress,
@@ -55,6 +59,14 @@ export default function CombatHUD({
   onToggleCharPanel, onToggleInventory, onToggleWorldMap, onToggleQuestPanel, onToggleSkillPanel,
 }: CombatHUDProps) {
   const meta = locationMeta[currentLocation];
+  const bossIdSet = new Set(bossIds ?? (bossId != null ? [bossId] : []));
+  const isBoss = (e: Enemy | null) => !!e && bossIdSet.has(e.id);
+
+  const enemyDef = activeEnemy ? MONSTER_DEFS[activeEnemy.name] : undefined;
+  const enemyLevel = enemyDef?.level;
+  const enemyHpPct = activeEnemy
+    ? Math.round((activeEnemy.hp / Math.max(1, activeEnemy.maxHp)) * 100)
+    : 0;
 
   /** Small icon row with countdown — used for both player and enemy status effects. */
   const StatusIcons = ({ effects, align }: { effects: StatusEffect[]; align: 'start' | 'end' }) => (
@@ -120,12 +132,12 @@ export default function CombatHUD({
         <div className="flex flex-col w-[45%]">
           {activeEnemy ? (
             <>
-              {activeEnemy.id === bossId && (
+              {isBoss(activeEnemy) && (
                 <div className="flex justify-center mb-[1px]">
                   <span className="text-[8px] font-black text-red-500 uppercase tracking-widest animate-pulse">👑 БОСС</span>
                 </div>
               )}
-              {activeEnemy.id !== bossId && activeEnemy.rarity !== 'common' && (
+              {!isBoss(activeEnemy) && activeEnemy.rarity !== 'common' && (
                 <div className="flex justify-end mb-[1px]">
                   <span className="text-[8px] font-black uppercase tracking-widest"
                     style={{ color: ENEMY_RARITY_DEFS[activeEnemy.rarity].color }}>
@@ -133,20 +145,30 @@ export default function CombatHUD({
                   </span>
                 </div>
               )}
-              <div className="flex justify-between items-end mb-[2px]">
-                <span className={`text-[10px] font-mono ${activeEnemy.id === bossId ? 'text-red-400' : 'text-destructive'}`}>{activeEnemy.hp}/{activeEnemy.maxHp}</span>
-                <span className="text-xs font-bold tracking-wide"
-                  style={{ color: activeEnemy.id === bossId ? undefined : (activeEnemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[activeEnemy.rarity].color : undefined) }}>
-                  <span className={activeEnemy.id === bossId || activeEnemy.rarity !== 'common' ? '' : 'text-white'}>
+              <div className="flex justify-between items-end mb-[2px] gap-1">
+                <span className={`text-[10px] font-mono shrink-0 ${isBoss(activeEnemy) ? 'text-red-400' : 'text-destructive'}`}>
+                  {activeEnemy.hp}/{activeEnemy.maxHp}
+                </span>
+                <span className="text-xs font-bold tracking-wide text-right leading-tight"
+                  style={{ color: isBoss(activeEnemy) ? '#f87171' : (activeEnemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[activeEnemy.rarity].color : undefined) }}>
+                  <span className={isBoss(activeEnemy) || activeEnemy.rarity !== 'common' ? '' : 'text-white'}>
                     {activeEnemy.emoji} {activeEnemy.name}
                   </span>
+                  {enemyLevel != null && (
+                    <span className="block text-[9px] font-mono text-[#888] font-normal">
+                      Ур. {enemyLevel} · {enemyHpPct}%
+                    </span>
+                  )}
+                  {enemyLevel == null && isBoss(activeEnemy) && (
+                    <span className="block text-[9px] font-mono text-red-500/80 font-normal">Босс</span>
+                  )}
                 </span>
               </div>
-              <div className="h-[5px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
-                <div className={`h-full transition-all duration-300 ${activeEnemy.id === bossId ? 'bg-red-600' : 'bg-destructive'}`}
+              <div className="h-[6px] w-full bg-[#1a1a1f] rounded-full overflow-hidden border border-tile-border flex justify-end">
+                <div className={`h-full transition-all duration-300 ${isBoss(activeEnemy) ? 'bg-red-600' : 'bg-destructive'}`}
                   style={{
-                    width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%`,
-                    backgroundColor: activeEnemy.id !== bossId && activeEnemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[activeEnemy.rarity].color : undefined,
+                    width: `${enemyHpPct}%`,
+                    backgroundColor: !isBoss(activeEnemy) && activeEnemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[activeEnemy.rarity].color : undefined,
                   }} />
               </div>
               {(activeEnemy.statusEffects ?? []).length > 0 && <div className="mt-[2px]"><StatusIcons effects={activeEnemy.statusEffects ?? []} align="end" /></div>}
