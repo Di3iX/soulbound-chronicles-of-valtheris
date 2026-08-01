@@ -14,12 +14,12 @@ import { BaseStats, computeStats } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, trackKillForQuests } from '../quests/quests';
 import {
-  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID,
-  CAVE_BOSS_DEF, FIELD_BOSS_DEF, RUINS_BOSS_DEF,
-  BOSS_REWARD, FIELD_BOSS_REWARD, RUINS_BOSS_REWARD,
+  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID,
+  CAVE_BOSS_DEF, FIELD_BOSS_DEF, RUINS_BOSS_DEF, SWAMP_BOSS_DEF,
+  BOSS_REWARD, FIELD_BOSS_REWARD, RUINS_BOSS_REWARD, SWAMP_BOSS_REWARD,
   BOSS_RARE_CHANCE, BOSS_RARE_LOOT, BOSS_COMMON_LOOT,
-  BOSS_RESPAWN_MS, FIELD_BOSS_RESPAWN_MS, RUINS_BOSS_RESPAWN_MS,
-  BossState, BossRewardInfo, makeBossTrophy, makeFieldBossTrophy, makeRuinsBossTrophy,
+  BOSS_RESPAWN_MS, FIELD_BOSS_RESPAWN_MS, RUINS_BOSS_RESPAWN_MS, SWAMP_BOSS_RESPAWN_MS,
+  BossState, BossRewardInfo, makeBossTrophy, makeFieldBossTrophy, makeRuinsBossTrophy, makeSwampBossTrophy,
   ALL_BOSS_IDS,
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
@@ -251,6 +251,21 @@ export function useCombat(ctx: CombatCtx) {
     log('⚔️ Появился Босс: Хранитель склепа!');
   }, [log]);
 
+  const spawnSwampBoss = useCallback(() => {
+    if (enemiesRef.current.some(e => e.id === SWAMP_BOSS_ID)) return;
+    const bossEnemy: Enemy = { ...SWAMP_BOSS_DEF, id: SWAMP_BOSS_ID };
+    enemiesRef.current = [...enemiesRef.current, bossEnemy];
+    setEnemies(prev => [...prev, bossEnemy]);
+    phaseRef.current = 'explore';
+    setPhase('explore');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossAppearNotif(true);
+    setTimeout(() => setBossAppearNotif(false), 3500);
+    log('⚔️ Появился Босс: Трясинный ужас!');
+  }, [log]);
+
+
   // ── Cave Boss: handle kill + rewards ──────────────────────────────────────
   const handleBossDeath = useCallback(() => {
     // Enemy already marked dead + player position already set by handleEnemyDeath
@@ -435,6 +450,64 @@ export function useCombat(ctx: CombatCtx) {
     }
   }, [log, grantXp]);
 
+  // ── Swamp Boss: handle kill + rewards ────────────────────────────────────
+  const handleSwampBossDeath = useCallback(() => {
+    log('🫧 Трясинный ужас повержен!');
+
+    playerGoldRef.current += SWAMP_BOSS_REWARD.gold;
+    setPlayerGold(playerGoldRef.current);
+    log(`💰 Получено ${SWAMP_BOSS_REWARD.gold} золота!`);
+
+    const xpGained = Math.floor(SWAMP_BOSS_REWARD.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    log(`✨ Получено ${xpGained} опыта!`);
+    const { leveledUp, level: newLevel } = grantXp(xpGained);
+
+    const isRare   = Math.random() < BOSS_RARE_CHANCE;
+    const dropPool = isRare ? [...BOSS_RARE_LOOT] : [...BOSS_COMMON_LOOT];
+    const dropKey  = dropPool[Math.floor(Math.random() * dropPool.length)];
+    const dropItem = makeItem(dropKey);
+    inventoryRef.current = [...inventoryRef.current, dropItem];
+    setInventory(prev => [...prev, dropItem]);
+    setLootNotif(dropItem.name);
+    setTimeout(() => setLootNotif(null), 2500);
+    log(`📦 Получен лут: ${dropItem.name}!`);
+
+    const sh = bossStateRef.current.swampHorror ?? { firstKillDone: false };
+    const wasFirstKill = !sh.firstKillDone;
+    let trophyItem: Item | undefined;
+    if (wasFirstKill) {
+      trophyItem = makeSwampBossTrophy();
+      inventoryRef.current = [...inventoryRef.current, trophyItem];
+      setInventory(prev => [...prev, trophyItem!]);
+      log('🏆 Получен трофей: Сердце трясины!');
+    }
+
+    const newBS: BossState = {
+      ...bossStateRef.current,
+      swampHorror: { firstKillDone: true, deadAt: Date.now() },
+    };
+    bossStateRef.current = newBS;
+    setBossState(newBS);
+
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossRewardInfo({ xp: xpGained, gold: SWAMP_BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
+    setShowBossVictory(true);
+
+    {
+      const { progress: qp, logs: qLogs } = trackKillForQuests(questProgressRef.current, 'Трясинный ужас');
+      if (qLogs.length) {
+        questProgressRef.current = qp;
+        setQuestProgress(qp);
+        for (const msg of qLogs) log(msg);
+      }
+    }
+    if (wasFirstKill) {
+      log('🌑 Трясина оседает. В центре — пульсирующий сгусток…');
+      log('📜 Отнеси весть старосте. Болота ещё не побеждены, но ранены.');
+    }
+  }, [log, grantXp]);
+
   // ── Enemy death ──────────────────────────────────────────────────────────
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string, rarity: EnemyRarity) => {
     phaseRef.current = 'victory';
@@ -452,6 +525,7 @@ export function useCombat(ctx: CombatCtx) {
     if (id === BOSS_ID) { handleBossDeath(); return; }
     if (id === FIELD_BOSS_ID) { handleFieldBossDeath(); return; }
     if (id === RUINS_BOSS_ID) { handleRuinsBossDeath(); return; }
+    if (id === SWAMP_BOSS_ID) { handleSwampBossDeath(); return; }
 
     const reward = applyRewards(name, rarity);
     setLastKillReward(reward);
@@ -475,7 +549,7 @@ export function useCombat(ctx: CombatCtx) {
         setActiveEnemyId(null); activeEnemyIdRef.current = null;
       }
     }, 1500);
-  }, [log, applyRewards, handleBossDeath, handleFieldBossDeath, handleRuinsBossDeath]);
+  }, [log, applyRewards, handleBossDeath, handleFieldBossDeath, handleRuinsBossDeath, handleSwampBossDeath]);
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'combat') return;
@@ -728,9 +802,21 @@ export function useCombat(ctx: CombatCtx) {
           spawnRuinsBoss();
         }
       }
+
+      // Swamp boss
+      if (currentLocationRef.current === 'swamp') {
+        const bossAbsent = !enemiesRef.current.some(e => e.id === SWAMP_BOSS_ID);
+        const sh = bossStateRef.current.swampHorror ?? { firstKillDone: false };
+        const deadAt = sh.deadAt;
+        const offCooldown = deadAt === undefined || now - deadAt >= SWAMP_BOSS_RESPAWN_MS;
+        const areaClear = enemiesRef.current.every(e => e.id === SWAMP_BOSS_ID || e.dead);
+        if (bossAbsent && offCooldown && areaClear) {
+          spawnSwampBoss();
+        }
+      }
     }, 1000);
     return () => clearInterval(t);
-  }, [spawnCaveBoss, spawnFieldBoss, spawnRuinsBoss]);
+  }, [spawnCaveBoss, spawnFieldBoss, spawnRuinsBoss, spawnSwampBoss]);
 
   // ── Skill cooldowns ───────────────────────────────────────────────────────
   useEffect(() => {
