@@ -113,33 +113,42 @@ export function useReset(ctx: ResetCtx) {
   } = ctx;
 
   // ── Reset current map (respawn in current location — keep all character progress) ──
+  // ── Soft death: return to village at 50% HP (keep all progress) ───────────
   const resetCurrentMap = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
-    const loc   = currentLocationRef.current;
-    const fresh = makeLocationEnemies(loc);
-    const spawn = LOCATION_SPAWN[loc];
-
-    // Max HP/MP is based on current level, stats and equipment — nothing changes here
+    const spawn = LOCATION_SPAWN.village;
     const fullHp = playerMaxHpRef.current;
     const fullMp = playerMaxMpRef.current;
+    const halfHp = Math.max(1, Math.floor(fullHp * 0.5));
+    // Soft XP loss: 15% of progress to next level (never levels down)
+    const xpLoss = Math.max(1, Math.floor(xpToNextRef.current * 0.15));
+    const actualLoss = Math.min(playerXpRef.current, xpLoss);
+    playerXpRef.current = Math.max(0, playerXpRef.current - actualLoss);
+    setPlayerXp(playerXpRef.current);
+    // Stash for healer restore — App reads sessionStorage
+    try {
+      const prev = Number(sessionStorage.getItem('sb_recoverable_xp') || '0');
+      sessionStorage.setItem('sb_recoverable_xp', String(prev + actualLoss));
+    } catch { /* ignore */ }
 
-    // Run-level state
     phaseRef.current         = 'explore';
-    playerHpRef.current      = fullHp;
+    playerHpRef.current      = halfHp;
     playerMpRef.current      = fullMp;
     shieldRef.current        = false;
     playerStatusEffectsRef.current = [];
     playerPosRef.current     = spawn;
-    enemiesRef.current       = fresh;
+    currentLocationRef.current = 'village';
+    enemiesRef.current       = []; // safe zone
     activeEnemyIdRef.current = null;
 
     setPhase('explore');
+    setCurrentLocation('village');
     setPlayerPos(spawn);
-    setPlayerHp(fullHp);
+    setPlayerHp(halfHp);
     setPlayerMp(fullMp);
-    setEnemies(fresh);
+    setEnemies([]);
     setActiveEnemyId(null);
     setShieldActive(false);
     setPlayerStatusEffects([]);
@@ -153,14 +162,12 @@ export function useReset(ctx: ResetCtx) {
     setShowShop(false);
     setShowSkillPanel(false);
     setShowBossVictory(false);
-    setLogs([{ id: Date.now(), msg: `🗺️ Новый забег начат. Lv.${playerLevelRef.current} · 💰${playerGoldRef.current}` }]);
-
-    // ── Character progress intentionally NOT reset: ──────────────────────────
-    // level, XP, statPoints, stats, playerBonusDmg, levelHpBonus, levelMpBonus,
-    // gold, inventory, equipment, equipBonuses, playerMaxHp, playerMaxMp
+    setLogs([{
+      id: Date.now(),
+      msg: `💚 Дух вернулся в долину. HP ${halfHp}/${fullHp}. Потеряно ${actualLoss} XP — лекарь может вернуть. Исцелений: до 10/сутки бесплатно.`,
+    }]);
   }, []);
 
-  // ── Full reset — wipes save, returns to Lv.1 in city ("Играть снова") ──────
   const resetCharacter = useCallback(() => {
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
