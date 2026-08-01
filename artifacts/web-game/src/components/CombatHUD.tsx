@@ -1,6 +1,6 @@
 import React from 'react';
 import { Enemy, LocationId, StatusEffect, STATUS_EFFECT_DEFS, ENEMY_RARITY_DEFS } from '../combat';
-import { QuestProgress } from '../quests/quests';
+import { QuestProgress, getActiveQuests } from '../quests/quests';
 import { MONSTER_DEFS } from '../monsters';
 
 interface CombatHUDProps {
@@ -251,6 +251,31 @@ export default function CombatHUD({
           🌟
         </button>
       </div>
+
+      {/* Active quest tracker */}
+      {(() => {
+        const active = getActiveQuests(questProgress).slice(0, 2);
+        if (active.length === 0) return null;
+        return (
+          <div className="px-2 pb-1.5 space-y-[2px]">
+            {active.map(q => (
+              <div
+                key={q.id}
+                className={`flex items-center justify-between gap-2 text-[9px] font-mono rounded px-1.5 py-[2px] border ${
+                  q.ready
+                    ? 'border-primary/50 bg-primary/10 text-primary'
+                    : 'border-tile-border/50 bg-[#0a0a12]/90 text-[#9ab]'
+                }`}
+              >
+                <span className="truncate">📜 {q.title}</span>
+                <span className="shrink-0 tabular-nums">
+                  {q.ready ? '✓ сдать' : `${q.current}/${q.required}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
