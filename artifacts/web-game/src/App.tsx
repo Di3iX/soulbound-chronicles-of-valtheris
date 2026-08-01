@@ -56,6 +56,34 @@ import BossVictoryPanel from './boss/BossVictoryPanel';
 
 const INITIAL_PLAYER_LVL = 1;
 
+// ─── HEALER ────────────────────────────────────────────────────────────────
+const HEAL_COST     = 25;
+const FREE_PER_DAY  = 10;
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function loadHealState() {
+  try {
+    const day  = localStorage.getItem('sb_heal_day');
+    const left = Number(localStorage.getItem('sb_free_heals') ?? FREE_PER_DAY);
+    if (day !== todayKey()) {
+      localStorage.setItem('sb_heal_day', todayKey());
+      localStorage.setItem('sb_free_heals', String(FREE_PER_DAY));
+      return FREE_PER_DAY;
+    }
+    return Math.max(0, left);
+  } catch {
+    return FREE_PER_DAY;
+  }
+}
+
+function getRecoverableXp() {
+  try { return Number(sessionStorage.getItem('sb_recoverable_xp') || '0'); }
+  catch { return 0; }
+}
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 // BaseStats (strength / agility / vitality / intelligence) lives in ./stats
 import { FloatingNum, LogEntry } from './types/ui';
@@ -342,6 +370,9 @@ const log = useCallback((msg: string) => {
         iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
         crystalCount,
         inventory: inventoryRef.current,
+        freeHealsLeft: loadHealState(),
+        recoverableXp: getRecoverableXp(),
+        healGoldCost: HEAL_COST,
       });
       if (dlg) { setQuestDialogue(dlg); }
       else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
@@ -428,13 +459,39 @@ const log = useCallback((msg: string) => {
     if (action.kind === 'dismiss') { setQuestDialogue(null); return; }
 
     if (action.kind === 'heal') {
+      let free = loadHealState();
+      if (free <= 0) {
+        if (playerGoldRef.current < HEAL_COST) {
+          log('💰 Не хватает золота на лечение.');
+          return;
+        }
+        playerGoldRef.current -= HEAL_COST;
+        setPlayerGold(playerGoldRef.current);
+        log(`💚 Лечение за ${HEAL_COST} золота.`);
+      } else {
+        free -= 1;
+        localStorage.setItem('sb_free_heals', String(free));
+        localStorage.setItem('sb_heal_day', todayKey());
+        log(`💚 Бесплатное лечение. Осталось сегодня: ${free}`);
+      }
+
+      // Full HP/MP + clear effects
       playerHpRef.current = playerMaxHpRef.current;
       setPlayerHp(playerMaxHpRef.current);
       playerMpRef.current = playerMaxMpRef.current;
       setPlayerMp(playerMaxMpRef.current);
       playerStatusEffectsRef.current = [];
       setPlayerStatusEffects([]);
-      log('💚 Лекарь восстановил ваши силы.');
+
+      // Restore death XP
+      const rec = getRecoverableXp();
+      if (rec > 0) {
+        playerXpRef.current += rec;
+        setPlayerXp(playerXpRef.current);
+        sessionStorage.setItem('sb_recoverable_xp', '0');
+        log(`✨ Лекарь вернул ${rec} опыта.`);
+      }
+
       setQuestDialogue(null);
       return;
     }
@@ -463,6 +520,9 @@ const log = useCallback((msg: string) => {
         iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
         crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
         inventory: inventoryRef.current,
+        freeHealsLeft: loadHealState(),
+        recoverableXp: getRecoverableXp(),
+        healGoldCost: HEAL_COST,
       });
       if (dlg) setQuestDialogue(dlg);
       return;
@@ -559,6 +619,9 @@ const log = useCallback((msg: string) => {
       iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
       crystalCount,
       inventory: inventoryRef.current,
+      freeHealsLeft: loadHealState(),
+      recoverableXp: getRecoverableXp(),
+      healGoldCost: HEAL_COST,
     });
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
