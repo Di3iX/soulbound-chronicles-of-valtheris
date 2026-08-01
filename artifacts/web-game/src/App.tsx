@@ -49,7 +49,7 @@ import CombatLog from './components/CombatLog';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
 import {
-  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID,
+  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID,
   BossState, BossRewardInfo, normalizeBossState,
 } from './boss/boss';
 import BossVictoryPanel from './boss/BossVictoryPanel';
@@ -338,6 +338,7 @@ const log = useCallback((msg: string) => {
         ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
         swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
         mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
+        passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
         crystalCount,
       });
       if (dlg) { setQuestDialogue(dlg); }
@@ -444,6 +445,7 @@ const log = useCallback((msg: string) => {
         ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
         swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
         mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
+        passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
         crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
       });
       if (dlg) setQuestDialogue(dlg);
@@ -537,6 +539,7 @@ const log = useCallback((msg: string) => {
       ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
       swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
       mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
+      passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
       crystalCount,
     });
     if (dlg) { setQuestDialogue(dlg); }
@@ -695,7 +698,7 @@ const log = useCallback((msg: string) => {
         playerMaxMp={playerMaxMp}
         playerStatusEffects={playerStatusEffects}
         activeEnemy={activeEnemy}
-        bossIds={[BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID]}
+        bossIds={[BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID]}
         bossId={BOSS_ID}
         currentLocation={currentLocation}
         locationMeta={LOCATION_META}
