@@ -31,6 +31,7 @@ export interface DialogueFlags {
   /** How many black_crystal the player carries. */
   crystalCount?: number;
   ruinsKeeperFirstKill?: boolean;
+  swampHorrorFirstKill?: boolean;
 }
 
 function questFlow(
@@ -262,13 +263,17 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
   }
 
   if (isQuestCompleted(progress, 'quest_swamp_001')) {
+    const lines = [
+      'Болота не забрали тебя. Это уже больше, чем удача.',
+      'Шахта на севере от руин, перевал, крепость льда — долгий путь.',
+      'Мы здесь. Кузнец, торговец, глупые надежды. Приходи.',
+    ];
+    if (flags.swampHorrorFirstKill) {
+      lines.unshift('Трясинный ужас пал. Сердце трясины — плохая игрушка, но сильный талисман.');
+    }
     return {
       ...base,
-      lines: [
-        'Болота не забрали тебя. Это уже больше, чем удача.',
-        'Шахта на севере от руин, перевал, крепость льда — долгий путь.',
-        'Мы здесь. Кузнец, торговец, глупые надежды. Приходи.',
-      ],
+      lines,
       buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
     };
   }

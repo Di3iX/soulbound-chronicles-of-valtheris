@@ -92,7 +92,7 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     description: 'Староста просит разведать Гнилые болота и истребить порчу.',
     npcId:       'elder',
     objective:   { description: 'Убить слизней, болотников или ядовитых пауков', required: 5 },
-    killTargets: ['Слизень', 'Болотник', 'Ядовитый паук'],
+    killTargets: ['Слизень', 'Болотник', 'Ядовитый паук', 'Трясинный ужас'],
     reward:      { gold: 300, xp: 350, items: ['greater_healing_potion', 'greater_mana_potion'] },
     requiresQuest: 'quest_ruins_001',
   },
