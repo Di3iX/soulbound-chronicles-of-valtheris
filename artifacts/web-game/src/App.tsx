@@ -339,6 +339,7 @@ const log = useCallback((msg: string) => {
         swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
         mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
         passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
+        iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
         crystalCount,
       });
       if (dlg) { setQuestDialogue(dlg); }
@@ -446,6 +447,7 @@ const log = useCallback((msg: string) => {
         swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
         mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
         passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
+        iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
         crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
       });
       if (dlg) setQuestDialogue(dlg);
@@ -540,6 +542,7 @@ const log = useCallback((msg: string) => {
       swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
       mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
       passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
+      iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
       crystalCount,
     });
     if (dlg) { setQuestDialogue(dlg); }
@@ -698,7 +701,10 @@ const log = useCallback((msg: string) => {
         playerMaxMp={playerMaxMp}
         playerStatusEffects={playerStatusEffects}
         activeEnemy={activeEnemy}
-        bossIds={[BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID]}
+        bossIds={[
+          BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID,
+          SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID,
+        ]}
         bossId={BOSS_ID}
         currentLocation={currentLocation}
         locationMeta={LOCATION_META}
