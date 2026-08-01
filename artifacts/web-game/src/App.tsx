@@ -49,7 +49,7 @@ import CombatLog from './components/CombatLog';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
 import {
-  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID,
+  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID,
   BossState, BossRewardInfo, normalizeBossState,
 } from './boss/boss';
 import BossVictoryPanel from './boss/BossVictoryPanel';
@@ -341,6 +341,7 @@ const log = useCallback((msg: string) => {
         passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
         iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
         crystalCount,
+        inventory: inventoryRef.current,
       });
       if (dlg) { setQuestDialogue(dlg); }
       else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
@@ -449,6 +450,7 @@ const log = useCallback((msg: string) => {
         passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
         iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
         crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
+        inventory: inventoryRef.current,
       });
       if (dlg) setQuestDialogue(dlg);
       return;
@@ -544,6 +546,7 @@ const log = useCallback((msg: string) => {
       passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
       iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
       crystalCount,
+      inventory: inventoryRef.current,
     });
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
@@ -805,11 +808,14 @@ const log = useCallback((msg: string) => {
                       <button
                         key={i}
                         type="button"
-                        onClick={() => handleQuestAction(btn.action)}
+                        disabled={!!btn.disabled}
+                        onClick={() => { if (!btn.disabled) handleQuestAction(btn.action); }}
                         className={`w-full py-2.5 rounded-lg border font-bold text-[12px] active:scale-95 transition-transform ${
-                          btn.primary
-                            ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_rgba(200,150,42,0.2)]'
-                            : 'border-tile-border bg-[#111118] text-[#ccc]'
+                          btn.disabled
+                            ? 'border-tile-border bg-[#0a0a10] text-[#444] opacity-60 cursor-not-allowed'
+                            : btn.primary
+                              ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_rgba(200,150,42,0.2)]'
+                              : 'border-tile-border bg-[#111118] text-[#ccc]'
                         }`}
                       >
                         {btn.label}
