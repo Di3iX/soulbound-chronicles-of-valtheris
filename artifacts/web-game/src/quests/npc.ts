@@ -594,18 +594,32 @@ function smithDialogue(_progress: QuestProgress, flags: DialogueFlags): NpcDialo
 }
 
 
-function healerDialogue(_p: QuestProgress, _flags: DialogueFlags): NpcDialogue {
+function healerDialogue(_p: QuestProgress, flags: DialogueFlags): NpcDialogue {
+  const free = flags.freeHealsLeft ?? 10;
+  const recXp = flags.recoverableXp ?? 0;
+  const cost = flags.healGoldCost ?? 25;
+  const lines = [
+    'Раненый? Садись. Дубовая Долина не бросает своих.',
+    free > 0
+      ? `Бесплатных исцелений сегодня: ${free} из 10.`
+      : `Бесплатные на сегодня кончились. Исцеление — ${cost} золота.`,
+  ];
+  if (recXp > 0) {
+    lines.push(`У меня хранится ${recXp} твоего опыта с последнего поражения — верну при исцелении.`);
+  }
+  lines.push('Не лезь в крепость без зелий. Я не чудотворец.');
+
+  const healLabel = free > 0
+    ? `💚 Исцелиться (бесплатно, осталось ${free})`
+    : `💚 Исцелиться (${cost}💰)`;
+
   return {
     npcId: 'healer',
     name: 'Лекарь',
     emoji: '💚',
-    lines: [
-      'Раненый? Садись. Дубовая Долина не бросает своих.',
-      'Я восстановлю силы — бесплатно, пока деревня цела.',
-      'Только не лезь в крепость без зелий. Я не чудотворец.',
-    ],
+    lines,
     buttons: [
-      { label: '💚 Исцелиться', action: { kind: 'heal' }, primary: true },
+      { label: healLabel, action: { kind: 'heal' }, primary: true },
       { label: 'Уйти', action: { kind: 'dismiss' } },
     ],
   };
