@@ -57,15 +57,15 @@ export interface MonsterDef {
 export const MONSTER_DEFS: Record<string, MonsterDef> = {
   // ── Тихие поля (1–5) ──────────────────────────────────────────────────────
   'Крыса': {
-    name: 'Крыса', emoji: '🐀', level: 1, hp: 60, dmgMin: 2, dmgMax: 6,
-    speed: 'normal', xp: 12, goldMin: 2, goldMax: 5,
-    dropChance: 0.20, dropPool: ['rat_tail', 'healing_potion', 'black_crystal'],
+    name: 'Крыса', emoji: '🐀', level: 1, hp: 50, dmgMin: 2, dmgMax: 5,
+    speed: 'normal', xp: 16, goldMin: 3, goldMax: 6,
+    dropChance: 0.28, dropPool: ['rat_tail', 'healing_potion', 'black_crystal'],
     note: 'Слабая, но кусачая тварь у амбаров.',
   },
   'Кролик': {
-    name: 'Кролик', emoji: '🐇', level: 1, hp: 40, dmgMin: 1, dmgMax: 3,
-    speed: 'slow', xp: 8, goldMin: 1, goldMax: 3,
-    dropChance: 0.25, dropPool: ['raw_meat', 'rabbit_fur'],
+    name: 'Кролик', emoji: '🐇', level: 1, hp: 35, dmgMin: 1, dmgMax: 2,
+    speed: 'slow', xp: 10, goldMin: 2, goldMax: 4,
+    dropChance: 0.35, dropPool: ['raw_meat', 'rabbit_fur'],
     note: 'Почти не опасен. Хороший источник мяса.',
   },
   'Ворон': {
@@ -74,9 +74,9 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
     dropChance: 0.15, dropPool: ['raven_feather'],
   },
   'Молодой кабан': {
-    name: 'Молодой кабан', emoji: '🐗', level: 3, hp: 140, dmgMin: 6, dmgMax: 12,
-    speed: 'slow', xp: 28, goldMin: 5, goldMax: 10,
-    dropChance: 0.30, dropPool: ['raw_meat', 'boar_hide', 'boar_tusk', 'black_crystal'],
+    name: 'Молодой кабан', emoji: '🐗', level: 3, hp: 120, dmgMin: 5, dmgMax: 11,
+    speed: 'slow', xp: 32, goldMin: 6, goldMax: 12,
+    dropChance: 0.35, dropPool: ['raw_meat', 'boar_hide', 'boar_tusk', 'black_crystal'],
   },
   'Полевая змея': {
     name: 'Полевая змея', emoji: '🐍', level: 4, hp: 110, dmgMin: 5, dmgMax: 11,
@@ -93,19 +93,19 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
 
   // ── Тёмный лес (6–10) ─────────────────────────────────────────────────────
   'Волк': {
-    name: 'Волк', emoji: '🐺', level: 6, hp: 120, dmgMin: 18, dmgMax: 22,
-    speed: 'fast', xp: 40, goldMin: 8, goldMax: 14,
-    dropChance: 0.35, dropPool: ['wolf_hide', 'wolf_fang', 'raw_meat'],
+    name: 'Волк', emoji: '🐺', level: 6, hp: 130, dmgMin: 14, dmgMax: 20,
+    speed: 'fast', xp: 48, goldMin: 10, goldMax: 16,
+    dropChance: 0.40, dropPool: ['wolf_hide', 'wolf_fang', 'raw_meat'],
     note: 'Быстрый хищник. Лут: шкура, клык, мясо.',
   },
   'Гоблин': {
-    name: 'Гоблин', emoji: '👺', level: 6, hp: 160, dmgMin: 6, dmgMax: 13,
-    speed: 'normal', xp: 25, goldMin: 5, goldMax: 10,
+    name: 'Гоблин', emoji: '👺', level: 6, hp: 150, dmgMin: 7, dmgMax: 14,
+    speed: 'normal', xp: 50, goldMin: 5, goldMax: 10,
     dropChance: 0.30, dropPool: ['rusty_sword', 'leather_helm', 'goblin_ear', 'black_crystal'],
   },
   'Бандит': {
     name: 'Бандит', emoji: '🥷', level: 8, hp: 200, dmgMin: 10, dmgMax: 18,
-    speed: 'normal', xp: 55, goldMin: 12, goldMax: 22,
+    speed: 'normal', xp: 61, goldMin: 12, goldMax: 22,
     dropChance: 0.40, dropPool: ['iron_sword', 'leather_armor', 'black_crystal', 'healing_potion'],
     ability: { effect: 'stun', chance: 0.15, label: 'Оглушение (15%)' },
   },
@@ -170,12 +170,12 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   // ── Древние руины (15–20) ─────────────────────────────────────────────────
   'Скелет': {
     name: 'Скелет', emoji: '💀', level: 15, hp: 200, dmgMin: 12, dmgMax: 20,
-    speed: 'normal', xp: 50, goldMin: 10, goldMax: 18,
+    speed: 'normal', xp: 56, goldMin: 10, goldMax: 18,
     dropChance: 0.35, dropPool: ['bone_amulet', 'iron_helm', 'rusty_sword'],
   },
   'Зомби': {
     name: 'Зомби', emoji: '🧟', level: 17, hp: 350, dmgMin: 18, dmgMax: 28,
-    speed: 'very_slow', xp: 80, goldMin: 20, goldMax: 35,
+    speed: 'very_slow', xp: 89, goldMin: 20, goldMax: 35,
     dropChance: 0.45, dropPool: ['chainmail', 'iron_sword', 'amulet_of_wisdom'],
     resists: { electric: -30 },
   },
@@ -190,7 +190,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   // ── Гнилые болота (18–25) ─────────────────────────────────────────────────
   'Слизень': {
     name: 'Слизень', emoji: '🟢', level: 18, hp: 280, dmgMin: 12, dmgMax: 20,
-    speed: 'slow', xp: 95, goldMin: 18, goldMax: 32,
+    speed: 'slow', xp: 106, goldMin: 18, goldMax: 32,
     dropChance: 0.30, dropPool: ['slime_gel', 'healing_potion'],
     ability: { effect: 'slow', chance: 0.35, label: 'Слизь (35%)' },
   },
@@ -198,11 +198,11 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
     name: 'Ядовитый паук', emoji: '🕷️', level: 20, hp: 240, dmgMin: 14, dmgMax: 22,
     speed: 'fast', xp: 110, goldMin: 22, goldMax: 38,
     dropChance: 0.40, dropPool: ['spider_silk', 'snake_skin'],
-    ability: { effect: 'poison', chance: 0.45, label: 'Сильный яд (45%)' },
+    ability: { effect: 'poison', chance: 0.35, label: 'Сильный яд (45%)' },
   },
   'Болотник': {
     name: 'Болотник', emoji: '🐸', level: 22, hp: 380, dmgMin: 18, dmgMax: 28,
-    speed: 'slow', xp: 120, goldMin: 25, goldMax: 42,
+    speed: 'slow', xp: 134, goldMin: 25, goldMax: 42,
     dropChance: 0.40, dropPool: ['slime_gel', 'raw_meat', 'pendant_of_protection'],
   },
 
