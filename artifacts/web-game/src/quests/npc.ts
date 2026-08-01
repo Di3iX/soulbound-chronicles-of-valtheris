@@ -262,10 +262,49 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
     }
   }
 
+  // Mine quest (Chapter V)
+  const mine = getQuestEntry(progress, 'quest_mine_001');
+  if (canOfferQuest(progress, 'quest_mine_001') || mine.status === 'active') {
+    if (mine.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_mine_001',
+        base,
+        [
+          'Из руин ведёт путь в Заброшенную шахту. Там големы и мёртвые забойщики.',
+          'Нужен примерно 25 уровень. Убей 5 тварей шахты — и расскажи, что видел.',
+        ],
+        [
+          'Шахта холодна и глубока. Не оставайся в темноте дольше нужного.',
+        ],
+        [
+          'Ты вышел из шахты. Камень и кость остались позади.',
+          'Перевал и лёд ждут сильнее. Мы держим долину — ты держи фронт.',
+        ],
+      );
+    }
+  }
+
+  if (isQuestCompleted(progress, 'quest_mine_001')) {
+    const lines = [
+      'Шахта не стала твоей могилой. Хороший знак.',
+      'Каменный перевал, ледяная крепость — когда будешь готов.',
+      'Долина всегда откроет ворота своим защитникам.',
+    ];
+    if (flags.mineGuardianFirstKill) {
+      lines.unshift('Каменный страж пал. Осколок ядра — редкая находка.');
+    }
+    return {
+      ...base,
+      lines,
+      buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+    };
+  }
+
   if (isQuestCompleted(progress, 'quest_swamp_001')) {
     const lines = [
       'Болота не забрали тебя. Это уже больше, чем удача.',
-      'Шахта на севере от руин, перевал, крепость льда — долгий путь.',
+      'Когда наберёшь сил (~25 ур.) — поговорим о шахте.',
       'Мы здесь. Кузнец, торговец, глупые надежды. Приходи.',
     ];
     if (flags.swampHorrorFirstKill) {

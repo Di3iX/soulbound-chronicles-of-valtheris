@@ -96,6 +96,16 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     reward:      { gold: 300, xp: 350, items: ['greater_healing_potion', 'greater_mana_potion'] },
     requiresQuest: 'quest_ruins_001',
   },
+  quest_mine_001: {
+    id:          'quest_mine_001',
+    title:       'Глубины шахты',
+    description: 'Староста просит разведать Заброшенную шахту и истребить нежить и големов.',
+    npcId:       'elder',
+    objective:   { description: 'Убить врагов в шахте', required: 5 },
+    killTargets: ['Голем', 'Летучая мышь', 'Шахтёр-зомби', 'Каменный страж'],
+    reward:      { gold: 400, xp: 450, items: ['greater_healing_potion', 'iron_helm'] },
+    requiresQuest: 'quest_swamp_001',
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',
