@@ -36,6 +36,7 @@ import {
 } from './world/chests';
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
+import { CRAFT_RECIPES, craftItem } from './craft';
 import ShopPanel from './shop/ShopPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
@@ -418,6 +419,29 @@ const log = useCallback((msg: string) => {
   // ── Quest action handler ──────────────────────────────────────────────────
   const handleQuestAction = useCallback((action: DialogAction) => {
     if (action.kind === 'dismiss') { setQuestDialogue(null); return; }
+
+    if (action.kind === 'craft') {
+      const recipe = CRAFT_RECIPES.find(r => r.id === action.recipeId);
+      if (!recipe) { setQuestDialogue(null); return; }
+      const result = craftItem(recipe, inventoryRef.current);
+      if (!result.ok) {
+        log(`⚒️ ${result.reason}`);
+        return;
+      }
+      inventoryRef.current = result.inventory;
+      setInventory(result.inventory);
+      setLootNotif(result.item.name);
+      setTimeout(() => setLootNotif(null), 2500);
+      log(`⚒️ Скрафчено: ${result.item.name}!`);
+      // обновить диалог кузнеца (те же кнопки)
+      const dlg = getNpcDialogue('smith', questProgressRef.current, {
+        fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
+        caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+        crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
+      });
+      if (dlg) setQuestDialogue(dlg);
+      return;
+    }
 
     if (action.kind === 'accept_quest') {
       const updated: QuestProgress = {
