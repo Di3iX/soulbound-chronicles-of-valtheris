@@ -14,12 +14,12 @@ import { BaseStats, computeStats } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, trackKillForQuests } from '../quests/quests';
 import {
-  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID,
-  CAVE_BOSS_DEF, FIELD_BOSS_DEF, RUINS_BOSS_DEF, SWAMP_BOSS_DEF, MINE_BOSS_DEF,
-  BOSS_REWARD, FIELD_BOSS_REWARD, RUINS_BOSS_REWARD, SWAMP_BOSS_REWARD, MINE_BOSS_REWARD,
+  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID,
+  CAVE_BOSS_DEF, FIELD_BOSS_DEF, RUINS_BOSS_DEF, SWAMP_BOSS_DEF, MINE_BOSS_DEF, PASS_BOSS_DEF,
+  BOSS_REWARD, FIELD_BOSS_REWARD, RUINS_BOSS_REWARD, SWAMP_BOSS_REWARD, MINE_BOSS_REWARD, PASS_BOSS_REWARD,
   BOSS_RARE_CHANCE, BOSS_RARE_LOOT, BOSS_COMMON_LOOT,
-  BOSS_RESPAWN_MS, FIELD_BOSS_RESPAWN_MS, RUINS_BOSS_RESPAWN_MS, SWAMP_BOSS_RESPAWN_MS, MINE_BOSS_RESPAWN_MS,
-  BossState, BossRewardInfo, makeBossTrophy, makeFieldBossTrophy, makeRuinsBossTrophy, makeSwampBossTrophy, makeMineBossTrophy,
+  BOSS_RESPAWN_MS, FIELD_BOSS_RESPAWN_MS, RUINS_BOSS_RESPAWN_MS, SWAMP_BOSS_RESPAWN_MS, MINE_BOSS_RESPAWN_MS, PASS_BOSS_RESPAWN_MS,
+  BossState, BossRewardInfo, makeBossTrophy, makeFieldBossTrophy, makeRuinsBossTrophy, makeSwampBossTrophy, makeMineBossTrophy, makePassBossTrophy,
   ALL_BOSS_IDS,
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
@@ -277,6 +277,20 @@ export function useCombat(ctx: CombatCtx) {
     setBossAppearNotif(true);
     setTimeout(() => setBossAppearNotif(false), 3500);
     log('⚔️ Появился Босс: Каменный страж!');
+  }, [log]);
+
+  const spawnPassBoss = useCallback(() => {
+    if (enemiesRef.current.some(e => e.id === PASS_BOSS_ID)) return;
+    const bossEnemy: Enemy = { ...PASS_BOSS_DEF, id: PASS_BOSS_ID };
+    enemiesRef.current = [...enemiesRef.current, bossEnemy];
+    setEnemies(prev => [...prev, bossEnemy]);
+    phaseRef.current = 'explore';
+    setPhase('explore');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossAppearNotif(true);
+    setTimeout(() => setBossAppearNotif(false), 3500);
+    log('⚔️ Появился Босс: Владыка перевала!');
   }, [log]);
 
 
@@ -572,6 +586,56 @@ export function useCombat(ctx: CombatCtx) {
     }
   }, [log, grantXp]);
 
+  const handlePassBossDeath = useCallback(() => {
+    log('🏔️ Владыка перевала повержен!');
+    playerGoldRef.current += PASS_BOSS_REWARD.gold;
+    setPlayerGold(playerGoldRef.current);
+    log(`💰 Получено ${PASS_BOSS_REWARD.gold} золота!`);
+    const xpGained = Math.floor(PASS_BOSS_REWARD.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    log(`✨ Получено ${xpGained} опыта!`);
+    const { leveledUp, level: newLevel } = grantXp(xpGained);
+    const isRare   = Math.random() < BOSS_RARE_CHANCE;
+    const dropPool = isRare ? [...BOSS_RARE_LOOT] : [...BOSS_COMMON_LOOT];
+    const dropKey  = dropPool[Math.floor(Math.random() * dropPool.length)];
+    const dropItem = makeItem(dropKey);
+    inventoryRef.current = [...inventoryRef.current, dropItem];
+    setInventory(prev => [...prev, dropItem]);
+    setLootNotif(dropItem.name);
+    setTimeout(() => setLootNotif(null), 2500);
+    log(`📦 Получен лут: ${dropItem.name}!`);
+    const pl = bossStateRef.current.passLord ?? { firstKillDone: false };
+    const wasFirstKill = !pl.firstKillDone;
+    let trophyItem: Item | undefined;
+    if (wasFirstKill) {
+      trophyItem = makePassBossTrophy();
+      inventoryRef.current = [...inventoryRef.current, trophyItem];
+      setInventory(prev => [...prev, trophyItem!]);
+      log('🏆 Получен трофей: Корона ветров!');
+    }
+    const newBS: BossState = {
+      ...bossStateRef.current,
+      passLord: { firstKillDone: true, deadAt: Date.now() },
+    };
+    bossStateRef.current = newBS;
+    setBossState(newBS);
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
+    setBossRewardInfo({ xp: xpGained, gold: PASS_BOSS_REWARD.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
+    setShowBossVictory(true);
+    {
+      const { progress: qp, logs: qLogs } = trackKillForQuests(questProgressRef.current, 'Владыка перевала');
+      if (qLogs.length) {
+        questProgressRef.current = qp;
+        setQuestProgress(qp);
+        for (const msg of qLogs) log(msg);
+      }
+    }
+    if (wasFirstKill) {
+      log('🌑 Ветер на перевале стих. В снегу — корона из кованого льда и камня…');
+      log('📜 Путь к крепости открыт. Староста ждёт вестей.');
+    }
+  }, [log, grantXp]);
+
   // ── Enemy death ──────────────────────────────────────────────────────────
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string, rarity: EnemyRarity) => {
     phaseRef.current = 'victory';
@@ -591,6 +655,7 @@ export function useCombat(ctx: CombatCtx) {
     if (id === RUINS_BOSS_ID) { handleRuinsBossDeath(); return; }
     if (id === SWAMP_BOSS_ID) { handleSwampBossDeath(); return; }
     if (id === MINE_BOSS_ID) { handleMineBossDeath(); return; }
+    if (id === PASS_BOSS_ID) { handlePassBossDeath(); return; }
 
     const reward = applyRewards(name, rarity);
     setLastKillReward(reward);
@@ -614,7 +679,7 @@ export function useCombat(ctx: CombatCtx) {
         setActiveEnemyId(null); activeEnemyIdRef.current = null;
       }
     }, 1500);
-  }, [log, applyRewards, handleBossDeath, handleFieldBossDeath, handleRuinsBossDeath, handleSwampBossDeath, handleMineBossDeath]);
+  }, [log, applyRewards, handleBossDeath, handleFieldBossDeath, handleRuinsBossDeath, handleSwampBossDeath, handleMineBossDeath, handlePassBossDeath]);
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'combat') return;
@@ -891,9 +956,21 @@ export function useCombat(ctx: CombatCtx) {
           spawnMineBoss();
         }
       }
+
+      // Pass boss
+      if (currentLocationRef.current === 'pass') {
+        const bossAbsent = !enemiesRef.current.some(e => e.id === PASS_BOSS_ID);
+        const pl = bossStateRef.current.passLord ?? { firstKillDone: false };
+        const deadAt = pl.deadAt;
+        const offCd = deadAt === undefined || now - deadAt >= PASS_BOSS_RESPAWN_MS;
+        const areaClear = enemiesRef.current.every(e => e.id === PASS_BOSS_ID || e.dead);
+        if (bossAbsent && offCd && areaClear) {
+          spawnPassBoss();
+        }
+      }
     }, 1000);
     return () => clearInterval(t);
-  }, [spawnCaveBoss, spawnFieldBoss, spawnRuinsBoss, spawnSwampBoss, spawnMineBoss]);
+  }, [spawnCaveBoss, spawnFieldBoss, spawnRuinsBoss, spawnSwampBoss, spawnMineBoss, spawnPassBoss]);
 
   // ── Skill cooldowns ───────────────────────────────────────────────────────
   useEffect(() => {
