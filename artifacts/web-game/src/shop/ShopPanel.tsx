@@ -18,18 +18,22 @@ export default function ShopPanel({
 }: Props) {
   const [tab, setTab] = useState<'buy' | 'sell'>('buy');
 
-  // IDs of currently equipped items — cannot be sold
   const equippedIds = new Set(
     Object.values(equipment).filter(Boolean).map(eq => (eq as Item).id),
   );
-
-  // Items the player can sell: anything unequipped
   const sellable = inventory.filter(i => !equippedIds.has(i.id));
+
+  const buyRows = MERCHANT_ITEMS.map(shopItem => {
+    const def = ITEM_CATALOG[shopItem.key];
+    return { shopItem, def };
+  });
+  const visibleBuy = buyRows.filter(r => r.def);
+  const missingKeys = buyRows.filter(r => !r.def).map(r => r.shopItem.key);
 
   return (
     <div className="absolute inset-0 z-[60] bg-[#08080d]/97 flex flex-col rounded backdrop-blur-md">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-tile-border shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-lg leading-none">🛒</span>
@@ -37,17 +41,17 @@ export default function ShopPanel({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[12px] font-bold font-mono text-yellow-400">💰 {playerGold}</span>
-          <button onClick={onClose}
+          <button type="button" onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded border border-tile-border text-[#888] hover:text-white hover:border-primary transition-colors text-sm font-bold">
             ✕
           </button>
         </div>
       </div>
 
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+      {/* Tabs */}
       <div className="flex border-b border-tile-border shrink-0">
         {(['buy', 'sell'] as const).map(t => (
-          <button key={t}
+          <button key={t} type="button"
             onClick={() => setTab(t)}
             className={`flex-1 py-[7px] text-[13px] font-bold transition-colors border-b-2 ${
               tab === t
@@ -59,26 +63,32 @@ export default function ShopPanel({
         ))}
       </div>
 
-      {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-[6px]">
+      {/* Body — always scrollable */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-[6px]">
 
-        {/* BUY TAB */}
-        {tab === 'buy' && MERCHANT_ITEMS.map(shopItem => {
-          const def = ITEM_CATALOG[shopItem.key];
-          if (!def) return null;
-          const rs         = RARITY_STYLE[def.rarity];
-          const canAfford  = playerGold >= shopItem.price;
-          const isConsumable = def.type === 'consumable';
-          const healAmt    = isConsumable ? (CONSUMABLE_HEAL[shopItem.key] ?? 0) : 0;
-          const bonusLines = isConsumable ? [] : formatBonuses(def.bonuses);
+        {tab === 'buy' && visibleBuy.length === 0 && (
+          <p className="text-center text-[#888] text-[12px] py-8">
+            Товар временно недоступен.
+            {missingKeys.length > 0 && (
+              <span className="block mt-2 text-[10px] text-red-400/80 font-mono">
+                Нет в каталоге: {missingKeys.join(', ')}
+              </span>
+            )}
+          </p>
+        )}
+
+        {tab === 'buy' && visibleBuy.map(({ shopItem, def }) => {
+          const rs = RARITY_STYLE[def!.rarity];
+          const canAfford = playerGold >= shopItem.price;
+          const isConsumable = def!.type === 'consumable';
+          const healAmt = isConsumable ? (CONSUMABLE_HEAL[shopItem.key] ?? 0) : 0;
+          const bonusLines = isConsumable ? [] : formatBonuses(def!.bonuses);
           return (
             <div key={shopItem.key}
               className={`flex items-center gap-3 p-3 rounded-lg border ${rs.border} ${rs.bg} ${rs.glow}`}>
-
-              {/* Item info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-[6px] mb-[2px]">
-                  <span className={`text-[13px] font-bold ${rs.text} leading-tight`}>{def.name}</span>
+                  <span className={`text-[13px] font-bold ${rs.text} leading-tight`}>{def!.name}</span>
                   <span className={`text-[9px] font-bold uppercase px-[4px] py-[1px] rounded border ${rs.border} ${rs.text} opacity-60`}>
                     {rs.label}
                   </span>
@@ -88,16 +98,15 @@ export default function ShopPanel({
                 ) : bonusLines.length > 0 ? (
                   <p className="text-[10px] text-[#88c] font-mono">{bonusLines.join(' · ')}</p>
                 ) : (
-                  <p className="text-[10px] text-[#555]">{TYPE_LABEL[def.type]}</p>
+                  <p className="text-[10px] text-[#555]">{TYPE_LABEL[def!.type]}</p>
                 )}
               </div>
-
-              {/* Price + button */}
               <div className="flex flex-col items-end gap-[5px] shrink-0">
                 <span className={`text-[12px] font-bold font-mono ${canAfford ? 'text-yellow-400' : 'text-[#6b3c1a]'}`}>
                   💰 {shopItem.price}
                 </span>
                 <button
+                  type="button"
                   disabled={!canAfford}
                   onClick={() => onBuy(shopItem.key)}
                   className="px-3 py-[4px] rounded border text-[11px] font-bold transition-all active:scale-95
@@ -111,21 +120,18 @@ export default function ShopPanel({
           );
         })}
 
-        {/* SELL TAB */}
         {tab === 'sell' && (
           sellable.length === 0 ? (
             <p className="text-center text-[#444] text-[12px] italic py-10">Нечего продавать</p>
           ) : sellable.map(item => {
-            const rs      = RARITY_STYLE[item.rarity];
-            const price   = sellPrice(item);
+            const rs = RARITY_STYLE[item.rarity];
+            const price = sellPrice(item);
             const isConsumable = item.type === 'consumable';
-            const healAmt  = isConsumable ? (CONSUMABLE_HEAL[item.key] ?? 0) : 0;
+            const healAmt = isConsumable ? (CONSUMABLE_HEAL[item.key] ?? 0) : 0;
             const bonusLines = isConsumable ? [] : formatBonuses(item.bonuses);
             return (
               <div key={item.id}
                 className={`flex items-center gap-3 p-3 rounded-lg border ${rs.border} ${rs.bg}`}>
-
-                {/* Item info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-[6px] mb-[2px]">
                     <span className={`text-[13px] font-bold ${rs.text} leading-tight`}>{item.name}</span>
@@ -141,11 +147,10 @@ export default function ShopPanel({
                     <p className="text-[10px] text-[#555]">{TYPE_LABEL[item.type]}</p>
                   )}
                 </div>
-
-                {/* Sell price + button */}
                 <div className="flex flex-col items-end gap-[5px] shrink-0">
                   <span className="text-[12px] font-bold font-mono text-yellow-400">💰 {price}</span>
                   <button
+                    type="button"
                     onClick={() => onSell(item.id)}
                     className="px-3 py-[4px] rounded border text-[11px] font-bold transition-all active:scale-95
                       border-[#555] bg-[#0f0f14] text-[#aaa] hover:text-white hover:border-[#888]">
@@ -156,16 +161,13 @@ export default function ShopPanel({
             );
           })
         )}
-
       </div>
 
-      {/* ── Footer hint ────────────────────────────────────────────────────── */}
       <div className="shrink-0 px-4 py-2 border-t border-tile-border/30 flex items-center justify-center">
         <span className="text-[9px] text-[#333] font-mono uppercase tracking-wide">
           {tab === 'sell' ? 'Выкуп — 50% от цены' : 'Удачных покупок, путник'}
         </span>
       </div>
-
     </div>
   );
 }

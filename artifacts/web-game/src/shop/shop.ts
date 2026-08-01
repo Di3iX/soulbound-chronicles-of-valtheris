@@ -7,17 +7,23 @@ export interface ShopItem {
 
 /** Items the Village Merchant sells. */
 export const MERCHANT_ITEMS: ShopItem[] = [
+  // Consumables
   { key: 'healing_potion',         price: 25  },
   { key: 'greater_healing_potion', price: 75  },
   { key: 'mana_potion',            price: 25  },
   { key: 'greater_mana_potion',    price: 75  },
   { key: 'raw_meat',               price: 8   },
+  // Weapons
   { key: 'rusty_sword',            price: 100 },
   { key: 'iron_sword',             price: 220 },
+  // Armor
   { key: 'leather_helm',           price: 80  },
   { key: 'leather_armor',          price: 120 },
   { key: 'leather_gloves',         price: 60  },
   { key: 'light_boots',            price: 60  },
+  // Accessories
+  { key: 'copper_ring',            price: 90  },
+  { key: 'silver_ring',            price: 160 },
 ];
 
 /** Fast-lookup: buy price by item key. */
