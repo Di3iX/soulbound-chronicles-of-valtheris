@@ -1,23 +1,20 @@
-// ─── CRAFTING ─────────────────────────────────────────────────────────────────
-import type { Item } from './inventory';
-import { makeItem, ITEM_CATALOG } from './inventory';
+// ─── CRAFTING (Blacksmith) ────────────────────────────────────────────────────
+import type { Item } from '../inventory';
+import { ITEM_CATALOG, makeItem } from '../inventory';
 
 export interface CraftIngredient {
-  key: string;
+  key:   string;
   count: number;
 }
 
 export interface CraftRecipe {
-  id: string;
-  /** Result item key in ITEM_CATALOG */
-  resultKey: string;
-  ingredients: CraftIngredient[];
-  /** Shown at blacksmith */
-  label: string;
+  id:          string;
+  resultKey:   string;
+  label:       string;
   description: string;
+  ingredients: CraftIngredient[];
 }
 
-/** Recipes available at the village blacksmith. */
 export const CRAFT_RECIPES: CraftRecipe[] = [
   {
     id: 'craft_leather_patch',
@@ -70,6 +67,36 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
       { key: 'black_crystal', count: 1 },
     ],
   },
+  {
+    id: 'craft_iron_edge',
+    resultKey: 'iron_sword',
+    label: 'Железный клинок',
+    description: 'Перековка ржавого меча с кристаллом.',
+    ingredients: [
+      { key: 'rusty_sword', count: 1 },
+      { key: 'black_crystal', count: 1 },
+    ],
+  },
+  {
+    id: 'craft_chain_patch',
+    resultKey: 'chainmail',
+    label: 'Кольчуга',
+    description: 'Кожа + кристаллы в кольчужное плетение.',
+    ingredients: [
+      { key: 'leather_armor', count: 1 },
+      { key: 'black_crystal', count: 2 },
+    ],
+  },
+  {
+    id: 'craft_ice_charm',
+    resultKey: 'amulet_of_wisdom',
+    label: 'Талисман льда',
+    description: 'Кристаллы и серебро против холода Бездны.',
+    ingredients: [
+      { key: 'black_crystal', count: 2 },
+      { key: 'silver_ring', count: 1 },
+    ],
+  },
 ];
 
 export function countKey(inventory: Item[], key: string): number {
@@ -80,13 +107,13 @@ export function canCraft(recipe: CraftRecipe, inventory: Item[]): boolean {
   return recipe.ingredients.every(ing => countKey(inventory, ing.key) >= ing.count);
 }
 
-/** Remove ingredients (first matching items) and return new inventory + crafted item. */
+/** Remove ingredients and return new inventory + crafted item. */
 export function craftItem(
   recipe: CraftRecipe,
   inventory: Item[],
 ): { ok: true; inventory: Item[]; item: Item } | { ok: false; reason: string } {
   if (!ITEM_CATALOG[recipe.resultKey]) {
-    return { ok: false, reason: `Неизвестный рецепт: ${recipe.resultKey}` };
+    return { ok: false, reason: `Неизвестный результат: ${recipe.resultKey}` };
   }
   if (!canCraft(recipe, inventory)) {
     return { ok: false, reason: 'Не хватает материалов' };
@@ -117,4 +144,8 @@ export function recipeRequirementsText(recipe: CraftRecipe): string {
       return `${ing.count}× ${name}`;
     })
     .join(', ');
+}
+
+export function getRecipe(id: string): CraftRecipe | undefined {
+  return CRAFT_RECIPES.find(r => r.id === id);
 }
