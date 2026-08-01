@@ -116,6 +116,16 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     reward:      { gold: 500, xp: 550, items: ['greater_healing_potion', 'plate_armor'] },
     requiresQuest: 'quest_mine_001',
   },
+  quest_ice_001: {
+    id:          'quest_ice_001',
+    title:       'Ледяная крепость',
+    description: 'Староста просит войти в Ледяную крепость и сразить стражей холода.',
+    npcId:       'elder',
+    objective:   { description: 'Убить врагов в крепости', required: 5 },
+    killTargets: ['Рыцарь льда', 'Маг льда', 'Йети', 'Ледяной волк', 'Король льда'],
+    reward:      { gold: 700, xp: 800, items: ['greater_healing_potion', 'greater_mana_potion'] },
+    requiresQuest: 'quest_pass_001',
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',
