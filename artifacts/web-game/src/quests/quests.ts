@@ -135,6 +135,17 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     killTargets: ['Йети', 'Ледяной волк'],
     reward:      { gold: 280, xp: 320, items: ['greater_mana_potion'] },
   },
+  quest_epilogue_001: {
+    id:          'quest_epilogue_001',
+    title:       'Осколки Печати',
+    description: 'После падения Короля льда староста просит собрать отголоски Бездны — чёрные кристаллы.',
+    npcId:       'elder',
+    objective:   { description: 'Сдать чёрные кристаллы старосте', required: 5 },
+    killTargets: [],
+    reward:      { gold: 500, xp: 600, items: ['greater_healing_potion', 'greater_mana_potion'] },
+    requiresQuest: 'quest_ice_001',
+    deliverItems: { key: 'black_crystal', count: 5 },
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',

@@ -334,15 +334,71 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
     }
   }
 
+  // Epilogue — shards of the Seal
+  const epi = getQuestEntry(progress, 'quest_epilogue_001');
+  if (canOfferQuest(progress, 'quest_epilogue_001') || epi.status === 'active') {
+    if (epi.status !== 'completed') {
+      const need = QUEST_DEFS.quest_epilogue_001.deliverItems?.count ?? 5;
+      const have = flags.crystalCount ?? 0;
+      if (epi.status === 'inactive') {
+        return questFlow(
+          progress,
+          'quest_epilogue_001',
+          base,
+          [
+            'Король льда пал, но чёрный лёд в тронном зале не растаял до конца.',
+            'Это осколки Печати — той, что держала Бездну за порогом мира.',
+            'Принеси 5 чёрных кристаллов. Сложим их у алтаря долины — хотя бы заткнём трещину.',
+          ],
+          [],
+          [],
+        );
+      }
+      if (have >= need) {
+        return {
+          ...base,
+          lines: [
+            `У тебя ${have} кристаллов. Хватит на обряд.`,
+            'Отдай их. Пусть Долина ещё подержит тишину.',
+          ],
+          buttons: [
+            { label: '🏆 Отдать кристаллы', action: { kind: 'complete_quest', questId: 'quest_epilogue_001' }, primary: true },
+            { label: 'Уйти', action: { kind: 'dismiss' } },
+          ],
+        };
+      }
+      return {
+        ...base,
+        lines: [
+          `Нужно ${need} чёрных кристалла. У тебя: ${have}.`,
+          'Их роняют звери у порчи и боссы. Поля, лес, руины, болота…',
+        ],
+        buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+      };
+    }
+  }
+
+  if (isQuestCompleted(progress, 'quest_epilogue_001')) {
+    return {
+      ...base,
+      lines: [
+        'Кристаллы лежат у алтаря. Печать… не цела, но и не разбита.',
+        'Ты прошёл от амбаров Дубовой Долины до ледяного трона.',
+        'Бездна отступила на шаг. Когда откроются новые земли — ты услышишь зов.',
+        'А пока — отдых, кузнец, лекарь. Долина — твой дом.',
+      ],
+      buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+    };
+  }
+
   if (isQuestCompleted(progress, 'quest_ice_001')) {
     const lines = [
       'Дубовая Долина стоит благодаря тебе.',
       'От полей до ледяного трона — весь путь. Мы не забудем.',
-      'Когда будешь готов к новым землям и осколкам Печати — мы найдём карту.',
+      'Зайди ко мне снова — есть дело про осколки Печати.',
     ];
     if (flags.iceKingFirstKill) {
       lines.unshift('Король льда пал. Корона вечной зимы холодит даже огонь очага.');
-      lines.push('Чёрный лёд в тронном зале… это след Бездны. Сюжет ещё не кончен.');
     }
     return {
       ...base,
