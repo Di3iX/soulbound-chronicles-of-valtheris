@@ -285,10 +285,47 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
     }
   }
 
+  // Pass quest (Chapter VI)
+  const pass = getQuestEntry(progress, 'quest_pass_001');
+  if (canOfferQuest(progress, 'quest_pass_001') || pass.status === 'active') {
+    if (pass.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_pass_001',
+        base,
+        [
+          'За шахтой — Каменный перевал. Тролли и гарпии режут караваны.',
+          'Нужен примерно 30 уровень. Убей 5 тварей перевала.',
+        ],
+        ['Ветер там срывает с ног. Держись скал.'],
+        [
+          'Перевал затих… на время.',
+          'Дальше только лёд и крепость. Печать зовёт на север.',
+        ],
+      );
+    }
+  }
+
+  if (isQuestCompleted(progress, 'quest_pass_001')) {
+    const lines = [
+      'Ты прошёл перевал. Мало кто возвращается.',
+      'Ледяная крепость — последний известный оплот на карте долины.',
+      'Мы будем ждать у ворот. С чем бы ты ни вернулся.',
+    ];
+    if (flags.passLordFirstKill) {
+      lines.unshift('Владыка перевала пал. Корона ветров — достойный трофей.');
+    }
+    return {
+      ...base,
+      lines,
+      buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
+    };
+  }
+
   if (isQuestCompleted(progress, 'quest_mine_001')) {
     const lines = [
       'Шахта не стала твоей могилой. Хороший знак.',
-      'Каменный перевал, ледяная крепость — когда будешь готов.',
+      'Когда будешь около 30 уровня — поговорим о перевале.',
       'Долина всегда откроет ворота своим защитникам.',
     ];
     if (flags.mineGuardianFirstKill) {

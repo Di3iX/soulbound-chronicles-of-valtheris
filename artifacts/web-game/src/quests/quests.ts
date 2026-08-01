@@ -106,6 +106,16 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     reward:      { gold: 400, xp: 450, items: ['greater_healing_potion', 'iron_helm'] },
     requiresQuest: 'quest_swamp_001',
   },
+  quest_pass_001: {
+    id:          'quest_pass_001',
+    title:       'Каменный перевал',
+    description: 'Староста просит очистить Каменный перевал от горных тварей.',
+    npcId:       'elder',
+    objective:   { description: 'Убить врагов на перевале', required: 5 },
+    killTargets: ['Горный тролль', 'Гарпия', 'Голем', 'Владыка перевала'],
+    reward:      { gold: 500, xp: 550, items: ['greater_healing_potion', 'plate_armor'] },
+    requiresQuest: 'quest_mine_001',
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',
