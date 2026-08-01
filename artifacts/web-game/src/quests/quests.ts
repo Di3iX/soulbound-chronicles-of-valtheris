@@ -126,6 +126,15 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     reward:      { gold: 700, xp: 800, items: ['greater_healing_potion', 'greater_mana_potion'] },
     requiresQuest: 'quest_pass_001',
   },
+  quest_yeti_001: {
+    id:          'quest_yeti_001',
+    title:       'Шёпот пиков',
+    description: 'Отшельник просит проредить йети на Ледяных пиках.',
+    npcId:       'hermit',
+    objective:   { description: 'Убить йети или ледяных волков', required: 4 },
+    killTargets: ['Йети', 'Ледяной волк'],
+    reward:      { gold: 280, xp: 320, items: ['greater_mana_potion'] },
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',

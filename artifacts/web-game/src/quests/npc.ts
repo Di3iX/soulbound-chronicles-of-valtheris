@@ -528,22 +528,37 @@ function scoutDialogue(progress: QuestProgress, _flags: DialogueFlags): NpcDialo
   );
 }
 
-function hermitDialogue(_p: QuestProgress, _flags: DialogueFlags): NpcDialogue {
+function hermitDialogue(progress: QuestProgress, _flags: DialogueFlags): NpcDialogue {
+  const base = { npcId: 'hermit', name: 'Отшельник', emoji: '🧙' };
+  const entry = getQuestEntry(progress, 'quest_yeti_001');
+  if (entry.status !== 'completed') {
+    return questFlow(
+      progress,
+      'quest_yeti_001',
+      base,
+      [
+        'Мало кто доходит до этих пиков живым.',
+        'Йети и ледяные волки слишком громко топчут снег — мешают думать.',
+        'Убей 4. Огонь им не люб — помни это.',
+      ],
+      ['Ищи следы у скал. Крепость ещё севернее — туда не торопись.'],
+      [
+        'Тише стало. Спасибо, странник.',
+        'Печать слабеет. Если пойдёшь в крепость — бери зелья и не смотри в чёрный лёд слишком долго.',
+      ],
+    );
+  }
   return {
-    npcId: 'hermit', name: 'Отшельник', emoji: '🧙',
+    ...base,
     lines: [
-      'Мало кто доходит до этих пиков живым.',
-      'Йети боятся огня. Крепость на севере — вотчина льда.',
-      'Печать слабеет. Ты это уже чувствуешь — иначе не стоял бы здесь.',
+      'Пики помнят твоё имя. Йети реже воют.',
+      'Крепость ждёт. Король льда не спит — он слушает Бездну.',
+      'Возвращайся, если выживешь. Мне будет что рассказать опечам.',
     ],
-    buttons: [{ label: 'Понял', action: { kind: 'dismiss' }, primary: true }],
+    buttons: [{ label: 'Уйти', action: { kind: 'dismiss' } }],
   };
 }
 
-/**
- * Resolve dialogue for an NPC.
- * Pass optional flags (e.g. fieldBoarFirstKill) from App for story branches.
- */
 
 function smithDialogue(_progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
   const base = { npcId: 'smith', name: 'Кузнец', emoji: '⚒️' };
