@@ -49,7 +49,8 @@ import CombatLog from './components/CombatLog';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
 import {
-  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, BossState, BossRewardInfo, INITIAL_BOSS_STATE,
+  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID,
+  BossState, BossRewardInfo, normalizeBossState,
 } from './boss/boss';
 import BossVictoryPanel from './boss/BossVictoryPanel';
 
@@ -119,7 +120,7 @@ export default function App() {
   const [skillProgress, setSkillProgress]     = useState<SkillProgress>(sv?.skillProgress ?? {});
   const [skillPoints, setSkillPoints]         = useState(sv?.skillPoints ?? 0);
   const [showSkillPanel, setShowSkillPanel]   = useState(false);
-  const [bossState, setBossState]             = useState<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
+  const [bossState, setBossState]             = useState<BossState>(normalizeBossState(sv?.bossState));
   const [bossAppearNotif, setBossAppearNotif] = useState(false);
   const [showBossVictory, setShowBossVictory] = useState(false);
   const [bossRewardInfo, setBossRewardInfo]   = useState<BossRewardInfo | null>(null);
@@ -155,7 +156,7 @@ export default function App() {
   const skillProgressRef   = useRef<SkillProgress>(sv?.skillProgress ?? {});
   const skillPointsRef     = useRef(sv?.skillPoints ?? 0);
   const skillBonusesRef    = useRef<SkillBonuses>(calcSkillBonuses(sv?.skillProgress ?? {}));
-  const bossStateRef              = useRef<BossState>(sv?.bossState ?? INITIAL_BOSS_STATE);
+  const bossStateRef              = useRef<BossState>(normalizeBossState(sv?.bossState));
   const playerAttackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openedChestsRef     = useRef<OpenedChests>(sv?.openedChests ?? {});
@@ -335,6 +336,7 @@ const log = useCallback((msg: string) => {
         fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
         caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
         ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
+        swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
         crystalCount,
       });
       if (dlg) { setQuestDialogue(dlg); }
@@ -439,6 +441,7 @@ const log = useCallback((msg: string) => {
         fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
         caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
         ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
+        swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
         crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
       });
       if (dlg) setQuestDialogue(dlg);
@@ -530,6 +533,7 @@ const log = useCallback((msg: string) => {
       fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
       caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
       ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
+      swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
       crystalCount,
     });
     if (dlg) { setQuestDialogue(dlg); }
@@ -688,7 +692,7 @@ const log = useCallback((msg: string) => {
         playerMaxMp={playerMaxMp}
         playerStatusEffects={playerStatusEffects}
         activeEnemy={activeEnemy}
-        bossIds={[BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID]}
+        bossIds={[BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID]}
         bossId={BOSS_ID}
         currentLocation={currentLocation}
         locationMeta={LOCATION_META}
