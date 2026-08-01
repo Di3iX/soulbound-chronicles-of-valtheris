@@ -427,6 +427,18 @@ const log = useCallback((msg: string) => {
   const handleQuestAction = useCallback((action: DialogAction) => {
     if (action.kind === 'dismiss') { setQuestDialogue(null); return; }
 
+    if (action.kind === 'heal') {
+      playerHpRef.current = playerMaxHpRef.current;
+      setPlayerHp(playerMaxHpRef.current);
+      playerMpRef.current = playerMaxMpRef.current;
+      setPlayerMp(playerMaxMpRef.current);
+      playerStatusEffectsRef.current = [];
+      setPlayerStatusEffects([]);
+      log('💚 Лекарь восстановил ваши силы.');
+      setQuestDialogue(null);
+      return;
+    }
+
     if (action.kind === 'craft') {
       const recipe = CRAFT_RECIPES.find(r => r.id === action.recipeId);
       if (!recipe) { setQuestDialogue(null); return; }
