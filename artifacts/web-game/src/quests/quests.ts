@@ -86,6 +86,16 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     reward:      { gold: 250, xp: 300, items: ['greater_healing_potion', 'silver_ring'] },
     requiresQuest: 'quest_shards_001',
   },
+  quest_swamp_001: {
+    id:          'quest_swamp_001',
+    title:       'Тление болот',
+    description: 'Староста просит разведать Гнилые болота и истребить порчу.',
+    npcId:       'elder',
+    objective:   { description: 'Убить слизней, болотников или ядовитых пауков', required: 5 },
+    killTargets: ['Слизень', 'Болотник', 'Ядовитый паук'],
+    reward:      { gold: 300, xp: 350, items: ['greater_healing_potion', 'greater_mana_potion'] },
+    requiresQuest: 'quest_ruins_001',
+  },
   quest_wolf_001: {
     id:          'quest_wolf_001',
     title:       'Охота на волков',
