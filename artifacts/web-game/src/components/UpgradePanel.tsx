@@ -68,6 +68,12 @@ export default function UpgradePanel({
                 → +{prev.nextLevel}: {formatBonuses(prev.bonuses).join(' · ')}
                 <br />
                 Стоимость: {prev.gold}💰 + {prev.crystals} кристалл
+                <br />
+                <span className={prev.successChance >= 0.7 ? 'text-green-400' : prev.successChance >= 0.45 ? 'text-yellow-400' : 'text-red-400'}>
+                  Шанс успеха: {Math.round(prev.successChance * 100)}%
+                </span>
+                <br />
+                <span className="text-[#666]">{prev.riskNote}</span>
               </p>
             )}
             {maxed && <p className="text-[10px] text-primary mt-1">Максимум</p>}
