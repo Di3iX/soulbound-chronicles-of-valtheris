@@ -23,7 +23,7 @@ type SlotKey = keyof Equipment;
 
 const SLOT_LABEL: Partial<Record<SlotKey, string>> = {
   weapon: 'Оружие', helmet: 'Шлем', armor: 'Броня', gloves: 'Перчатки',
-  boots: 'Сапоги', ring: 'Кольцо', amulet: 'Амулет',
+  boots: 'Сапоги', ring1: 'Кольцо 1', ring2: 'Кольцо 2', amulet: 'Амулет',
 };
 
 export default function TierPromotePanel({
