@@ -36,7 +36,7 @@ import {
 } from './world/chests';
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
-import { CRAFT_RECIPES, craftItem } from './craft';
+import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
 import ShopPanel from './shop/ShopPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
@@ -134,6 +134,8 @@ export default function App() {
   const [lootNotif, setLootNotif]         = useState<string | null>(null);
   const [saveFlash, setSaveFlash]         = useState(false);
   const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showCraft, setShowCraft]         = useState(false);
+  const [unlockedRecipes, setUnlockedRecipes] = useState<string[]>(sv?.unlockedRecipes ?? []);
   const [showWorldMap, setShowWorldMap]   = useState(false);
   const [openedChests, setOpenedChests]   = useState<OpenedChests>(sv?.openedChests ?? {});
 
@@ -247,6 +249,7 @@ export default function App() {
     skillProgress, skillPoints,
     bossState, exploredTiles,
     openedChests,
+    unlockedRecipes,
   }, () => {
     setSaveFlash(true);
     if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current);
@@ -464,6 +467,12 @@ const log = useCallback((msg: string) => {
   const handleQuestAction = useCallback((action: DialogAction) => {
     if (action.kind === 'dismiss') { setQuestDialogue(null); return; }
 
+    if (action.kind === 'open_craft') {
+      setQuestDialogue(null);
+      setShowCraft(true);
+      return;
+    }
+
     if (action.kind === 'heal') {
       let free = loadHealState();
       if (free <= 0) {
@@ -632,6 +641,27 @@ const log = useCallback((msg: string) => {
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
   }, []);
+
+  // ── CraftPanel: craft / learn ───────────────────────────────────────────────
+  const handleCraft = useCallback((recipeId: string) => {
+    const recipe = getRecipe(recipeId);
+    if (!recipe) return;
+    const res = craftItem(recipe, inventoryRef.current);
+    if (!res.ok) { log(res.reason); return; }
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    log(`⚒️ Скрафчено: ${res.item.name}`);
+  }, [log]);
+
+  const handleLearn = useCallback((recipeId: string) => {
+    const recipe = getRecipe(recipeId);
+    if (!recipe) return;
+    const res = learnRecipe(recipe, unlockedRecipes, inventoryRef.current);
+    setUnlockedRecipes(res.unlocked);
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    log(res.msg);
+  }, [log, unlockedRecipes]);
 
   // ── Shop: buy ────────────────────────────────────────────────────────────
 
