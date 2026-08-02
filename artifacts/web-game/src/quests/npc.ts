@@ -12,6 +12,7 @@ export type DialogAction =
   | { kind: 'craft';          recipeId: string }
   | { kind: 'heal' }
   | { kind: 'open_craft' }
+  | { kind: 'open_upgrade' }
   | { kind: 'dismiss' };
 
 export interface DialogButton {
@@ -633,6 +634,7 @@ function smithDialogue(_progress: QuestProgress, flags: DialogueFlags): NpcDialo
     lines,
     buttons: [
       { label: '⚒️ Открыть кузницу', action: { kind: 'open_craft' }, primary: true },
+      { label: '✨ Улучшение вещей', action: { kind: 'open_upgrade' } },
       { label: 'Уйти', action: { kind: 'dismiss' } },
     ],
   };
