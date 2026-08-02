@@ -37,7 +37,7 @@ import {
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
-import { upgradeItemInInventory, upgradeEquippedItem } from './upgrade';
+import { upgradeItemInInventory, upgradeEquippedItem, UpgradeProtectItem } from './upgrade';
 import ShopPanel from './shop/ShopPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
@@ -672,8 +672,8 @@ const log = useCallback((msg: string) => {
   }, [log, unlockedRecipes]);
 
   // ── UpgradePanel: upgrade inventory / equipped item ─────────────────────────
-  const handleUpgradeInv = useCallback((itemId: string) => {
-    const res = upgradeItemInInventory(itemId, inventoryRef.current, playerGoldRef.current);
+  const handleUpgradeInv = useCallback((itemId: string, protect?: UpgradeProtectItem) => {
+    const res = upgradeItemInInventory(itemId, inventoryRef.current, playerGoldRef.current, protect);
     if (!res.ok) { log(res.reason); return; }
     inventoryRef.current = res.inventory;
     setInventory(res.inventory);
@@ -682,10 +682,10 @@ const log = useCallback((msg: string) => {
     log(res.msg);
   }, [log]);
 
-  const handleUpgradeEq = useCallback((slot: string) => {
+  const handleUpgradeEq = useCallback((slot: string, protect?: UpgradeProtectItem) => {
     const item = equipmentRef.current[slot as keyof Equipment];
     if (!item) return;
-    const res = upgradeEquippedItem(item, inventoryRef.current, playerGoldRef.current);
+    const res = upgradeEquippedItem(item, inventoryRef.current, playerGoldRef.current, protect);
     if (!res.ok) { log(res.reason); return; }
 
     playerGoldRef.current = res.gold;

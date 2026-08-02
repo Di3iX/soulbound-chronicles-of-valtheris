@@ -101,12 +101,12 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   'Гоблин': {
     name: 'Гоблин', emoji: '👺', level: 6, hp: 150, dmgMin: 7, dmgMax: 14,
     speed: 'normal', xp: 50, goldMin: 5, goldMax: 10,
-    dropChance: 0.30, dropPool: ['rusty_sword', 'leather_helm', 'goblin_ear', 'black_crystal'],
+    dropChance: 0.30, dropPool: ['rusty_sword', 'leather_helm', 'goblin_ear', 'black_crystal', 'upgrade_protect'],
   },
   'Бандит': {
     name: 'Бандит', emoji: '🥷', level: 8, hp: 200, dmgMin: 10, dmgMax: 18,
     speed: 'normal', xp: 61, goldMin: 12, goldMax: 22,
-    dropChance: 0.40, dropPool: ['iron_sword', 'leather_armor', 'black_crystal', 'healing_potion'],
+    dropChance: 0.40, dropPool: ['iron_sword', 'leather_armor', 'black_crystal', 'healing_potion', 'upgrade_protect_plus'],
     ability: { effect: 'stun', chance: 0.15, label: 'Оглушение (15%)' },
   },
 
@@ -171,7 +171,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   'Скелет': {
     name: 'Скелет', emoji: '💀', level: 15, hp: 200, dmgMin: 12, dmgMax: 20,
     speed: 'normal', xp: 56, goldMin: 10, goldMax: 18,
-    dropChance: 0.35, dropPool: ['bone_amulet', 'iron_helm', 'rusty_sword'],
+    dropChance: 0.35, dropPool: ['bone_amulet', 'iron_helm', 'rusty_sword', 'upgrade_protect'],
   },
   'Зомби': {
     name: 'Зомби', emoji: '🧟', level: 17, hp: 350, dmgMin: 18, dmgMax: 28,
@@ -239,7 +239,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
     name: 'Рыцарь льда', emoji: '🛡️', level: 36, hp: 700, dmgMin: 30, dmgMax: 45,
     damageType: 'ice',
     speed: 'slow', xp: 220, goldMin: 45, goldMax: 70,
-    dropChance: 0.55, dropPool: ['ice_shard', 'plate_armor', 'iron_sword', 'pendant_of_protection'],
+    dropChance: 0.55, dropPool: ['ice_shard', 'plate_armor', 'iron_sword', 'pendant_of_protection', 'upgrade_blessing'],
     ability: { effect: 'slow', chance: 0.25, label: 'Ледяной удар (25%)' },
     resists: { fire: -30, ice: 60 },
   },
