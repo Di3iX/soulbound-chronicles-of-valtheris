@@ -4,7 +4,7 @@ import type { Item } from '../inventory';
 import { ITEM_CATALOG } from '../inventory';
 import type { QuestProgress } from '../quests/quests';
 import {
-  CRAFT_RECIPES, CRAFT_TAB_LABEL, CraftTab, CraftRecipe,
+  CRAFT_RECIPES, CRAFT_TAB_LABEL, RECIPE_RARITY_STYLE, CraftTab, CraftRecipe,
   canCraft, isRecipeUnlocked, recipeRequirementsText, recipeTab,
   type UnlockedRecipes,
 } from '../craft';
@@ -79,8 +79,13 @@ export default function CraftPanel({
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2">
         {tab === 'locked' && locked.map(r => (
-          <div key={r.id} className="p-3 rounded-lg border border-[#333] bg-[#0c0c12] opacity-80">
-            <div className="text-[13px] font-bold text-[#666]">🔒 {r.label}</div>
+          <div key={r.id} className={`p-3 rounded-lg border opacity-80 ${RECIPE_RARITY_STYLE[r.rarity].border} ${RECIPE_RARITY_STYLE[r.rarity].bg}`}>
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-bold text-[#666]">🔒 {r.label}</span>
+              <span className="text-[9px] font-bold uppercase" style={{ color: RECIPE_RARITY_STYLE[r.rarity].color }}>
+                {RECIPE_RARITY_STYLE[r.rarity].label}
+              </span>
+            </div>
             <p className="text-[10px] text-[#555] mt-1">
               {r.requiresRecipeItem
                 ? `Нужен свиток: ${ITEM_CATALOG[r.requiresRecipeItem]?.name ?? r.requiresRecipeItem}`
@@ -100,10 +105,16 @@ export default function CraftPanel({
           const needLearn = !!(r.requiresRecipeItem && !unlockedRecipes.includes(r.id) && !r.unlockedByDefault);
           const hasScroll = r.requiresRecipeItem ? inventory.some(i => i.key === r.requiresRecipeItem) : false;
           return (
-            <div key={r.id} className="p-3 rounded-lg border border-tile-border bg-[#0d0d16]">
+            <div key={r.id} className={`p-3 rounded-lg border ${RECIPE_RARITY_STYLE[r.rarity].border} ${RECIPE_RARITY_STYLE[r.rarity].bg}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[13px] font-bold text-primary">{r.label}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] font-bold" style={{ color: RECIPE_RARITY_STYLE[r.rarity].color }}>{r.label}</span>
+                    <span className="text-[9px] font-bold uppercase px-1 rounded border opacity-80"
+                      style={{ color: RECIPE_RARITY_STYLE[r.rarity].color, borderColor: RECIPE_RARITY_STYLE[r.rarity].color }}>
+                      {RECIPE_RARITY_STYLE[r.rarity].label}
+                    </span>
+                  </div>
                   <p className="text-[10px] text-[#888] mt-0.5">{r.description}</p>
                   <p className="text-[10px] text-[#6a8] font-mono mt-1">{recipeRequirementsText(r)}</p>
                 </div>
