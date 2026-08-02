@@ -5,6 +5,14 @@ export type ItemType = 'weapon' | 'helmet' | 'armor' | 'gloves' | 'boots' | 'rin
 
 /** Gear tier T1–T6 (level bands). */
 export type ItemTier = 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface ItemAffix {
+  id: string;
+  /** Short Russian label for UI */
+  label: string;
+  bonuses: ItemBonuses;
+}
+
 export type Rarity   = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface ItemBonuses {
@@ -249,13 +257,145 @@ export function rollAffixedBonuses(key: string, rarity: Rarity): ItemBonuses {
   return result;
 }
 
-export function makeItem(key: string): Item {
+
+// ─── RANDOM AFFIXES ───────────────────────────────────────────────────────────
+interface AffixDef {
+  id: string;
+  label: (v: number) => string;
+  /** Roll integer in [min, max] inclusive */
+  min: number;
+  max: number;
+  apply: (v: number) => ItemBonuses;
+  /** Weight in the pool */
+  weight: number;
+  /** Allowed item types; empty = all gear */
+  types?: ItemType[];
+}
+
+const AFFIX_POOL: AffixDef[] = [
+  { id: 'str', label: v => `+${v} к силе`, min: 1, max: 4, weight: 10,
+    apply: v => ({ strength: v }) },
+  { id: 'agi', label: v => `+${v} к ловкости`, min: 1, max: 4, weight: 10,
+    apply: v => ({ agility: v }) },
+  { id: 'vit', label: v => `+${v} к живучести`, min: 1, max: 4, weight: 10,
+    apply: v => ({ vitality: v }) },
+  { id: 'int', label: v => `+${v} к интеллекту`, min: 1, max: 4, weight: 8,
+    apply: v => ({ intelligence: v }) },
+  { id: 'hp', label: v => `+${v} HP`, min: 5, max: 25, weight: 12,
+    apply: v => ({ hp: v }) },
+  { id: 'mana', label: v => `+${v} MP`, min: 5, max: 20, weight: 8,
+    apply: v => ({ mana: v }) },
+  { id: 'def', label: v => `+${v} к защите`, min: 1, max: 5, weight: 10,
+    apply: v => ({ defense: v }), types: ['helmet', 'armor', 'gloves', 'boots', 'amulet'] },
+  { id: 'dmg', label: v => `+${v} к урону`, min: 1, max: 6, weight: 10,
+    apply: v => ({ damage: v }), types: ['weapon', 'ring', 'amulet'] },
+  { id: 'crit', label: v => `+${v}% к криту`, min: 1, max: 4, weight: 6,
+    apply: v => ({ critChance: v }) },
+  { id: 'critdmg', label: v => `+${v}% к крит.урону`, min: 3, max: 10, weight: 5,
+    apply: v => ({ critDamage: v }) },
+  { id: 'dodge', label: v => `+${v}% к уклонению`, min: 1, max: 4, weight: 6,
+    apply: v => ({ dodgeChance: v }) },
+  { id: 'block', label: v => `+${v}% к блоку`, min: 1, max: 4, weight: 5,
+    apply: v => ({ blockChance: v }), types: ['armor', 'gloves', 'helmet'] },
+  { id: 'fire_res', label: v => `+${v}% сопр. огню`, min: 2, max: 8, weight: 4,
+    apply: v => ({ fireResist: v }) },
+  { id: 'ice_res', label: v => `+${v}% сопр. льду`, min: 2, max: 8, weight: 4,
+    apply: v => ({ iceResist: v }) },
+  { id: 'elec_res', label: v => `+${v}% сопр. молнии`, min: 2, max: 8, weight: 4,
+    apply: v => ({ electricResist: v }) },
+];
+
+function randInt(min: number, max: number): number {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function pickWeighted(pool: AffixDef[], exclude: Set<string>): AffixDef | null {
+  const avail = pool.filter(a => !exclude.has(a.id));
+  if (!avail.length) return null;
+  const total = avail.reduce((s, a) => s + a.weight, 0);
+  let r = Math.random() * total;
+  for (const a of avail) {
+    r -= a.weight;
+    if (r <= 0) return a;
+  }
+  return avail[avail.length - 1];
+}
+
+/** How many affixes to roll by rarity. */
+export function affixCountForRarity(rarity: ItemRarity): number {
+  switch (rarity) {
+    case 'common':    return Math.random() < 0.35 ? 1 : 0;
+    case 'uncommon':  return Math.random() < 0.55 ? 1 : (Math.random() < 0.15 ? 2 : 0);
+    case 'rare':      return Math.random() < 0.5 ? 2 : 1;
+    case 'epic':      return Math.random() < 0.4 ? 3 : 2;
+    case 'legendary': return Math.random() < 0.5 ? 3 : 2;
+    default:          return 0;
+  }
+}
+
+/** Scale affix roll range slightly by tier. */
+function tierAffixScale(tier?: ItemTier): number {
+  if (!tier || tier <= 1) return 1;
+  return 1 + (tier - 1) * 0.12;
+}
+
+export function rollAffixes(
+  type: ItemType,
+  rarity: ItemRarity,
+  tier?: ItemTier,
+): ItemAffix[] {
+  if (type === 'consumable') return [];
+  const count = affixCountForRarity(rarity);
+  if (count <= 0) return [];
+
+  const pool = AFFIX_POOL.filter(a => !a.types || a.types.includes(type));
+  const used = new Set<string>();
+  const out: ItemAffix[] = [];
+  const scale = tierAffixScale(tier);
+
+  for (let i = 0; i < count; i++) {
+    const def = pickWeighted(pool, used);
+    if (!def) break;
+    used.add(def.id);
+    let v = randInt(def.min, def.max);
+    v = Math.max(1, Math.round(v * scale));
+    out.push({
+      id: def.id,
+      label: def.label(v),
+      bonuses: def.apply(v),
+    });
+  }
+  return out;
+}
+
+/** Merge base + affix bonuses into one object. */
+export function mergeBonuses(base: ItemBonuses, affixes?: ItemAffix[]): ItemBonuses {
+  if (!affixes?.length) return { ...base };
+  const out: ItemBonuses = { ...base };
+  for (const ax of affixes) {
+    for (const key of Object.keys(ax.bonuses) as (keyof ItemBonuses)[]) {
+      const add = ax.bonuses[key];
+      if (add === undefined) continue;
+      const prev = (out[key] as number | undefined) ?? 0;
+      (out as Record<string, number>)[key] = prev + add;
+    }
+  }
+  return out;
+}
+
+export function makeItem(key: string, opts?: { rollAffixes?: boolean }): Item {
   const tpl = ITEM_CATALOG[key];
   if (!tpl) throw new Error(`makeItem: unknown item key "${key}" — add it to ITEM_CATALOG`);
+  const doRoll = opts?.rollAffixes !== false && tpl.type !== 'consumable';
+  const affixes = doRoll ? rollAffixes(tpl.type, tpl.rarity, tpl.tier) : [];
+  const baseBonuses = { ...(tpl.bonuses ?? {}) };
+  // Optional random ranges if BONUS_RANGES exists - keep simple: use catalog + affixes
+  const bonuses = mergeBonuses(baseBonuses, affixes);
   return {
     ...tpl,
-    bonuses: rollAffixedBonuses(key, tpl.rarity),
     id: `${key}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    bonuses,
+    affixes: affixes.length ? affixes : undefined,
   };
 }
 
@@ -286,4 +426,8 @@ export function itemDisplayName(item: Item): string {
   const t = item.tier ? ` ${tierLabel(item.tier)}` : '';
   const up = n > 0 ? ` +${n}` : '';
   return `${item.name}${t}${up}`;
+}
+
+export function formatAffixes(item: Item): string[] {
+  return (item.affixes ?? []).map(a => a.label);
 }

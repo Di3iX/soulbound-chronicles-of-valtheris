@@ -1,6 +1,6 @@
 // ─── EQUIPMENT UPGRADE SYSTEM (failure + protection scrolls) ──────────────────
 import type { Item, ItemBonuses } from '../inventory';
-import { ITEM_CATALOG } from '../inventory';
+import { ITEM_CATALOG, mergeBonuses } from '../inventory';
 
 export const MAX_UPGRADE_LEVEL = 5;
 
@@ -41,7 +41,11 @@ export function canUpgradeItem(item: Item): boolean {
 }
 
 function catalogBase(item: Item): ItemBonuses {
-  return { ...(ITEM_CATALOG[item.key]?.bonuses ?? item.bonuses) };
+  return { ...(ITEM_CATALOG[item.key]?.bonuses ?? {}) };
+}
+
+function finalItemBonuses(item: Item, level: number): ItemBonuses {
+  return mergeBonuses(bonusesAtLevel(catalogBase(item), level), item.affixes);
 }
 
 export function bonusesAtLevel(base: ItemBonuses, level: number): ItemBonuses {
@@ -106,7 +110,7 @@ export function previewUpgrade(item: Item, protect: ProtectMode = 'none'): {
     nextLevel: next,
     gold: upgradeGoldCost(item, next),
     crystals: upgradeCrystalCost(next),
-    bonuses: bonusesAtLevel(catalogBase(item), next),
+    bonuses: finalItemBonuses(item, next),
     successChance: chance,
     riskNote,
     protectKey: protect === 'none' ? undefined : PROTECT_ITEM_KEY[protect],
@@ -171,7 +175,7 @@ function applyUpgradeAttempt(
     const upgraded: Item = {
       ...item,
       upgradeLevel: next,
-      bonuses: bonusesAtLevel(catalogBase(item), next),
+      bonuses: finalItemBonuses(item, next),
     };
     const inv = keepItemReference ? bag : [...bag, upgraded];
     return {
@@ -211,7 +215,7 @@ function applyUpgradeAttempt(
     const downgraded: Item = {
       ...item,
       upgradeLevel: down,
-      bonuses: bonusesAtLevel(catalogBase(item), down),
+      bonuses: finalItemBonuses(item, down),
     };
     const inv = keepItemReference ? bag : [...bag, downgraded];
     return {

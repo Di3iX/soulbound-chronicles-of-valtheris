@@ -1,6 +1,6 @@
 // ─── ITEM TIER PROMOTION (T1 → T6) ─────────────────────────────────────────────
 import type { Item, ItemBonuses, ItemTier } from '../inventory';
-import { ITEM_CATALOG, minLevelForTier } from '../inventory';
+import { ITEM_CATALOG, minLevelForTier, mergeBonuses } from '../inventory';
 
 // Re-implement scale without depending on upgrade.ts circularly
 function scaleBonuses(base: ItemBonuses, mult: number): ItemBonuses {
@@ -57,11 +57,12 @@ export function nextTier(item: Item): ItemTier | null {
  * Full stat recalc: catalog base × tier mult × (1 + 0.12 * upgradeLevel).
  */
 export function recomputeItemBonuses(item: Item): ItemBonuses {
-  const base = { ...(ITEM_CATALOG[item.key]?.bonuses ?? item.bonuses) };
+  const base = { ...(ITEM_CATALOG[item.key]?.bonuses ?? {}) };
   const tier = (item.tier ?? 1) as ItemTier;
   const up = item.upgradeLevel ?? 0;
   const mult = TIER_STAT_MULT[tier] * (1 + up * 0.12);
-  return scaleBonuses(base, mult);
+  const scaled = scaleBonuses(base, mult);
+  return mergeBonuses(scaled, item.affixes);
 }
 
 export function previewTierPromote(item: Item): {
