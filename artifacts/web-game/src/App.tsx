@@ -14,7 +14,7 @@ import {
 } from './inventory';
 import {
   Equipment, EquipBonuses,
-  EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES,
+  EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES, calcEquipBonuses,
 } from './equipment';
 import {
   LocationId, Phase, Enemy, KillReward, StatusEffect,
@@ -37,6 +37,7 @@ import {
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
+import { upgradeItemInInventory, upgradeEquippedItem } from './upgrade';
 import ShopPanel from './shop/ShopPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
@@ -136,6 +137,7 @@ export default function App() {
   const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCraft, setShowCraft]         = useState(false);
   const [unlockedRecipes, setUnlockedRecipes] = useState<string[]>(sv?.unlockedRecipes ?? []);
+  const [showUpgrade, setShowUpgrade]     = useState(false);
   const [showWorldMap, setShowWorldMap]   = useState(false);
   const [openedChests, setOpenedChests]   = useState<OpenedChests>(sv?.openedChests ?? {});
 
@@ -473,6 +475,12 @@ const log = useCallback((msg: string) => {
       return;
     }
 
+    if (action.kind === 'open_upgrade') {
+      setQuestDialogue(null);
+      setShowUpgrade(true);
+      return;
+    }
+
     if (action.kind === 'heal') {
       let free = loadHealState();
       if (free <= 0) {
@@ -662,6 +670,49 @@ const log = useCallback((msg: string) => {
     setInventory(res.inventory);
     log(res.msg);
   }, [log, unlockedRecipes]);
+
+  // ── UpgradePanel: upgrade inventory / equipped item ─────────────────────────
+  const handleUpgradeInv = useCallback((itemId: string) => {
+    const res = upgradeItemInInventory(itemId, inventoryRef.current, playerGoldRef.current);
+    if (!res.ok) { log(res.reason); return; }
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    playerGoldRef.current = res.gold;
+    setPlayerGold(res.gold);
+    log(res.msg);
+  }, [log]);
+
+  const handleUpgradeEq = useCallback((slot: string) => {
+    const item = equipmentRef.current[slot as keyof Equipment];
+    if (!item) return;
+    const res = upgradeEquippedItem(item, inventoryRef.current, playerGoldRef.current);
+    if (!res.ok) { log(res.reason); return; }
+
+    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: res.item };
+    equipmentRef.current = newEquipment;
+    setEquipment(newEquipment);
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    playerGoldRef.current = res.gold;
+    setPlayerGold(res.gold);
+
+    // Пересчитать equipBonuses и производные max HP/MP — как при экипировке.
+    const newBonuses = calcEquipBonuses(newEquipment);
+    equipBonusesRef.current = newBonuses;
+    setEquipBonuses(newBonuses);
+
+    const newStats = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
+      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
+      skills: skillBonusesRef.current,
+    });
+    playerMaxHpRef.current = newStats.maxHp;
+    setPlayerMaxHp(newStats.maxHp);
+    playerMaxMpRef.current = newStats.maxMp;
+    setPlayerMaxMp(newStats.maxMp);
+
+    log(res.msg);
+  }, [log]);
 
   // ── Shop: buy ────────────────────────────────────────────────────────────
 
