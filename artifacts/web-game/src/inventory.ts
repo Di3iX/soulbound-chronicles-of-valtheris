@@ -214,3 +214,9 @@ export function formatBonuses(b: ItemBonuses): string[] {
   if (b.atkSpeedPenalty) lines.push(`−${b.atkSpeedPenalty}% скор.`);
   return lines;
 }
+
+/** Name with +N suffix for upgraded gear. */
+export function itemDisplayName(item: Item): string {
+  const n = item.upgradeLevel ?? 0;
+  return n > 0 ? `${item.name} +${n}` : item.name;
+}
