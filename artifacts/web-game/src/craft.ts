@@ -1,8 +1,8 @@
 // ─── CRAFTING (Blacksmith) ────────────────────────────────────────────────────
-import type { Item } from '../inventory';
-import { ITEM_CATALOG, makeItem, type ItemType } from '../inventory';
-import type { QuestProgress } from '../quests/quests';
-import { isQuestCompleted } from '../quests/quests';
+import type { Item } from './inventory';
+import { ITEM_CATALOG, makeItem, type ItemType } from './inventory';
+import type { QuestProgress } from './quests/quests';
+import { isQuestCompleted } from './quests/quests';
 
 export interface CraftIngredient {
   key:   string;

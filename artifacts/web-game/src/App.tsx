@@ -37,9 +37,12 @@ import {
 import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
-import { upgradeItemInInventory, upgradeEquippedItem, UpgradeProtectItem } from './upgrade';
+import { upgradeItemInInventory, upgradeEquippedItem, ProtectMode } from './upgrade';
 import { promoteItemTier } from './tierPromote';
 import ShopPanel from './shop/ShopPanel';
+import CraftPanel from './components/CraftPanel';
+import UpgradePanel from './components/UpgradePanel';
+import TierPromotePanel from './components/TierPromotePanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
 import CombatHUD from './components/CombatHUD';
@@ -690,7 +693,7 @@ const log = useCallback((msg: string) => {
   }, [log, unlockedRecipes]);
 
   // ── UpgradePanel: upgrade inventory / equipped item ─────────────────────────
-  const handleUpgradeInv = useCallback((itemId: string, protect?: UpgradeProtectItem) => {
+  const handleUpgradeInv = useCallback((itemId: string, protect: ProtectMode = 'none') => {
     const res = upgradeItemInInventory(itemId, inventoryRef.current, playerGoldRef.current, protect);
     if (!res.ok) { log(res.reason); return; }
     inventoryRef.current = res.inventory;
@@ -700,7 +703,7 @@ const log = useCallback((msg: string) => {
     log(res.msg);
   }, [log]);
 
-  const handleUpgradeEq = useCallback((slot: string, protect?: UpgradeProtectItem) => {
+  const handleUpgradeEq = useCallback((slot: string, protect: ProtectMode = 'none') => {
     const item = equipmentRef.current[slot as keyof Equipment];
     if (!item) return;
     const res = upgradeEquippedItem(item, inventoryRef.current, playerGoldRef.current, protect);
@@ -1206,6 +1209,49 @@ const log = useCallback((msg: string) => {
               onBuy={handleShopBuy}
               onSell={handleShopSell}
               onClose={() => setShowShop(false)}
+            />
+          )}
+
+          {/* ══ CRAFT PANEL OVERLAY (z-60) ═══════════════════════════════════════
+              Blacksmith crafting — recipe tabs, craft / learn recipe.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showCraft && (
+            <CraftPanel
+              inventory={inventory}
+              questProgress={questProgress}
+              unlockedRecipes={unlockedRecipes}
+              onCraft={handleCraft}
+              onLearn={handleLearn}
+              onClose={() => setShowCraft(false)}
+            />
+          )}
+
+          {/* ══ UPGRADE PANEL OVERLAY (z-60) ═════════════════════════════════════
+              Equipment upgrade +1..+5 — success chance, protection scrolls.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showUpgrade && (
+            <UpgradePanel
+              inventory={inventory}
+              equipment={equipment}
+              playerGold={playerGold}
+              onUpgradeInventory={handleUpgradeInv}
+              onUpgradeEquipped={handleUpgradeEq}
+              onClose={() => setShowUpgrade(false)}
+            />
+          )}
+
+          {/* ══ TIER PROMOTE PANEL OVERLAY (z-60) ════════════════════════════════
+              Equipment tier promotion T1→T6.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showTier && (
+            <TierPromotePanel
+              inventory={inventory}
+              equipment={equipment}
+              playerGold={playerGold}
+              playerLevel={playerLevel}
+              onPromoteInventory={handleTierPromoteInv}
+              onPromoteEquipped={handleTierPromoteEq}
+              onClose={() => setShowTier(false)}
             />
           )}
 

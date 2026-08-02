@@ -1,6 +1,6 @@
 // ─── EQUIPMENT UPGRADE SYSTEM (failure + protection scrolls) ──────────────────
-import type { Item, ItemBonuses } from '../inventory';
-import { ITEM_CATALOG, mergeBonuses } from '../inventory';
+import type { Item, ItemBonuses } from './inventory';
+import { ITEM_CATALOG, mergeBonuses } from './inventory';
 
 export const MAX_UPGRADE_LEVEL = 5;
 

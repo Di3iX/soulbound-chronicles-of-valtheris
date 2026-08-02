@@ -1,6 +1,6 @@
 // ─── ITEM TIER PROMOTION (T1 → T6) ─────────────────────────────────────────────
-import type { Item, ItemBonuses, ItemTier } from '../inventory';
-import { ITEM_CATALOG, minLevelForTier, mergeBonuses } from '../inventory';
+import type { Item, ItemBonuses, ItemTier } from './inventory';
+import { ITEM_CATALOG, minLevelForTier, mergeBonuses } from './inventory';
 
 // Re-implement scale without depending on upgrade.ts circularly
 function scaleBonuses(base: ItemBonuses, mult: number): ItemBonuses {
