@@ -10,7 +10,7 @@ import { useEconomy } from './hooks/useEconomy';
 import {
   Item, ItemType, ItemBonuses, Rarity,
   ITEM_CATALOG, RARITY_STYLE,
-  makeItem, canEquipItem,
+  makeItem, canEquipItem, TIER_LEVEL_RANGE, ItemTier,
 } from './inventory';
 import {
   Equipment, EquipBonuses,
@@ -38,6 +38,7 @@ import { QuestProgress, QUEST_DEFS } from './quests/quests';
 import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
 import { upgradeItemInInventory, upgradeEquippedItem, UpgradeProtectItem } from './upgrade';
+import { promoteItemTier } from './tierPromote';
 import ShopPanel from './shop/ShopPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
@@ -138,6 +139,7 @@ export default function App() {
   const [showCraft, setShowCraft]         = useState(false);
   const [unlockedRecipes, setUnlockedRecipes] = useState<string[]>(sv?.unlockedRecipes ?? []);
   const [showUpgrade, setShowUpgrade]     = useState(false);
+  const [showTier, setShowTier]           = useState(false);
   const [showWorldMap, setShowWorldMap]   = useState(false);
   const [openedChests, setOpenedChests]   = useState<OpenedChests>(sv?.openedChests ?? {});
 
@@ -491,6 +493,12 @@ const log = useCallback((msg: string) => {
       return;
     }
 
+    if (action.kind === 'open_tier') {
+      setQuestDialogue(null);
+      setShowTier(true);
+      return;
+    }
+
     if (action.kind === 'heal') {
       let free = loadHealState();
       if (free <= 0) {
@@ -718,6 +726,68 @@ const log = useCallback((msg: string) => {
       return;
     }
 
+    equipmentRef.current = newEquipment;
+    setEquipment(newEquipment);
+
+    // Пересчитать equipBonuses и производные max HP/MP — как при экипировке.
+    const newBonuses = calcEquipBonuses(newEquipment);
+    equipBonusesRef.current = newBonuses;
+    setEquipBonuses(newBonuses);
+
+    const newStats = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
+      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
+      skills: skillBonusesRef.current,
+    });
+    playerMaxHpRef.current = newStats.maxHp;
+    setPlayerMaxHp(newStats.maxHp);
+    playerMaxMpRef.current = newStats.maxMp;
+    setPlayerMaxMp(newStats.maxMp);
+  }, [log]);
+
+  // ── TierPromotePanel: T1→T6 ──────────────────────────────────────────────
+  const handleTierPromoteInv = useCallback((itemId: string) => {
+    const item = inventoryRef.current.find(i => i.id === itemId);
+    if (!item) return;
+
+    const nextTier = Math.min(6, (item.tier ?? 1) + 1) as ItemTier;
+    const requiredLevel = TIER_LEVEL_RANGE[nextTier][0];
+    if (playerLevelRef.current < requiredLevel) {
+      log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
+      return;
+    }
+
+    const res = promoteItemTier(item, inventoryRef.current, playerGoldRef.current, true);
+    if (!res.ok) { log(res.reason); return; }
+
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    playerGoldRef.current = res.gold;
+    setPlayerGold(res.gold);
+    log(res.msg);
+  }, [log]);
+
+  const handleTierPromoteEq = useCallback((slot: string) => {
+    const item = equipmentRef.current[slot as keyof Equipment];
+    if (!item) return;
+
+    const nextTier = Math.min(6, (item.tier ?? 1) + 1) as ItemTier;
+    const requiredLevel = TIER_LEVEL_RANGE[nextTier][0];
+    if (playerLevelRef.current < requiredLevel) {
+      log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
+      return;
+    }
+
+    const res = promoteItemTier(item, inventoryRef.current, playerGoldRef.current, false);
+    if (!res.ok) { log(res.reason); return; }
+
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    playerGoldRef.current = res.gold;
+    setPlayerGold(res.gold);
+    log(res.msg);
+
+    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: res.item };
     equipmentRef.current = newEquipment;
     setEquipment(newEquipment);
 
