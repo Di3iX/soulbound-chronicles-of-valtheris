@@ -69,8 +69,8 @@ export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
   // Materials
   // Recipe scrolls (unlock blacksmith recipes)
   recipe_iron_edge:   { key: 'recipe_iron_edge',   name: 'Рецепт: Железный клинок', type: 'consumable', rarity: 'uncommon', bonuses: {} },
-  recipe_chain_patch: { key: 'recipe_chain_patch', name: 'Рецепт: Кольчуга',         type: 'consumable', rarity: 'uncommon', bonuses: {} },
-  recipe_ice_charm:   { key: 'recipe_ice_charm',   name: 'Рецепт: Талисман льда',   type: 'consumable', rarity: 'rare',     bonuses: {} },
+  recipe_chain_patch: { key: 'recipe_chain_patch', name: 'Рецепт: Кольчуга',         type: 'consumable', rarity: 'rare', bonuses: {} },
+  recipe_ice_charm:   { key: 'recipe_ice_charm',   name: 'Рецепт: Талисман льда',   type: 'consumable', rarity: 'epic',     bonuses: {} },
   recipe_boar_blade:  { key: 'recipe_boar_blade',  name: 'Рецепт: Клинок с клыком', type: 'consumable', rarity: 'uncommon', bonuses: {} },
   recipe_crystal_charm: { key: 'recipe_crystal_charm', name: 'Рецепт: Кулон защиты', type: 'consumable', rarity: 'rare',  bonuses: {} },
 

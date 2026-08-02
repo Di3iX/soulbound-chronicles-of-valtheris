@@ -20,12 +20,24 @@ export type CraftTab =
   | 'consumable'
   | 'locked';
 
+export type RecipeRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export const RECIPE_RARITY_STYLE: Record<RecipeRarity, { label: string; color: string; border: string; bg: string }> = {
+  common:    { label: 'Обычный',     color: '#c8c8c8', border: 'border-[#555]', bg: 'bg-[#1a1a1f]' },
+  uncommon:  { label: 'Необычный',   color: '#4ade80', border: 'border-green-700/60', bg: 'bg-green-950/20' },
+  rare:      { label: 'Редкий',      color: '#60a5fa', border: 'border-blue-600/50', bg: 'bg-blue-950/20' },
+  epic:      { label: 'Эпический',   color: '#c084fc', border: 'border-purple-600/50', bg: 'bg-purple-950/25' },
+  legendary: { label: 'Легендарный', color: '#fbbf24', border: 'border-amber-500/50', bg: 'bg-amber-950/20' },
+};
+
 export interface CraftRecipe {
   id:          string;
   resultKey:   string;
   label:       string;
   description: string;
   ingredients: CraftIngredient[];
+  /** Recipe rarity (scroll / known blueprint). */
+  rarity:      RecipeRarity;
   /** Always known to the smith. */
   unlockedByDefault?: boolean;
   /** Inventory item key (recipe scroll) required to unlock permanently. */
@@ -37,6 +49,7 @@ export interface CraftRecipe {
 export const CRAFT_RECIPES: CraftRecipe[] = [
   {
     id: 'craft_leather_patch',
+    rarity: 'common',
     resultKey: 'leather_armor',
     label: 'Кожаный доспех',
     description: 'Грубая броня из шкур.',
@@ -48,6 +61,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
   },
   {
     id: 'craft_wolf_charm',
+    rarity: 'common',
     resultKey: 'bone_amulet',
     label: 'Костяной амулет',
     description: 'Клыки и кости — защита от зверя.',
@@ -59,6 +73,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
   },
   {
     id: 'craft_field_ration',
+    rarity: 'common',
     resultKey: 'healing_potion',
     label: 'Полевое зелье',
     description: 'Мясо и травы в пузырьке.',
@@ -70,6 +85,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
   },
   {
     id: 'craft_boar_blade',
+    rarity: 'uncommon',
     resultKey: 'iron_sword',
     label: 'Клинок с клыком',
     description: 'Клык кабана в клинке.',
@@ -82,6 +98,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
   },
   {
     id: 'craft_iron_edge',
+    rarity: 'uncommon',
     resultKey: 'iron_sword',
     label: 'Железный клинок',
     description: 'Перековка ржавого меча.',
@@ -93,6 +110,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
   },
   {
     id: 'craft_chain_patch',
+    rarity: 'rare',
     resultKey: 'chainmail',
     label: 'Кольчуга',
     description: 'Кожа + кристаллы.',
@@ -104,6 +122,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
   },
   {
     id: 'craft_crystal_charm',
+    rarity: 'rare',
     resultKey: 'pendant_of_protection',
     label: 'Кулон защиты',
     description: 'Чёрный кристалл в оправе.',
@@ -115,6 +134,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
   },
   {
     id: 'craft_ice_charm',
+    rarity: 'epic',
     resultKey: 'amulet_of_wisdom',
     label: 'Талисман льда',
     description: 'Против холода Бездны.',
