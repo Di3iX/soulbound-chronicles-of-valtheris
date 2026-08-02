@@ -11,6 +11,7 @@ export type DialogAction =
   | { kind: 'complete_quest'; questId: string }
   | { kind: 'craft';          recipeId: string }
   | { kind: 'heal' }
+  | { kind: 'open_craft' }
   | { kind: 'dismiss' };
 
 export interface DialogButton {
@@ -618,37 +619,24 @@ function hermitDialogue(progress: QuestProgress, _flags: DialogueFlags): NpcDial
 
 
 function smithDialogue(_progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
-  const base = { npcId: 'smith', name: 'Кузнец', emoji: '⚒️' };
-  const inv = flags.inventory ?? [];
-
   const lines = [
-    'Мех, клыки, кристаллы — таскай сюда. Золота не беру.',
-    'Зелёным отмечено то, что можно скрафтить сейчас.',
+    'Горн горячий. Свитки рецептов — с врагов и за дела.',
+    'Открою книгу кузницы: оружие, броня, амулеты…',
   ];
   if (flags.caveChiefFirstKill) {
-    lines.push('Слышал, ты снял главаря. Кристаллы с него — хорошая оправа.');
+    lines.push('Кристаллы с главаря хорошо идут в оправу.');
   }
-
-  const buttons: DialogButton[] = CRAFT_RECIPES.map((recipe, i) => {
-    const ok = canCraft(recipe, inv);
-    const req = recipeRequirementsText(recipe);
-    return {
-      label: `${ok ? '✅' : '❌'} ${recipe.label}`,
-      action: { kind: 'craft', recipeId: recipe.id },
-      primary: ok && i === 0,
-      disabled: !ok,
-    };
-  });
-  // Tooltip-ish: put requirements into lines for missing ones
-  const missing = CRAFT_RECIPES.filter(r => !canCraft(r, inv));
-  if (missing.length) {
-    lines.push('Не хватает: ' + missing.map(r => `${r.label} (${recipeRequirementsText(r)})`).join('; '));
-  }
-  buttons.push({ label: 'Уйти', action: { kind: 'dismiss' } });
-
-  return { ...base, lines, buttons };
+  return {
+    npcId: 'smith',
+    name: 'Кузнец',
+    emoji: '⚒️',
+    lines,
+    buttons: [
+      { label: '⚒️ Открыть кузницу', action: { kind: 'open_craft' }, primary: true },
+      { label: 'Уйти', action: { kind: 'dismiss' } },
+    ],
+  };
 }
-
 
 function healerDialogue(_p: QuestProgress, flags: DialogueFlags): NpcDialogue {
   const free = flags.freeHealsLeft ?? 10;

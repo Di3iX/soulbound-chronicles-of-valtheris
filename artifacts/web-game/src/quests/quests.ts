@@ -241,3 +241,88 @@ export function getActiveQuests(progress: QuestProgress): {
   }
   return out;
 }
+
+
+// ─── DAILY QUESTS ─────────────────────────────────────────────────────────────
+const DAILY_POOL = [
+  {
+    id: 'daily_rats',
+    title: 'Ежедневно: Крысы',
+    description: 'Фермер просит проредить крыс на полях.',
+    npcId: 'farmer',
+    objective: { description: 'Убить крыс', required: 8 },
+    killTargets: ['Крыса'],
+    reward: { gold: 40, xp: 50 },
+  },
+  {
+    id: 'daily_wolves',
+    title: 'Ежедневно: Волки',
+    description: 'Охотник просит шкуры — волки у леса.',
+    npcId: 'hunter',
+    objective: { description: 'Убить волков', required: 5 },
+    killTargets: ['Волк', 'Альфа-волк', 'Ледяной волк'],
+    reward: { gold: 70, xp: 90 },
+  },
+  {
+    id: 'daily_goblins',
+    title: 'Ежедневно: Гоблины',
+    description: 'Староста просит приглушить гоблинов в лесу.',
+    npcId: 'elder',
+    objective: { description: 'Убить гоблинов', required: 6 },
+    killTargets: ['Гоблин'],
+    reward: { gold: 80, xp: 100 },
+  },
+  {
+    id: 'daily_bandits',
+    title: 'Ежедневно: Разбойники',
+    description: 'Разведчик: очисти дорогу от разбойников.',
+    npcId: 'scout',
+    objective: { description: 'Убить разбойников', required: 5 },
+    killTargets: ['Разбойник', 'Лучник', 'Наёмник'],
+    reward: { gold: 90, xp: 110 },
+  },
+] as const;
+
+function daySeed(d = new Date()): number {
+  const s = d.toISOString().slice(0, 10);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+export function getDailyQuestDef(d = new Date()) {
+  const pool = DAILY_POOL;
+  const idx = daySeed(d) % pool.length;
+  const base = pool[idx];
+  return {
+    ...base,
+    id: `daily_${base.id}_${d.toISOString().slice(0, 10)}`,
+  };
+}
+
+/** Ensure today's daily exists in QUEST_DEFS + progress inactive if new day. */
+export function ensureDailyQuest(
+  progress: QuestProgress,
+  d = new Date(),
+): { progress: QuestProgress; def: ReturnType<typeof getDailyQuestDef> } {
+  const def = getDailyQuestDef(d);
+  // register in QUEST_DEFS dynamically
+  if (!QUEST_DEFS[def.id]) {
+    (QUEST_DEFS as Record<string, QuestDef>)[def.id] = {
+      id: def.id,
+      title: def.title,
+      description: def.description,
+      npcId: def.npcId,
+      objective: { ...def.objective },
+      killTargets: [...def.killTargets],
+      reward: { ...def.reward },
+    };
+  }
+  if (!progress[def.id]) {
+    return {
+      progress: { ...progress, [def.id]: { status: 'inactive', current: 0 } },
+      def,
+    };
+  }
+  return { progress, def };
+}
