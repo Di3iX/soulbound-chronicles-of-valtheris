@@ -2,6 +2,9 @@
 import { buildDropTables } from './monsters';
 
 export type ItemType = 'weapon' | 'helmet' | 'armor' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'consumable';
+
+/** Gear tier T1–T6 (level bands). */
+export type ItemTier = 1 | 2 | 3 | 4 | 5 | 6;
 export type Rarity   = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface ItemBonuses {
@@ -32,40 +35,97 @@ export interface Item {
   bonuses: ItemBonuses;
 }
 
+
+/** Level bands for tiers: T1 = 1–10 … T6 = 51–60. */
+export const TIER_LEVEL_RANGE: Record<ItemTier, { min: number; max: number; label: string }> = {
+  1: { min: 1,  max: 10, label: 'T1' },
+  2: { min: 11, max: 20, label: 'T2' },
+  3: { min: 21, max: 30, label: 'T3' },
+  4: { min: 31, max: 40, label: 'T4' },
+  5: { min: 41, max: 50, label: 'T5' },
+  6: { min: 51, max: 60, label: 'T6' },
+};
+
+export const TIER_STYLE: Record<ItemTier, { color: string; border: string }> = {
+  1: { color: '#9ca3af', border: 'border-[#555]' },
+  2: { color: '#4ade80', border: 'border-green-700/50' },
+  3: { color: '#60a5fa', border: 'border-blue-600/50' },
+  4: { color: '#c084fc', border: 'border-purple-500/50' },
+  5: { color: '#f472b6', border: 'border-pink-500/50' },
+  6: { color: '#fbbf24', border: 'border-amber-500/50' },
+};
+
+/** Player level → recommended tier. */
+export function tierForPlayerLevel(level: number): ItemTier {
+  if (level <= 10) return 1;
+  if (level <= 20) return 2;
+  if (level <= 30) return 3;
+  if (level <= 40) return 4;
+  if (level <= 50) return 5;
+  return 6;
+}
+
+export function minLevelForTier(tier: ItemTier): number {
+  return TIER_LEVEL_RANGE[tier].min;
+}
+
+/** Effective required level for equipping. */
+export function itemRequiredLevel(item: { tier?: ItemTier; requiredLevel?: number; type: ItemType }): number {
+  if (item.type === 'consumable') return 1;
+  if (item.requiredLevel != null) return item.requiredLevel;
+  if (item.tier != null) return minLevelForTier(item.tier);
+  return 1;
+}
+
+export function canEquipItem(
+  item: { tier?: ItemTier; requiredLevel?: number; type: ItemType },
+  playerLevel: number,
+): { ok: true } | { ok: false; required: number } {
+  if (item.type === 'consumable') return { ok: true };
+  const need = itemRequiredLevel(item);
+  if (playerLevel >= need) return { ok: true };
+  return { ok: false, required: need };
+}
+
+export function tierLabel(tier: ItemTier | undefined): string {
+  if (!tier) return '';
+  return TIER_LEVEL_RANGE[tier].label;
+}
+
 export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
   healing_potion:         { key: 'healing_potion',         name: 'Зелье лечения',        type: 'consumable', rarity: 'common',    bonuses: {} },
   greater_healing_potion: { key: 'greater_healing_potion', name: 'Большое зелье лечения', type: 'consumable', rarity: 'uncommon',  bonuses: {} },
   mana_potion:            { key: 'mana_potion',            name: 'Зелье маны',            type: 'consumable', rarity: 'common',    bonuses: {} },
   greater_mana_potion:    { key: 'greater_mana_potion',    name: 'Большое зелье маны',    type: 'consumable', rarity: 'uncommon',  bonuses: {} },
-  rusty_sword:      { key: 'rusty_sword',      name: 'Ржавый меч',         type: 'weapon',  rarity: 'common',    bonuses: { damage: 2 } },
-  iron_sword:       { key: 'iron_sword',       name: 'Железный меч',       type: 'weapon',  rarity: 'uncommon',  bonuses: { damage: 5 } },
-  orc_axe:          { key: 'orc_axe',          name: 'Топор орка',         type: 'weapon',  rarity: 'rare',      bonuses: { damage: 9, atkSpeedPenalty: 5 } },
-  shadow_blade:     { key: 'shadow_blade',     name: 'Теневой клинок',     type: 'weapon',  rarity: 'epic',      bonuses: { damage: 15, agility: 2 } },
-  dragon_fang:      { key: 'dragon_fang',      name: 'Клык дракона',       type: 'weapon',  rarity: 'legendary', bonuses: { damage: 25, strength: 3 } },
-  leather_helm:     { key: 'leather_helm',     name: 'Кожаный шлем',       type: 'helmet',  rarity: 'common',    bonuses: { hp: 10 } },
-  iron_helm:        { key: 'iron_helm',        name: 'Железный шлем',      type: 'helmet',  rarity: 'uncommon',  bonuses: { hp: 20 } },
-  mage_hood:        { key: 'mage_hood',        name: 'Капюшон мага',       type: 'helmet',  rarity: 'rare',      bonuses: { hp: 30, strength: 1 } },
-  leather_armor:    { key: 'leather_armor',    name: 'Кожаная броня',      type: 'armor',   rarity: 'common',    bonuses: { hp: 20 } },
-  chainmail:        { key: 'chainmail',        name: 'Кольчуга',           type: 'armor',   rarity: 'uncommon',  bonuses: { hp: 40 } },
-  plate_armor:      { key: 'plate_armor',      name: 'Латные доспехи',     type: 'armor',   rarity: 'rare',      bonuses: { hp: 60 } },
-  void_plate:       { key: 'void_plate',       name: 'Доспехи пустоты',    type: 'armor',   rarity: 'epic',      bonuses: { hp: 90, strength: 2 } },
-  leather_gloves:   { key: 'leather_gloves',   name: 'Кожаные перчатки',   type: 'gloves',  rarity: 'common',    bonuses: { strength: 1 } },
-  battle_gloves:    { key: 'battle_gloves',    name: 'Боевые перчатки',    type: 'gloves',  rarity: 'uncommon',  bonuses: { strength: 2 } },
-  titan_gauntlets:  { key: 'titan_gauntlets',  name: 'Рукавицы титана',    type: 'gloves',  rarity: 'epic',      bonuses: { strength: 4, hp: 20 } },
-  light_boots:      { key: 'light_boots',      name: 'Лёгкие сапоги',      type: 'boots',   rarity: 'common',    bonuses: { agility: 1 } },
-  scout_boots:      { key: 'scout_boots',      name: 'Сапоги разведчика',  type: 'boots',   rarity: 'uncommon',  bonuses: { agility: 2 } },
-  wind_walkers:     { key: 'wind_walkers',     name: 'Сапоги ветра',       type: 'boots',   rarity: 'legendary', bonuses: { agility: 5, hp: 15 } },
-  arcane_staff:     { key: 'arcane_staff',     name: 'Магический посох',   type: 'weapon',  rarity: 'rare',      bonuses: { damage: 8, hp: 20 } },
-  copper_ring:      { key: 'copper_ring',      name: 'Медное кольцо',      type: 'ring',    rarity: 'common',    bonuses: { critChance: 1 } },
-  silver_ring:      { key: 'silver_ring',      name: 'Серебряное кольцо',  type: 'ring',    rarity: 'uncommon',  bonuses: { dodgeChance: 2 } },
-  ring_of_vigor:    { key: 'ring_of_vigor',    name: 'Кольцо бодрости',    type: 'ring',    rarity: 'rare',      bonuses: { mana: 15, hp: 5 } },
-  ring_of_phoenix:  { key: 'ring_of_phoenix',  name: 'Кольцо феникса',     type: 'ring',    rarity: 'epic',      bonuses: { critDamage: 8, hp: 10 } },
-  band_of_eternity: { key: 'band_of_eternity', name: 'Обод вечности',      type: 'ring',    rarity: 'legendary', bonuses: { critChance: 6, dodgeChance: 4, hp: 20 } },
-  bone_amulet:      { key: 'bone_amulet',      name: 'Костяной амулет',    type: 'amulet',  rarity: 'common',    bonuses: { hp: 10 } },
-  amulet_of_wisdom: { key: 'amulet_of_wisdom', name: 'Амулет мудрости',    type: 'amulet',  rarity: 'uncommon',  bonuses: { mana: 20 } },
-  pendant_of_protection: { key: 'pendant_of_protection', name: 'Кулон защиты', type: 'amulet', rarity: 'rare',    bonuses: { defense: 6, hp: 15 } },
-  amulet_of_dragon: { key: 'amulet_of_dragon', name: 'Амулет дракона',     type: 'amulet',  rarity: 'epic',      bonuses: { damage: 8, fireResist: 5 } },
-  heart_of_mountain:{ key: 'heart_of_mountain',name: 'Сердце горы',        type: 'amulet',  rarity: 'legendary', bonuses: { hp: 45, defense: 8, blockChance: 4 } },
+  rusty_sword:      { key: 'rusty_sword',      name: 'Ржавый меч',         type: 'weapon',  rarity: 'common',    bonuses: { damage: 2 }, tier: 1 as ItemTier },
+  iron_sword:       { key: 'iron_sword',       name: 'Железный меч',       type: 'weapon',  rarity: 'uncommon',  bonuses: { damage: 5 }, tier: 2 as ItemTier },
+  orc_axe:          { key: 'orc_axe',          name: 'Топор орка',         type: 'weapon',  rarity: 'rare',      bonuses: { damage: 9, atkSpeedPenalty: 5 }, tier: 3 as ItemTier },
+  shadow_blade:     { key: 'shadow_blade',     name: 'Теневой клинок',     type: 'weapon',  rarity: 'epic',      bonuses: { damage: 15, agility: 2 }, tier: 4 as ItemTier },
+  dragon_fang:      { key: 'dragon_fang',      name: 'Клык дракона',       type: 'weapon',  rarity: 'legendary', bonuses: { damage: 25, strength: 3 }, tier: 5 as ItemTier },
+  leather_helm:     { key: 'leather_helm',     name: 'Кожаный шлем',       type: 'helmet',  rarity: 'common',    bonuses: { hp: 10 }, tier: 1 as ItemTier },
+  iron_helm:        { key: 'iron_helm',        name: 'Железный шлем',      type: 'helmet',  rarity: 'uncommon',  bonuses: { hp: 20 }, tier: 2 as ItemTier },
+  mage_hood:        { key: 'mage_hood',        name: 'Капюшон мага',       type: 'helmet',  rarity: 'rare',      bonuses: { hp: 30, strength: 1 }, tier: 3 as ItemTier },
+  leather_armor:    { key: 'leather_armor',    name: 'Кожаная броня',      type: 'armor',   rarity: 'common',    bonuses: { hp: 20 }, tier: 1 as ItemTier },
+  chainmail:        { key: 'chainmail',        name: 'Кольчуга',           type: 'armor',   rarity: 'uncommon',  bonuses: { hp: 40 }, tier: 2 as ItemTier },
+  plate_armor:      { key: 'plate_armor',      name: 'Латные доспехи',     type: 'armor',   rarity: 'rare',      bonuses: { hp: 60 }, tier: 3 as ItemTier },
+  void_plate:       { key: 'void_plate',       name: 'Доспехи пустоты',    type: 'armor',   rarity: 'epic',      bonuses: { hp: 90, strength: 2 }, tier: 4 as ItemTier },
+  leather_gloves:   { key: 'leather_gloves',   name: 'Кожаные перчатки',   type: 'gloves',  rarity: 'common',    bonuses: { strength: 1 }, tier: 1 as ItemTier },
+  battle_gloves:    { key: 'battle_gloves',    name: 'Боевые перчатки',    type: 'gloves',  rarity: 'uncommon',  bonuses: { strength: 2 }, tier: 2 as ItemTier },
+  titan_gauntlets:  { key: 'titan_gauntlets',  name: 'Рукавицы титана',    type: 'gloves',  rarity: 'epic',      bonuses: { strength: 4, hp: 20 }, tier: 4 as ItemTier },
+  light_boots:      { key: 'light_boots',      name: 'Лёгкие сапоги',      type: 'boots',   rarity: 'common',    bonuses: { agility: 1 }, tier: 1 as ItemTier },
+  scout_boots:      { key: 'scout_boots',      name: 'Сапоги разведчика',  type: 'boots',   rarity: 'uncommon',  bonuses: { agility: 2 }, tier: 2 as ItemTier },
+  wind_walkers:     { key: 'wind_walkers',     name: 'Сапоги ветра',       type: 'boots',   rarity: 'legendary', bonuses: { agility: 5, hp: 15 }, tier: 5 as ItemTier },
+  arcane_staff:     { key: 'arcane_staff',     name: 'Магический посох',   type: 'weapon',  rarity: 'rare',      bonuses: { damage: 8, hp: 20 }, tier: 3 as ItemTier },
+  copper_ring:      { key: 'copper_ring',      name: 'Медное кольцо',      type: 'ring',    rarity: 'common',    bonuses: { critChance: 1 }, tier: 1 as ItemTier },
+  silver_ring:      { key: 'silver_ring',      name: 'Серебряное кольцо',  type: 'ring',    rarity: 'uncommon',  bonuses: { dodgeChance: 2 }, tier: 2 as ItemTier },
+  ring_of_vigor:    { key: 'ring_of_vigor',    name: 'Кольцо бодрости',    type: 'ring',    rarity: 'rare',      bonuses: { mana: 15, hp: 5 }, tier: 3 as ItemTier },
+  ring_of_phoenix:  { key: 'ring_of_phoenix',  name: 'Кольцо феникса',     type: 'ring',    rarity: 'epic',      bonuses: { critDamage: 8, hp: 10 }, tier: 4 as ItemTier },
+  band_of_eternity: { key: 'band_of_eternity', name: 'Обод вечности',      type: 'ring',    rarity: 'legendary', bonuses: { critChance: 6, dodgeChance: 4, hp: 20 }, tier: 5 as ItemTier },
+  bone_amulet:      { key: 'bone_amulet',      name: 'Костяной амулет',    type: 'amulet',  rarity: 'common',    bonuses: { hp: 10 }, tier: 1 as ItemTier },
+  amulet_of_wisdom: { key: 'amulet_of_wisdom', name: 'Амулет мудрости',    type: 'amulet',  rarity: 'uncommon',  bonuses: { mana: 20 }, tier: 2 as ItemTier },
+  pendant_of_protection: { key: 'pendant_of_protection', name: 'Кулон защиты', type: 'amulet', rarity: 'rare',    bonuses: { defense: 6, hp: 15 }, tier: 3 as ItemTier },
+  amulet_of_dragon: { key: 'amulet_of_dragon', name: 'Амулет дракона',     type: 'amulet',  rarity: 'epic',      bonuses: { damage: 8, fireResist: 5 }, tier: 4 as ItemTier },
+  heart_of_mountain:{ key: 'heart_of_mountain',name: 'Сердце горы',        type: 'amulet',  rarity: 'legendary', bonuses: { hp: 45, defense: 8, blockChance: 4 }, tier: 5 as ItemTier },
   // Materials
   // Upgrade protection
   upgrade_protect:     { key: 'upgrade_protect',     name: 'Свиток защиты (+)',      type: 'consumable', rarity: 'uncommon', bonuses: {} },
@@ -223,5 +283,7 @@ export function formatBonuses(b: ItemBonuses): string[] {
 /** Name with +N suffix for upgraded gear. */
 export function itemDisplayName(item: Item): string {
   const n = item.upgradeLevel ?? 0;
-  return n > 0 ? `${item.name} +${n}` : item.name;
+  const t = item.tier ? ` ${tierLabel(item.tier)}` : '';
+  const up = n > 0 ? ` +${n}` : '';
+  return `${item.name}${t}${up}`;
 }

@@ -10,7 +10,7 @@ import { useEconomy } from './hooks/useEconomy';
 import {
   Item, ItemType, ItemBonuses, Rarity,
   ITEM_CATALOG, RARITY_STYLE,
-  makeItem,
+  makeItem, canEquipItem,
 } from './inventory';
 import {
   Equipment, EquipBonuses,
@@ -287,13 +287,23 @@ const log = useCallback((msg: string) => {
   }, []);
 
   // ── Equipment ─────────────────────────────────────────────────────────────
-  const { equipItem, unequipItem } = useEquipment({
+  const { equipItem: rawEquipItem, unequipItem } = useEquipment({
     equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
     skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef,
     setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
     setPlayerMaxMp, setPlayerMp, setSelectedItem,
     log,
   });
+
+  // Тир-гейт: нельзя надеть предмет выше уровня персонажа (см. ITEM_TIERS.md).
+  const equipItem = useCallback((item: Item) => {
+    const check = canEquipItem(item, playerLevelRef.current);
+    if (!check.ok) {
+      log(`Нужен ${check.required} уровень.`);
+      return;
+    }
+    rawEquipItem(item);
+  }, [rawEquipItem, log]);
 
   // ── Shop, consumables, skill-point spending ─────────────────────────────────
   const { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill } = useEconomy({
