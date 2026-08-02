@@ -24,6 +24,8 @@ export const MERCHANT_ITEMS: ShopItem[] = [
   // Accessories
   { key: 'copper_ring',            price: 90  },
   { key: 'silver_ring',            price: 160 },
+  { key: 'upgrade_protect',        price: 80  },
+  { key: 'upgrade_protect_plus',   price: 200 },
 ];
 
 /** Fast-lookup: buy price by item key. */
@@ -63,6 +65,9 @@ export const MAT_SELL_PRICE: Record<string, number> = {
   stone_guardian_trophy: 120,
   pass_lord_trophy:    130,
   ice_king_trophy:     200,
+  upgrade_protect:      25,
+  upgrade_protect_plus: 60,
+  upgrade_blessing:    120,
 };
 
 /** Rarity fallback sell values for items not sold by the merchant. */
