@@ -688,13 +688,28 @@ const log = useCallback((msg: string) => {
     const res = upgradeEquippedItem(item, inventoryRef.current, playerGoldRef.current);
     if (!res.ok) { log(res.reason); return; }
 
-    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: res.item };
-    equipmentRef.current = newEquipment;
-    setEquipment(newEquipment);
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
     playerGoldRef.current = res.gold;
     setPlayerGold(res.gold);
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    log(res.msg);
+
+    let newEquipment: Equipment;
+    if (res.success) {
+      // Успех: ставим улучшенный предмет обратно в слот.
+      newEquipment = { ...equipmentRef.current, [slot]: res.item ?? null };
+    } else if (res.failKind === 'destroy') {
+      // Провал с уничтожением: слот пустеет, предмет потерян.
+      newEquipment = { ...equipmentRef.current, [slot]: null };
+    } else if (res.item) {
+      // Провал (safe/downgrade): предмет остаётся надетым, тот же или ослабленный.
+      newEquipment = { ...equipmentRef.current, [slot]: res.item };
+    } else {
+      return;
+    }
+
+    equipmentRef.current = newEquipment;
+    setEquipment(newEquipment);
 
     // Пересчитать equipBonuses и производные max HP/MP — как при экипировке.
     const newBonuses = calcEquipBonuses(newEquipment);
@@ -710,8 +725,6 @@ const log = useCallback((msg: string) => {
     setPlayerMaxHp(newStats.maxHp);
     playerMaxMpRef.current = newStats.maxMp;
     setPlayerMaxMp(newStats.maxMp);
-
-    log(res.msg);
   }, [log]);
 
   // ── Shop: buy ────────────────────────────────────────────────────────────
