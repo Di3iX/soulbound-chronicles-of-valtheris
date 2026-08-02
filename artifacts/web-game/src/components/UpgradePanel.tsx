@@ -5,27 +5,23 @@ import { itemDisplayName, formatBonuses, RARITY_STYLE } from '../inventory';
 import type { Equipment } from '../equipment';
 import {
   MAX_UPGRADE_LEVEL, canUpgradeItem, previewUpgrade,
+  type ProtectMode, PROTECT_LABEL, PROTECT_ITEM_KEY,
 } from '../upgrade';
 
 interface Props {
   inventory: Item[];
   equipment: Equipment;
   playerGold: number;
-  onUpgradeInventory: (itemId: string) => void;
-  onUpgradeEquipped: (slot: string) => void;
+  onUpgradeInventory: (itemId: string, protect: ProtectMode) => void;
+  onUpgradeEquipped: (slot: string, protect: ProtectMode) => void;
   onClose: () => void;
 }
 
 type SlotKey = keyof Equipment;
 
 const SLOT_LABEL: Partial<Record<SlotKey, string>> = {
-  weapon: 'Оружие',
-  helmet: 'Шлем',
-  armor: 'Броня',
-  gloves: 'Перчатки',
-  boots: 'Сапоги',
-  ring: 'Кольцо',
-  amulet: 'Амулет',
+  weapon: 'Оружие', helmet: 'Шлем', armor: 'Броня', gloves: 'Перчатки',
+  boots: 'Сапоги', ring: 'Кольцо', amulet: 'Амулет',
 };
 
 export default function UpgradePanel({
@@ -33,6 +29,9 @@ export default function UpgradePanel({
   onUpgradeInventory, onUpgradeEquipped, onClose,
 }: Props) {
   const [tab, setTab] = useState<'equipped' | 'bag'>('equipped');
+  const [protect, setProtect] = useState<ProtectMode>('none');
+
+  const countKey = (key: string) => inventory.filter(i => i.key === key).length;
 
   const equippedList = (Object.keys(SLOT_LABEL) as SlotKey[])
     .map(slot => ({ slot, item: equipment[slot] as Item | null | undefined }))
@@ -41,13 +40,14 @@ export default function UpgradePanel({
   const bagGear = inventory.filter(i => i.type !== 'consumable' && canUpgradeItem(i));
 
   const Row = ({ item, onUpgrade, tag }: { item: Item; onUpgrade: () => void; tag?: string }) => {
-    const prev = previewUpgrade(item);
+    const prev = previewUpgrade(item, protect);
     const lvl = item.upgradeLevel ?? 0;
     const rs = RARITY_STYLE[item.rarity];
     const maxed = !canUpgradeItem(item);
     const canPay = prev && playerGold >= prev.gold;
-    const cry = inventory.filter(i => i.key === 'black_crystal').length;
+    const cry = countKey('black_crystal');
     const canCry = prev ? cry >= prev.crystals : false;
+    const canProt = protect === 'none' || countKey(PROTECT_ITEM_KEY[protect]) > 0;
 
     return (
       <div className={`p-3 rounded-lg border ${rs.border} ${rs.bg}`}>
@@ -60,16 +60,14 @@ export default function UpgradePanel({
             <p className="text-[10px] text-[#88c] font-mono mt-0.5">
               {formatBonuses(item.bonuses).join(' · ') || '—'}
             </p>
-            <p className="text-[9px] text-[#666] mt-1">
-              Уровень: +{lvl} / +{MAX_UPGRADE_LEVEL}
-            </p>
+            <p className="text-[9px] text-[#666] mt-1">Уровень: +{lvl} / +{MAX_UPGRADE_LEVEL}</p>
             {prev && (
               <p className="text-[10px] text-[#a78bfa] mt-1 font-mono">
                 → +{prev.nextLevel}: {formatBonuses(prev.bonuses).join(' · ')}
                 <br />
                 Стоимость: {prev.gold}💰 + {prev.crystals} кристалл
                 <br />
-                <span className={prev.successChance >= 0.7 ? 'text-green-400' : prev.successChance >= 0.45 ? 'text-yellow-400' : 'text-red-400'}>
+                <span className={prev.successChance >= 0.99 ? 'text-green-300' : prev.successChance >= 0.7 ? 'text-green-400' : prev.successChance >= 0.45 ? 'text-yellow-400' : 'text-red-400'}>
                   Шанс успеха: {Math.round(prev.successChance * 100)}%
                 </span>
                 <br />
@@ -80,7 +78,7 @@ export default function UpgradePanel({
           </div>
           <button
             type="button"
-            disabled={maxed || !canPay || !canCry}
+            disabled={maxed || !canPay || !canCry || !canProt}
             onClick={onUpgrade}
             className="shrink-0 px-2 py-1.5 rounded border text-[11px] font-bold border-primary bg-primary/20 text-primary
               disabled:opacity-30 disabled:cursor-not-allowed"
@@ -91,6 +89,8 @@ export default function UpgradePanel({
       </div>
     );
   };
+
+  const modes: ProtectMode[] = ['none', 'protect', 'protect_plus', 'blessing'];
 
   return (
     <div className="absolute inset-0 z-[60] bg-[#08080d]/97 flex flex-col rounded backdrop-blur-md">
@@ -104,6 +104,32 @@ export default function UpgradePanel({
           <button type="button" onClick={onClose}
             className="w-8 h-8 rounded border border-tile-border text-[#888] font-bold">✕</button>
         </div>
+      </div>
+
+      {/* Protection mode */}
+      <div className="px-3 py-2 border-b border-tile-border shrink-0 space-y-1">
+        <p className="text-[9px] text-[#666] uppercase tracking-wide">Защита от провала</p>
+        <div className="flex flex-wrap gap-1">
+          {modes.map(m => {
+            const have = m === 'none' ? true : countKey(PROTECT_ITEM_KEY[m]) > 0;
+            return (
+              <button
+                key={m}
+                type="button"
+                disabled={!have && m !== 'none'}
+                onClick={() => setProtect(m)}
+                className={`px-2 py-1 rounded text-[9px] font-bold border ${
+                  protect === m
+                    ? 'border-primary bg-primary/20 text-primary'
+                    : 'border-tile-border text-[#777]'
+                } disabled:opacity-30`}
+              >
+                {m === 'none' ? 'Нет' : m === 'protect' ? `🛡️×${countKey('upgrade_protect')}` : m === 'protect_plus' ? `🔒×${countKey('upgrade_protect_plus')}` : `✨×${countKey('upgrade_blessing')}`}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[9px] text-[#555]">{PROTECT_LABEL[protect]}</p>
       </div>
 
       <div className="flex border-b border-tile-border shrink-0">
@@ -122,23 +148,19 @@ export default function UpgradePanel({
           <p className="text-center text-[#555] text-[12px] py-8">Нет надетых предметов</p>
         )}
         {tab === 'equipped' && equippedList.map(({ slot, item }) => (
-          <Row
-            key={slot}
-            item={item!}
-            tag={SLOT_LABEL[slot]}
-            onUpgrade={() => onUpgradeEquipped(slot)}
-          />
+          <Row key={slot} item={item!} tag={SLOT_LABEL[slot]}
+            onUpgrade={() => onUpgradeEquipped(slot, protect)} />
         ))}
         {tab === 'bag' && bagGear.length === 0 && (
           <p className="text-center text-[#555] text-[12px] py-8">Нечего улучшать в сумке</p>
         )}
         {tab === 'bag' && bagGear.map(item => (
-          <Row key={item.id} item={item} onUpgrade={() => onUpgradeInventory(item.id)} />
+          <Row key={item.id} item={item} onUpgrade={() => onUpgradeInventory(item.id, protect)} />
         ))}
       </div>
 
       <div className="shrink-0 px-3 py-2 border-t border-tile-border/40 text-[9px] text-[#444] text-center">
-        Макс. +{MAX_UPGRADE_LEVEL} · +12% к бонусам за уровень · кристаллы + золото
+        🛡️ нет destroy · 🔒 только safe-провал · ✨ 100% успех · свитки с мобов / торговец
       </div>
     </div>
   );
