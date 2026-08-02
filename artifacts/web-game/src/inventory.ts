@@ -67,6 +67,13 @@ export const ITEM_CATALOG: Record<string, Omit<Item, 'id'>> = {
   amulet_of_dragon: { key: 'amulet_of_dragon', name: 'Амулет дракона',     type: 'amulet',  rarity: 'epic',      bonuses: { damage: 8, fireResist: 5 } },
   heart_of_mountain:{ key: 'heart_of_mountain',name: 'Сердце горы',        type: 'amulet',  rarity: 'legendary', bonuses: { hp: 45, defense: 8, blockChance: 4 } },
   // Materials
+  // Recipe scrolls (unlock blacksmith recipes)
+  recipe_iron_edge:   { key: 'recipe_iron_edge',   name: 'Рецепт: Железный клинок', type: 'consumable', rarity: 'uncommon', bonuses: {} },
+  recipe_chain_patch: { key: 'recipe_chain_patch', name: 'Рецепт: Кольчуга',         type: 'consumable', rarity: 'uncommon', bonuses: {} },
+  recipe_ice_charm:   { key: 'recipe_ice_charm',   name: 'Рецепт: Талисман льда',   type: 'consumable', rarity: 'rare',     bonuses: {} },
+  recipe_boar_blade:  { key: 'recipe_boar_blade',  name: 'Рецепт: Клинок с клыком', type: 'consumable', rarity: 'uncommon', bonuses: {} },
+  recipe_crystal_charm: { key: 'recipe_crystal_charm', name: 'Рецепт: Кулон защиты', type: 'consumable', rarity: 'rare',  bonuses: {} },
+
   black_crystal:  { key: 'black_crystal',  name: 'Чёрный кристалл', type: 'consumable', rarity: 'uncommon', bonuses: {} },
   rat_tail:       { key: 'rat_tail',       name: 'Крысиный хвост',   type: 'consumable', rarity: 'common',   bonuses: {} },
   rabbit_fur:     { key: 'rabbit_fur',     name: 'Кроличий мех',     type: 'consumable', rarity: 'common',   bonuses: {} },
