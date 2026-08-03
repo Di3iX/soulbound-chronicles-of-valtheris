@@ -39,10 +39,12 @@ import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
 import { upgradeItemInInventory, upgradeEquippedItem, ProtectMode } from './upgrade';
 import { promoteItemTier } from './tierPromote';
+import { applyEnchant } from './enchant';
 import ShopPanel from './shop/ShopPanel';
 import CraftPanel from './components/CraftPanel';
 import UpgradePanel from './components/UpgradePanel';
 import TierPromotePanel from './components/TierPromotePanel';
+import EnchantPanel from './components/EnchantPanel';
 import CharacterPanel from './components/CharacterPanel';
 import InventoryPanel from './components/InventoryPanel';
 import CombatHUD from './components/CombatHUD';
@@ -143,6 +145,7 @@ export default function App() {
   const [unlockedRecipes, setUnlockedRecipes] = useState<string[]>(sv?.unlockedRecipes ?? []);
   const [showUpgrade, setShowUpgrade]     = useState(false);
   const [showTier, setShowTier]           = useState(false);
+  const [showEnchant, setShowEnchant]     = useState(false);
   const [showWorldMap, setShowWorldMap]   = useState(false);
   const [openedChests, setOpenedChests]   = useState<OpenedChests>(sv?.openedChests ?? {});
 
@@ -502,6 +505,12 @@ const log = useCallback((msg: string) => {
       return;
     }
 
+    if (action.kind === 'open_enchant') {
+      setQuestDialogue(null);
+      setShowEnchant(true);
+      return;
+    }
+
     if (action.kind === 'heal') {
       let free = loadHealState();
       if (free <= 0) {
@@ -754,7 +763,7 @@ const log = useCallback((msg: string) => {
     if (!item) return;
 
     const nextTier = Math.min(6, (item.tier ?? 1) + 1) as ItemTier;
-    const requiredLevel = TIER_LEVEL_RANGE[nextTier][0];
+    const requiredLevel = TIER_LEVEL_RANGE[nextTier].min;
     if (playerLevelRef.current < requiredLevel) {
       log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
       return;
@@ -775,13 +784,61 @@ const log = useCallback((msg: string) => {
     if (!item) return;
 
     const nextTier = Math.min(6, (item.tier ?? 1) + 1) as ItemTier;
-    const requiredLevel = TIER_LEVEL_RANGE[nextTier][0];
+    const requiredLevel = TIER_LEVEL_RANGE[nextTier].min;
     if (playerLevelRef.current < requiredLevel) {
       log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
       return;
     }
 
     const res = promoteItemTier(item, inventoryRef.current, playerGoldRef.current, false);
+    if (!res.ok) { log(res.reason); return; }
+
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    playerGoldRef.current = res.gold;
+    setPlayerGold(res.gold);
+    log(res.msg);
+
+    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: res.item };
+    equipmentRef.current = newEquipment;
+    setEquipment(newEquipment);
+
+    // Пересчитать equipBonuses и производные max HP/MP — как при экипировке.
+    const newBonuses = calcEquipBonuses(newEquipment);
+    equipBonusesRef.current = newBonuses;
+    setEquipBonuses(newBonuses);
+
+    const newStats = computeStats({
+      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
+      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
+      skills: skillBonusesRef.current,
+    });
+    playerMaxHpRef.current = newStats.maxHp;
+    setPlayerMaxHp(newStats.maxHp);
+    playerMaxMpRef.current = newStats.maxMp;
+    setPlayerMaxMp(newStats.maxMp);
+  }, [log]);
+
+  // ── EnchantPanel: apply enchant (bag / equipped) ─────────────────────────
+  const handleEnchantInv = useCallback((itemId: string, enchantId: string) => {
+    const item = inventoryRef.current.find(i => i.id === itemId);
+    if (!item) return;
+
+    const res = applyEnchant(item, enchantId, inventoryRef.current, playerGoldRef.current, true);
+    if (!res.ok) { log(res.reason); return; }
+
+    inventoryRef.current = res.inventory;
+    setInventory(res.inventory);
+    playerGoldRef.current = res.gold;
+    setPlayerGold(res.gold);
+    log(res.msg);
+  }, [log]);
+
+  const handleEnchantEq = useCallback((slot: string, enchantId: string) => {
+    const item = equipmentRef.current[slot as keyof Equipment];
+    if (!item) return;
+
+    const res = applyEnchant(item, enchantId, inventoryRef.current, playerGoldRef.current, false);
     if (!res.ok) { log(res.reason); return; }
 
     inventoryRef.current = res.inventory;
@@ -1252,6 +1309,20 @@ const log = useCallback((msg: string) => {
               onPromoteInventory={handleTierPromoteInv}
               onPromoteEquipped={handleTierPromoteEq}
               onClose={() => setShowTier(false)}
+            />
+          )}
+
+          {/* ══ ENCHANT PANEL OVERLAY (z-60) ═════════════════════════════════════
+              Enchantment — one per item, new replaces old. Preserves affixes/tier/+N.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showEnchant && (
+            <EnchantPanel
+              inventory={inventory}
+              equipment={equipment}
+              playerGold={playerGold}
+              onEnchantInventory={handleEnchantInv}
+              onEnchantEquipped={handleEnchantEq}
+              onClose={() => setShowEnchant(false)}
             />
           )}
 

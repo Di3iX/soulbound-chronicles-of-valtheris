@@ -41,6 +41,18 @@ export interface Item {
   type:    ItemType;
   rarity:  Rarity;
   bonuses: ItemBonuses;
+  /** Equipment tier T1–T6 (see ITEM_TIERS.md). */
+  tier?: ItemTier;
+  /** Explicit level requirement; if absent, derived from `tier`'s minimum level. */
+  requiredLevel?: number;
+  /** Upgrade level applied via the blacksmith (0–5). */
+  upgradeLevel?: number;
+  /** Rolled affixes (rarity-based bonus rolls). */
+  affixes?: ItemAffix[];
+  /** Currently applied enchantment id (see enchant.ts). One per item; new replaces old. */
+  enchantId?: string;
+  /** Display name of the currently applied enchantment. */
+  enchantName?: string;
 }
 
 
