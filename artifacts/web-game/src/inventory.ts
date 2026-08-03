@@ -317,10 +317,6 @@ const AFFIX_POOL: AffixDef[] = [
     apply: v => ({ electricResist: v }) },
 ];
 
-function randInt(min: number, max: number): number {
-  return min + Math.floor(Math.random() * (max - min + 1));
-}
-
 function pickWeighted(pool: AffixDef[], exclude: Set<string>): AffixDef | null {
   const avail = pool.filter(a => !exclude.has(a.id));
   if (!avail.length) return null;
