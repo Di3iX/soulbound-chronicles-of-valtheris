@@ -398,6 +398,12 @@ const log = useCallback((msg: string) => {
     // NPC intercept
     const npc = (LOCATION_NPCS[currentLocationRef.current] ?? []).find(n => n.x === nx && n.y === ny);
     if (npc) {
+      // Merchant → open shop (same special-case as the "Говорить" button)
+      if (npc.id === 'merchant') {
+        setShowShop(true);
+        setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowSkillPanel(false);
+        return;
+      }
       const crystalCount = inventoryRef.current.filter(i => i.key === 'black_crystal').length;
       const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
         fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
