@@ -139,6 +139,8 @@ export default function App() {
   const [showInventory, setShowInventory] = useState(false);
   const [selectedItem, setSelectedItem]   = useState<Item | null>(null);
   const [lootNotif, setLootNotif]         = useState<string | null>(null);
+  const [gateNotif, setGateNotif]         = useState<string | null>(null);
+  const gateNotifTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saveFlash, setSaveFlash]         = useState(false);
   const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCraft, setShowCraft]         = useState(false);
@@ -271,6 +273,13 @@ const log = useCallback((msg: string) => {
   appendLog(setLogs, msg);
 }, [setLogs]);
 
+  /** Top-of-screen toast for "blocked, needs level N" messages — same slot as loot notifications. */
+  const showGateNotif = useCallback((msg: string) => {
+    setGateNotif(msg);
+    if (gateNotifTimer.current) clearTimeout(gateNotifTimer.current);
+    gateNotifTimer.current = setTimeout(() => setGateNotif(null), 2500);
+  }, []);
+
   const spawnFloat = useCallback((value: string, col: number, row: number, type: FloatingNum['type']) => {
     setFloatingNums(prev => [...prev, { id: Date.now() + Math.random(), value, col, row, type, timestamp: Date.now() }]);
   }, []);
@@ -308,10 +317,11 @@ const log = useCallback((msg: string) => {
     const check = canEquipItem(item, playerLevelRef.current);
     if (!check.ok) {
       log(`Нужен ${check.required} уровень.`);
+      showGateNotif(`🔒 Нужен ${check.required} уровень, чтобы надеть предмет`);
       return;
     }
     rawEquipItem(item);
-  }, [rawEquipItem, log]);
+  }, [rawEquipItem, log, showGateNotif]);
 
   // ── Shop, consumables, skill-point spending ─────────────────────────────────
   const { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill } = useEconomy({
@@ -445,11 +455,13 @@ const log = useCallback((msg: string) => {
         const gate = canEnterLocation(exit.to, playerLevelRef.current);
         if (!gate.ok) {
           log(`⛔ Нужен ${gate.required} уровень, чтобы войти (у вас ${playerLevelRef.current}).`);
+          showGateNotif(`🔒 Нужен ${gate.required} уровень, чтобы войти в «${LOCATION_META[exit.to].label}»`);
           return;
         }
         // Block Cave → Ruins until Goblin Chief has been defeated for the first time
         if (currentLocationRef.current === 'wolfcave' && exit.to === 'ruins' && !bossStateRef.current.caveChief.firstKillDone) {
           log('⚠️ Путь заблокирован! Победите Главаря гоблинов, чтобы пройти в Руины.');
+          showGateNotif('⚠️ Победите Главаря гоблинов, чтобы пройти в Руины');
           return;
         }
         handleLocationTransition(exit.to, exit.spawnAt);
@@ -458,7 +470,7 @@ const log = useCallback((msg: string) => {
     }
     if (tileType !== 0) { log('Путь заблокирован!'); return; }
     playerPosRef.current = { x: nx, y: ny }; setPlayerPos({ x: nx, y: ny });
-  }, [log, handleLocationTransition]);
+  }, [log, showGateNotif, handleLocationTransition]);
 
   // ── Floating number cleanup ───────────────────────────────────────────────
   useEffect(() => {
@@ -477,11 +489,12 @@ const log = useCallback((msg: string) => {
     const gate = canEnterLocation(to, playerLevelRef.current);
     if (!gate.ok) {
       log(`⛔ Нужен ${gate.required} уровень для «${LOCATION_META[to].label}» (у вас ${playerLevelRef.current}).`);
+      showGateNotif(`🔒 Нужен ${gate.required} уровень, чтобы войти в «${LOCATION_META[to].label}»`);
       return;
     }
     setShowWorldMap(false);
     handleLocationTransition(to, LOCATION_SPAWN[to]);
-  }, [handleLocationTransition, log]);
+  }, [handleLocationTransition, log, showGateNotif]);
 
   // ── Quest action handler ──────────────────────────────────────────────────
   const handleQuestAction = useCallback((action: DialogAction) => {
@@ -766,6 +779,7 @@ const log = useCallback((msg: string) => {
     const requiredLevel = TIER_LEVEL_RANGE[nextTier].min;
     if (playerLevelRef.current < requiredLevel) {
       log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
+      showGateNotif(`🔒 Нужен ${requiredLevel} уровень для тира T${nextTier}`);
       return;
     }
 
@@ -777,7 +791,7 @@ const log = useCallback((msg: string) => {
     playerGoldRef.current = res.gold;
     setPlayerGold(res.gold);
     log(res.msg);
-  }, [log]);
+  }, [log, showGateNotif]);
 
   const handleTierPromoteEq = useCallback((slot: string) => {
     const item = equipmentRef.current[slot as keyof Equipment];
@@ -787,6 +801,7 @@ const log = useCallback((msg: string) => {
     const requiredLevel = TIER_LEVEL_RANGE[nextTier].min;
     if (playerLevelRef.current < requiredLevel) {
       log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
+      showGateNotif(`🔒 Нужен ${requiredLevel} уровень для тира T${nextTier}`);
       return;
     }
 
@@ -817,7 +832,7 @@ const log = useCallback((msg: string) => {
     setPlayerMaxHp(newStats.maxHp);
     playerMaxMpRef.current = newStats.maxMp;
     setPlayerMaxMp(newStats.maxMp);
-  }, [log]);
+  }, [log, showGateNotif]);
 
   // ── EnchantPanel: apply enchant (bag / equipped) ─────────────────────────
   const handleEnchantInv = useCallback((itemId: string, enchantId: string) => {
@@ -1148,6 +1163,14 @@ const log = useCallback((msg: string) => {
             <div className="absolute top-2 inset-x-2 z-[65] flex items-center gap-2 bg-[#0b1f0e]/95 border border-green-700/70 rounded px-3 py-2 shadow-lg pointer-events-none animate-in fade-in duration-200">
               <span className="text-base shrink-0">📦</span>
               <span className="text-[12px] font-bold text-green-300 leading-tight">Получен предмет: {lootNotif}</span>
+            </div>
+          )}
+
+          {/* Level-gate blocked toast (equip, tier, location transition) */}
+          {gateNotif && (
+            <div className="absolute top-2 inset-x-2 z-[65] flex items-center gap-2 bg-[#2a0e0e]/95 border border-red-700/70 rounded px-3 py-2 shadow-lg pointer-events-none animate-in fade-in duration-200">
+              <span className="text-base shrink-0">⛔</span>
+              <span className="text-[12px] font-bold text-red-300 leading-tight">{gateNotif}</span>
             </div>
           )}
 
