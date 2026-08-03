@@ -14,6 +14,7 @@ export type DialogAction =
   | { kind: 'open_craft' }
   | { kind: 'open_upgrade' }
   | { kind: 'open_tier' }
+  | { kind: 'open_enchant' }
   | { kind: 'dismiss' };
 
 export interface DialogButton {
@@ -637,6 +638,7 @@ function smithDialogue(_progress: QuestProgress, flags: DialogueFlags): NpcDialo
       { label: '⚒️ Открыть кузницу', action: { kind: 'open_craft' }, primary: true },
       { label: '✨ Улучшение +N', action: { kind: 'open_upgrade' } },
       { label: '⬆️ Прокачка тира', action: { kind: 'open_tier' } },
+      { label: '🔮 Зачарование', action: { kind: 'open_enchant' } },
       { label: 'Уйти', action: { kind: 'dismiss' } },
     ],
   };
