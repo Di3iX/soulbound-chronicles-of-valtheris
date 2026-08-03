@@ -42,6 +42,7 @@ export interface ResetCtx {
   playerMaxHpRef: MutableRefObject<number>;
   playerPosRef: MutableRefObject<{ x: number; y: number }>;
   playerXpRef: MutableRefObject<number>;
+  questProgressRef: MutableRefObject<QuestProgress>;
   shieldRef: MutableRefObject<boolean>;
   playerStatusEffectsRef: MutableRefObject<StatusEffect[]>;
   statPointsRef: MutableRefObject<number>;
@@ -73,6 +74,7 @@ export interface ResetCtx {
   setPlayerMaxMp: (v: number) => void;
   setPlayerPos: (v: { x: number; y: number }) => void;
   setPlayerXp: (v: number) => void;
+  setQuestProgress: (v: QuestProgress) => void;
   setSelectedItem: (v: Item | null) => void;
   setShieldActive: (v: boolean) => void;
   setPlayerStatusEffects: (v: StatusEffect[]) => void;
@@ -86,6 +88,7 @@ export interface ResetCtx {
   setSkillsCd: Dispatch<SetStateAction<Record<number, number>>>;
   setStatPoints: (v: number) => void;
   setStats: (v: BaseStats) => void;
+  setUnlockedRecipes: (v: string[]) => void;
   setXpToNext: (v: number) => void;
 }
 
@@ -102,14 +105,15 @@ export function useReset(ctx: ResetCtx) {
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, equipmentRef,
     inventoryRef, levelHpBonusRef, levelMpBonusRef, exploredTilesRef, phaseRef, playerAttackTimeout, playerBonusDmgRef,
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
+    questProgressRef,
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
-    setPlayerPos, setPlayerXp, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
+    setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
-    setSkillProgress, setSkillsCd, setStatPoints, setStats, setXpToNext,
+    setSkillProgress, setSkillsCd, setStatPoints, setStats, setUnlockedRecipes, setXpToNext,
   } = ctx;
 
   // ── Reset current map (respawn in current location — keep all character progress) ──
@@ -203,6 +207,7 @@ export function useReset(ctx: ResetCtx) {
     inventoryRef.current       = [];
     currentLocationRef.current           = 'village';
     bossStateRef.current                  = INITIAL_BOSS_STATE;
+    questProgressRef.current             = {};
 
     // Reset state
     setPhase('explore');
@@ -232,6 +237,8 @@ export function useReset(ctx: ResetCtx) {
     setSkillPoints(0);
     setBossState(INITIAL_BOSS_STATE);
     setShowBossVictory(false);
+    setQuestProgress({});
+    setUnlockedRecipes([]);
     setEquipment({ ...EMPTY_EQUIPMENT });
     setInventory([]);
     setEquipBonuses({ ...ZERO_EQUIP_BONUSES });
