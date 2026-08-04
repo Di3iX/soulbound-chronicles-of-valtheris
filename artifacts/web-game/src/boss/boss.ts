@@ -14,7 +14,7 @@ export const ICE_BOSS_ID   = 9993; // Король льда (Ледяная кр
 /** All reserved boss entity ids. */
 
 export const CAVE_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Главарь гоблинов', emoji: '👑', x: 15, y: 15,
+  name: 'Главарь гоблинов', emoji: '👑', x: 19, y: 25,
   hp: 750, maxHp: 750, baseMaxHp: 750, rarity: 'common',
   attackInterval: 1760, dmgMin: 10, dmgMax: 24, dead: false,
 };
