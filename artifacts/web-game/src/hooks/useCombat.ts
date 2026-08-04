@@ -702,18 +702,18 @@ export function useCombat(ctx: CombatCtx) {
 
   // ── Enemy death ──────────────────────────────────────────────────────────
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string, rarity: EnemyRarity) => {
-    phaseRef.current = 'victory';
+    // Stop attack loops immediately
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
     const deadAt = Date.now();
-    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e);
-    setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e));
+    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt, aggro: false } : e);
+    setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt, aggro: false } : e));
     playerPosRef.current = { x: ex, y: ey };
     setPlayerPos({ x: ex, y: ey });
     log(`💀 ${name} повержен!`);
 
-    // Boss intercept — rewards and victory handled separately
+    // Boss intercept — optional overlay; still no generic "victory tablet"
     if (id === BOSS_ID) { handleBossDeath(); return; }
     if (id === FIELD_BOSS_ID) { handleFieldBossDeath(); return; }
     if (id === RUINS_BOSS_ID) { handleRuinsBossDeath(); return; }
@@ -722,10 +722,11 @@ export function useCombat(ctx: CombatCtx) {
     if (id === PASS_BOSS_ID) { handlePassBossDeath(); return; }
     if (id === ICE_BOSS_ID) { handleIceBossDeath(); return; }
 
+    // MMO-style: rewards via log / floating notifs only — no blocking victory screen
     const reward = applyRewards(name, rarity);
-    setLastKillReward(reward);
+    setLastKillReward(reward); // optional short toast in App; clear quickly
+    setTimeout(() => setLastKillReward(null), 2200);
 
-    // ── Quest progress (any active quest matching this enemy name) ───────────
     {
       const { progress: qp, logs: qLogs } = trackKillForQuests(questProgressRef.current, name);
       if (qLogs.length) {
@@ -736,14 +737,13 @@ export function useCombat(ctx: CombatCtx) {
     }
 
     const allDead = enemiesRef.current.every(e => e.dead);
-    if (allDead) log('🏆 Локация зачищена! Враги возродятся через некоторое время.');
-    setPhase('victory');
-    setTimeout(() => {
-      if (phaseRef.current === 'victory') {
-        phaseRef.current = 'explore'; setPhase('explore');
-        setActiveEnemyId(null); activeEnemyIdRef.current = null;
-      }
-    }, 1500);
+    if (allDead) log('🏆 Локация зачищена. Враги скоро возродятся.');
+
+    // Instant return to explore — keep moving
+    phaseRef.current = 'explore';
+    setPhase('explore');
+    setActiveEnemyId(null);
+    activeEnemyIdRef.current = null;
   }, [log, applyRewards, handleBossDeath, handleFieldBossDeath, handleRuinsBossDeath, handleSwampBossDeath, handleMineBossDeath, handlePassBossDeath, handleIceBossDeath]);
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {
