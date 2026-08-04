@@ -346,9 +346,21 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       { name: 'Наёмник', x: 24, y: 15 },
     ],
     ruins: [
-      { name: 'Скелет', x: 10, y: 11 }, { name: 'Зомби', x: 18, y: 10 },
-      { name: 'Призрак', x: 15, y: 15 }, { name: 'Скелет', x: 12, y: 18 },
-      { name: 'Зомби', x: 19, y: 19 },
+      // west hall
+      { name: 'Скелет', x: 5, y: 14 }, { name: 'Зомби', x: 7, y: 16 },
+      // courtyard
+      { name: 'Скелет', x: 12, y: 13 }, { name: 'Призрак', x: 15, y: 14 },
+      { name: 'Зомби', x: 18, y: 16 }, { name: 'Скелет', x: 16, y: 18 },
+      // north wing
+      { name: 'Призрак', x: 13, y: 5 }, { name: 'Скелет', x: 16, y: 6 },
+      // south crypt approach
+      { name: 'Зомби', x: 13, y: 23 }, { name: 'Скелет', x: 17, y: 24 },
+      { name: 'Призрак', x: 15, y: 25 },
+      // side rooms
+      { name: 'Зомби', x: 5, y: 6 }, { name: 'Скелет', x: 24, y: 6 },
+      { name: 'Призрак', x: 5, y: 23 }, { name: 'Зомби', x: 24, y: 15 },
+      // east hall
+      { name: 'Скелет', x: 25, y: 14 }, { name: 'Зомби', x: 26, y: 16 },
     ],
     swamp: [
       { name: 'Слизень', x: 9, y: 10 }, { name: 'Ядовитый паук', x: 17, y: 11 },
