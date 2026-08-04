@@ -50,6 +50,15 @@
   border-radius: 3px;
 }
 
+/* Hide scrollbar for the horizontally-scrollable HUD button row (still scrollable via touch/wheel) */
+.scrollbar-none {
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* IE/Edge legacy */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;              /* Chrome/Safari/Android WebView */
+}
+
 /* Tile Styles */
 .tile-grass {
   background-color: #1e2a1e;
