@@ -38,7 +38,7 @@ export const SWAMP_BOSS_DEF: Omit<Enemy, 'id'> = {
 };
 
 export const MINE_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Каменный страж', emoji: '🗿', x: 15, y: 15,
+  name: 'Каменный страж', emoji: '🗿', x: 19, y: 25,
   hp: 1700, maxHp: 1700, baseMaxHp: 1700, rarity: 'common',
   attackInterval: 1900, dmgMin: 30, dmgMax: 48, dead: false,
 };
