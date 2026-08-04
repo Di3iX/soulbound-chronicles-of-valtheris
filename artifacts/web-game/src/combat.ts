@@ -363,8 +363,22 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       { name: 'Скелет', x: 25, y: 14 }, { name: 'Зомби', x: 26, y: 16 },
     ],
     swamp: [
-      { name: 'Слизень', x: 9, y: 10 }, { name: 'Ядовитый паук', x: 17, y: 11 },
-      { name: 'Болотник', x: 13, y: 17 }, { name: 'Слизень', x: 19, y: 19 },
+      // west islands
+      { name: 'Слизень', x: 5, y: 5 }, { name: 'Ядовитый паук', x: 8, y: 7 },
+      { name: 'Болотник', x: 6, y: 15 },
+      // center belt
+      { name: 'Слизень', x: 12, y: 14 }, { name: 'Болотник', x: 16, y: 16 },
+      { name: 'Ядовитый паук', x: 15, y: 11 },
+      // north
+      { name: 'Слизень', x: 14, y: 4 }, { name: 'Ядовитый паук', x: 22, y: 5 },
+      { name: 'Болотник', x: 24, y: 7 },
+      // south-west
+      { name: 'Слизень', x: 5, y: 22 }, { name: 'Болотник', x: 7, y: 24 },
+      // boss island SE
+      { name: 'Ядовитый паук', x: 20, y: 21 }, { name: 'Слизень', x: 23, y: 23 },
+      { name: 'Болотник', x: 21, y: 25 },
+      // east approach
+      { name: 'Слизень', x: 25, y: 14 }, { name: 'Ядовитый паук', x: 24, y: 16 },
     ],
     mine: [
       { name: 'Летучая мышь', x: 9, y: 9 }, { name: 'Шахтёр-зомби', x: 16, y: 10 },
