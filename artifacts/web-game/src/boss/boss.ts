@@ -11,44 +11,66 @@ export const MINE_BOSS_ID  = 9995; // Каменный страж (Заброш�
 export const PASS_BOSS_ID  = 9994; // Владыка перевала (Каменный перевал)
 export const ICE_BOSS_ID   = 9993; // Король льда (Ледяная крепость)
 
+/** All reserved boss entity ids. */
+export const ALL_BOSS_IDS: readonly number[] = [
+  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID,
+];
+
+export function isBossId(id: number): boolean {
+  return (ALL_BOSS_IDS as readonly number[]).includes(id);
+}
+
+/** Mini-bosses (zone mid bosses) vs story bosses — for UI labels. */
+export const MINI_BOSS_IDS: readonly number[] = [FIELD_BOSS_ID];
+
+export function isMiniBossId(id: number): boolean {
+  return (MINI_BOSS_IDS as readonly number[]).includes(id);
+}
+
+export function bossKindLabel(id: number): string {
+  if (isMiniBossId(id)) return 'Мини-босс';
+  if (isBossId(id)) return 'Босс';
+  return '';
+}
+
 export const CAVE_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Главарь гоблинов', emoji: '👑', x: 10, y: 10,
+  name: 'Главарь гоблинов', emoji: '👑', x: 15, y: 15,
   hp: 750, maxHp: 750, baseMaxHp: 750, rarity: 'common',
   attackInterval: 1760, dmgMin: 10, dmgMax: 24, dead: false,
 };
 
 export const FIELD_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Огромный Кабан', emoji: '🐗', x: 10, y: 10,
+  name: 'Огромный Кабан', emoji: '🐗', x: 14, y: 16,
   hp: 520, maxHp: 520, baseMaxHp: 520, rarity: 'common',
   attackInterval: 2000, dmgMin: 14, dmgMax: 26, dead: false,
 };
 
 export const RUINS_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Хранитель склепа', emoji: '⚰️', x: 10, y: 10,
+  name: 'Хранитель склепа', emoji: '⚰️', x: 15, y: 15,
   hp: 1100, maxHp: 1100, baseMaxHp: 1100, rarity: 'common',
   attackInterval: 1600, dmgMin: 22, dmgMax: 36, dead: false,
 };
 
 export const SWAMP_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Трясинный ужас', emoji: '🫧', x: 10, y: 10,
+  name: 'Трясинный ужас', emoji: '🫧', x: 15, y: 15,
   hp: 1400, maxHp: 1400, baseMaxHp: 1400, rarity: 'common',
   attackInterval: 1700, dmgMin: 26, dmgMax: 42, dead: false,
 };
 
 export const MINE_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Каменный страж', emoji: '🗿', x: 10, y: 10,
+  name: 'Каменный страж', emoji: '🗿', x: 15, y: 15,
   hp: 1700, maxHp: 1700, baseMaxHp: 1700, rarity: 'common',
   attackInterval: 1900, dmgMin: 30, dmgMax: 48, dead: false,
 };
 
 export const PASS_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Владыка перевала', emoji: '🏔️', x: 10, y: 10,
+  name: 'Владыка перевала', emoji: '🏔️', x: 15, y: 15,
   hp: 2000, maxHp: 2000, baseMaxHp: 2000, rarity: 'common',
   attackInterval: 1800, dmgMin: 34, dmgMax: 52, dead: false,
 };
 
 export const ICE_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Король льда', emoji: '❄️', x: 10, y: 10,
+  name: 'Король льда', emoji: '❄️', x: 15, y: 15,
   hp: 2500, maxHp: 2500, baseMaxHp: 2500, rarity: 'common',
   attackInterval: 1650, dmgMin: 38, dmgMax: 58, dead: false,
 };
