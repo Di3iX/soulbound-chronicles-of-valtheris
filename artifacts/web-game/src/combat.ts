@@ -328,9 +328,22 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       { name: 'Ледяной волк', x: 12, y: 21 },
     ],
     road: [
-      { name: 'Разбойник', x: 10, y: 12 }, { name: 'Лучник', x: 19, y: 13 },
-      { name: 'Разбойник', x: 13, y: 16 }, { name: 'Наёмник', x: 20, y: 15 },
-      { name: 'Лучник', x: 9, y: 17 },
+      // west approach
+      { name: 'Разбойник', x: 6, y: 14 }, { name: 'Лучник', x: 8, y: 16 },
+      // north camp
+      { name: 'Разбойник', x: 9, y: 9 }, { name: 'Лучник', x: 11, y: 10 },
+      { name: 'Наёмник', x: 10, y: 11 },
+      // mid road
+      { name: 'Лучник', x: 14, y: 13 }, { name: 'Разбойник', x: 16, y: 17 },
+      { name: 'Наёмник', x: 15, y: 15 },
+      // NE camp
+      { name: 'Лучник', x: 20, y: 9 }, { name: 'Разбойник', x: 22, y: 10 },
+      // SE camp
+      { name: 'Наёмник', x: 19, y: 19 }, { name: 'Разбойник', x: 21, y: 20 },
+      { name: 'Лучник', x: 23, y: 18 },
+      // east approach
+      { name: 'Разбойник', x: 25, y: 14 }, { name: 'Лучник', x: 26, y: 16 },
+      { name: 'Наёмник', x: 24, y: 15 },
     ],
     ruins: [
       { name: 'Скелет', x: 10, y: 11 }, { name: 'Зомби', x: 18, y: 10 },
