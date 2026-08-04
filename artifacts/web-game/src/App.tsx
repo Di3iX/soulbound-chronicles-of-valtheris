@@ -1085,6 +1085,7 @@ const log = useCallback((msg: string) => {
             playerMaxHp={playerMaxHp}
             playerPos={playerPos}
             activeEnemy={activeEnemy}
+            enemies={enemies}
             bossId={BOSS_ID}
             floatingNums={floatingNums}
             bossAppearNotif={bossAppearNotif}
