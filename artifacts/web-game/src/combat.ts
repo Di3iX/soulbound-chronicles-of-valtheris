@@ -286,9 +286,24 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       { name: 'Молодой кабан', x: 8, y: 16 },
     ],
     darkforest: [
-      { name: 'Гоблин', x: 10, y: 9 }, { name: 'Гоблин', x: 19, y: 10 },
-      { name: 'Волк', x: 12, y: 16 }, { name: 'Волк', x: 17, y: 13 },
-      { name: 'Бандит', x: 13, y: 19 }, { name: 'Бандит', x: 18, y: 20 },
+      // NW
+      { name: 'Волк', x: 6, y: 6 }, { name: 'Гоблин', x: 9, y: 8 },
+      { name: 'Волк', x: 11, y: 5 },
+      // NE / camp
+      { name: 'Бандит', x: 19, y: 12 }, { name: 'Бандит', x: 22, y: 14 },
+      { name: 'Гоблин', x: 20, y: 15 }, { name: 'Гоблин', x: 23, y: 11 },
+      // center
+      { name: 'Волк', x: 14, y: 13 }, { name: 'Волк', x: 16, y: 17 },
+      { name: 'Гоблин', x: 13, y: 15 },
+      // SW
+      { name: 'Гоблин', x: 7, y: 20 }, { name: 'Волк', x: 9, y: 23 },
+      { name: 'Бандит', x: 6, y: 17 },
+      // SE
+      { name: 'Гоблин', x: 20, y: 20 }, { name: 'Волк', x: 22, y: 22 },
+      { name: 'Бандит', x: 18, y: 24 },
+      // path patrols
+      { name: 'Волк', x: 15, y: 10 }, { name: 'Гоблин', x: 10, y: 15 },
+      { name: 'Гоблин', x: 25, y: 15 }, { name: 'Волк', x: 15, y: 25 },
     ],
     wolfcave: [
       { name: 'Волк', x: 10, y: 10 }, { name: 'Волк', x: 19, y: 11 },
