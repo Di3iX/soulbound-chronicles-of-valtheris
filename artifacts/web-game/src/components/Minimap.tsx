@@ -37,7 +37,7 @@ const TILE_COLOR: Record<number, string> = {
 export default function Minimap({
   currentMap, exploredTiles, playerPos, camCol, camRow, visible, onToggle, enemies = [],
 }: MinimapProps) {
-  const CELL = 4;
+  const CELL = 2;
   const SIZE = MAP_COLS * CELL;
 
   const map = currentMap ?? [];
