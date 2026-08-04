@@ -188,14 +188,14 @@ export default function CombatHUD({
       </div>
 
       {/* Row 2 — location + gold + panel buttons, all on one line */}
-      <div className="flex items-center px-3 pt-[1px] pb-1.5 gap-1.5">
-        <span className="text-[9px] font-bold text-[#666] uppercase tracking-widest shrink-0 truncate">
+      <div className="flex items-center px-3 pt-[1px] pb-1.5 gap-1.5 overflow-x-auto scrollbar-none">
+        <span className="text-[9px] font-bold text-[#666] uppercase tracking-widest min-w-0 truncate">
           {meta.emoji} {meta.label}{meta.isSafeZone ? ' ·' : ''}
         </span>
         {meta.isSafeZone && <span className="text-[8px] text-green-800 font-bold shrink-0">безопасно</span>}
         <span className="text-[10px] font-bold text-yellow-400 shrink-0">💰{playerGold}</span>
 
-        <div className="flex-1" />
+        <div className="flex-1 min-w-[8px]" />
 
         {/* Персонаж button */}
         <button
