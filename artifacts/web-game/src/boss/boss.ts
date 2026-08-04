@@ -50,7 +50,7 @@ export const PASS_BOSS_DEF: Omit<Enemy, 'id'> = {
 };
 
 export const ICE_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Король льда', emoji: '❄️', x: 15, y: 15,
+  name: 'Король льда', emoji: '❄️', x: 15, y: 7,
   hp: 2500, maxHp: 2500, baseMaxHp: 2500, rarity: 'common',
   attackInterval: 1650, dmgMin: 38, dmgMax: 58, dead: false,
 };
