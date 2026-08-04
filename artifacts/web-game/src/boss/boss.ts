@@ -44,7 +44,7 @@ export const MINE_BOSS_DEF: Omit<Enemy, 'id'> = {
 };
 
 export const PASS_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Владыка перевала', emoji: '🏔️', x: 15, y: 15,
+  name: 'Владыка перевала', emoji: '🏔️', x: 22, y: 23,
   hp: 2000, maxHp: 2000, baseMaxHp: 2000, rarity: 'common',
   attackInterval: 1800, dmgMin: 34, dmgMax: 52, dead: false,
 };
