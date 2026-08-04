@@ -684,3 +684,44 @@ export const LOCATION_NPCS: Partial<Record<LocationId, NpcDef[]>> =
     if (npcs.length > 0) acc[id] = npcs;
     return acc;
   }, {} as Partial<Record<LocationId, NpcDef[]>>);
+
+/** Lookup a location definition (safe zone, level, name, connections, …). */
+export function getLocation(id: LocationId): Location {
+  const loc = LOCATIONS[id];
+  if (!loc) throw new Error(`Unknown location: ${id}`);
+  return loc;
+}
+
+/** True if two locations share a direct connection. */
+export function isConnected(a: LocationId, b: LocationId): boolean {
+  const la = LOCATIONS[a];
+  if (!la) return false;
+  return la.connectedLocations.includes(b);
+}
+
+/** Exit tiles from the current location. */
+export function getAvailableExits(from: LocationId): Array<{ x: number; y: number; to: LocationId; spawnAt: { x: number; y: number } }> {
+  const exits = LOCATIONS[from]?.exits;
+  if (!exits) return [];
+  const out: Array<{ x: number; y: number; to: LocationId; spawnAt: { x: number; y: number } }> = [];
+  exits.forEach((def, key) => {
+    const [xs, ys] = key.split(',');
+    out.push({ x: Number(xs), y: Number(ys), to: def.to, spawnAt: def.spawnAt });
+  });
+  return out;
+}
+
+/** Resolve travel target spawn when moving from → to (first matching exit). */
+export function moveToLocation(from: LocationId, to: LocationId): { to: LocationId; spawnAt: { x: number; y: number } } | null {
+  const exits = LOCATIONS[from]?.exits;
+  if (!exits) return null;
+  for (const def of exits.values()) {
+    if (def.to === to) return { to: def.to, spawnAt: def.spawnAt };
+  }
+  // fallback: destination default spawn
+  const dest = LOCATIONS[to];
+  if (!dest) return null;
+  return { to, spawnAt: { ...dest.spawn } };
+}
+
+export { LOCATIONS };
