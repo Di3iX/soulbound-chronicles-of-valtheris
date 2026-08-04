@@ -39,6 +39,7 @@ import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
 import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
 import { upgradeItemInInventory, upgradeEquippedItem, ProtectMode } from './upgrade';
 import { promoteItemTier } from './tierPromote';
+import { updateAggro, stepAggroEnemies, clearAllAggro } from './aggro';
 import { applyEnchant } from './enchant';
 import ShopPanel from './shop/ShopPanel';
 import CraftPanel from './components/CraftPanel';
@@ -476,6 +477,13 @@ const log = useCallback((msg: string) => {
     }
     if (tileType !== 0) { log('Путь заблокирован!'); return; }
     playerPosRef.current = { x: nx, y: ny }; setPlayerPos({ x: nx, y: ny });
+
+    // Аггро: подсветить мобов, оказавшихся в радиусе обнаружения (см. aggro.ts)
+    const aggroed = updateAggro(enemiesRef.current, playerPosRef.current);
+    if (aggroed !== enemiesRef.current) {
+      enemiesRef.current = aggroed;
+      setEnemies(aggroed);
+    }
   }, [log, showGateNotif, handleLocationTransition]);
 
   // ── Floating number cleanup ───────────────────────────────────────────────
@@ -487,6 +495,42 @@ const log = useCallback((msg: string) => {
     }, 200);
     return () => clearInterval(t);
   }, [floatingNums]);
+
+  // ── Aggro chase timer (explore only) — see aggro.ts ─────────────────────────
+  useEffect(() => {
+    if (phase !== 'explore') return;
+    const t = setInterval(() => {
+      const map = LOCATION_MAPS[currentLocationRef.current];
+      const { enemies: next, engageId } = stepAggroEnemies(
+        enemiesRef.current,
+        playerPosRef.current,
+        map,
+      );
+      if (next !== enemiesRef.current) {
+        enemiesRef.current = next;
+        setEnemies(next);
+      }
+      if (engageId != null) {
+        const enemy = next.find(e => e.id === engageId);
+        phaseRef.current = 'combat';
+        activeEnemyIdRef.current = engageId;
+        setActiveEnemyId(engageId);
+        setPhase('combat');
+        if (enemy) log(`⚔️ ${enemy.name} догнал вас!`);
+      }
+    }, 450);
+    return () => clearInterval(t);
+  }, [phase, currentLocation, log]);
+
+  // После победы / поражения / бегства / сброса — снять аггро со всех мобов.
+  useEffect(() => {
+    if (phase !== 'explore') return;
+    const cleared = clearAllAggro(enemiesRef.current);
+    if (cleared !== enemiesRef.current) {
+      enemiesRef.current = cleared;
+      setEnemies(cleared);
+    }
+  }, [phase]);
 
   // ── World map travel ──────────────────────────────────────────────────────
   const handleWorldMapTravel = useCallback((to: LocationId) => {

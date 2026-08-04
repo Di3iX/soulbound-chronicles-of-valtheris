@@ -25,6 +25,13 @@ export interface Enemy {
   campId?: string;
   /** Override global RESPAWN_MS for this spawn. */
   respawnMs?: number;
+  /** Currently chasing the player. */
+  aggro?: boolean;
+  /** Spawn home for leash return. */
+  homeX?: number;
+  homeY?: number;
+  aggroRange?: number;
+  leashRange?: number;
   rarity: EnemyRarity;
   statusEffects?: StatusEffect[];
   /** % resist (positive) or weakness (negative) per damage type this enemy takes. */
@@ -85,7 +92,10 @@ export function reviveEnemy(enemy: Enemy): Enemy {
     rarity,
     statusEffects: [],
     deadAt: undefined,
-    // spawnId / campId / x / y / respawnMs preserved via spread
+    aggro: false,
+    // Return to home on revive
+    x: enemy.homeX ?? enemy.x,
+    y: enemy.homeY ?? enemy.y,
   };
 }
 
@@ -484,6 +494,9 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       spawnId,
       campId,
       respawnMs,
+      aggro: false,
+      homeX: s.x,
+      homeY: s.y,
     };
   });
 };
