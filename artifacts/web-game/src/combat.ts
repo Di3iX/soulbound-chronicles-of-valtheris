@@ -19,6 +19,12 @@ export interface Enemy {
   attackInterval: number; dmgMin: number; dmgMax: number;
   dead: boolean;
   deadAt?: number;           // Date.now() timestamp when it died — drives respawn timing
+  /** Stable spawn-point id (survives revive). */
+  spawnId?: string;
+  /** Camp/group for multi-mob nodes. */
+  campId?: string;
+  /** Override global RESPAWN_MS for this spawn. */
+  respawnMs?: number;
   rarity: EnemyRarity;
   statusEffects?: StatusEffect[];
   /** % resist (positive) or weakness (negative) per damage type this enemy takes. */
@@ -28,7 +34,7 @@ export interface Enemy {
 }
 
 /** How long (ms) a slain normal enemy stays dead before respawning at its spot. */
-export const RESPAWN_MS = 90_000;  // 90 sec — enough time to clear a zone
+export const RESPAWN_MS = 60_000;  // 60 sec default trash respawn (MMO-style camps)
 
 // ── Enemy rarity (rolled fresh on every spawn/respawn) ────────────────────────
 export type EnemyRarity = 'common' | 'uncommon' | 'rare' | 'elite' | 'legendary';
@@ -71,7 +77,36 @@ export function rollEnemyRarity(): EnemyRarity {
 export function reviveEnemy(enemy: Enemy): Enemy {
   const rarity = rollEnemyRarity();
   const maxHp  = Math.round(enemy.baseMaxHp * ENEMY_RARITY_DEFS[rarity].hpMult);
-  return { ...enemy, dead: false, hp: maxHp, maxHp, rarity, statusEffects: [], deadAt: undefined };
+  return {
+    ...enemy,
+    dead: false,
+    hp: maxHp,
+    maxHp,
+    rarity,
+    statusEffects: [],
+    deadAt: undefined,
+    // spawnId / campId / x / y / respawnMs preserved via spread
+  };
+}
+
+/** True if a dead enemy is ready to revive. */
+export function canRespawnEnemy(enemy: Enemy, now = Date.now()): boolean {
+  if (!enemy.dead || enemy.deadAt === undefined) return false;
+  const wait = enemy.respawnMs ?? RESPAWN_MS;
+  return now - enemy.deadAt >= wait;
+}
+
+/** Tick all enemies: revive those whose spawn timer elapsed. Returns new array if any changed. */
+export function tickEnemyRespawns(enemies: Enemy[], now = Date.now()): Enemy[] {
+  let changed = false;
+  const next = enemies.map(e => {
+    if (canRespawnEnemy(e, now)) {
+      changed = true;
+      return reviveEnemy(e);
+    }
+    return e;
+  });
+  return changed ? next : enemies;
 }
 
 export interface KillReward {
@@ -425,6 +460,14 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
     const baseHp = def?.hp ?? 100;
     const rarity = rollEnemyRarity();
     const maxHp  = Math.round(baseHp * ENEMY_RARITY_DEFS[rarity].hpMult);
+    const spawnId = `${loc}_${i}_${s.name}`;
+    // Group nearby spawns into camps by 6-tile grid cell
+    const campId = `${loc}_c${Math.floor(s.x / 6)}_${Math.floor(s.y / 6)}`;
+    // Slightly faster respawn in early zones, slower in late
+    const respawnMs =
+      loc === 'forest' || loc === 'darkforest' ? 45_000 :
+      loc === 'icefort' || loc === 'pass' || loc === 'mine' ? 75_000 :
+      RESPAWN_MS;
     return {
       id: i + 1,
       name: s.name,
@@ -438,8 +481,22 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       rarity,
       resistances: ENEMY_RESISTANCES[s.name],
       dealsDamageType: def?.damageType ?? 'physical',
+      spawnId,
+      campId,
+      respawnMs,
     };
   });
 };
+
+/** List spawn points for tooling / future MMO server. */
+export function getLocationSpawnPoints(loc: LocationId): { spawnId: string; name: string; x: number; y: number; campId: string }[] {
+  return makeLocationEnemies(loc).map(e => ({
+    spawnId: e.spawnId!,
+    name: e.name,
+    x: e.x,
+    y: e.y,
+    campId: e.campId!,
+  }));
+}
 
 const ENEMY_RESISTANCES: Record<string, Partial<Record<DamageType, number>>> = buildResistances();
