@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import {
   Enemy, KillReward, LocationId, Phase, SKILLS,
-  REWARD_TABLE, applyXpGain, RESPAWN_MS, reviveEnemy,
+  REWARD_TABLE, applyXpGain, RESPAWN_MS, reviveEnemy, tickEnemyRespawns, canRespawnEnemy,
   EnemyRarity, ENEMY_RARITY_DEFS,
   StatusEffect, STATUS_EFFECT_DEFS, ENEMY_EFFECT_ON_HIT, SKILL_EFFECT_ON_HIT,
   addStatusEffect, tickStatusEffects, hasStatusEffect, slowMultiplier,
@@ -953,7 +953,7 @@ export function useCombat(ctx: CombatCtx) {
       let changed = false;
       const revived = enemiesRef.current.map(e => {
         if (ALL_BOSS_IDS.has(e.id)) return e;
-        if (e.dead && e.deadAt !== undefined && now - e.deadAt >= RESPAWN_MS) {
+        if (canRespawnEnemy(e, now)) {
           changed = true;
           return reviveEnemy(e);
         }
