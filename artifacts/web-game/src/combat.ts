@@ -306,9 +306,21 @@ export const makeLocationEnemies = (loc: LocationId): Enemy[] => {
       { name: 'Гоблин', x: 25, y: 15 }, { name: 'Волк', x: 15, y: 25 },
     ],
     wolfcave: [
-      { name: 'Волк', x: 10, y: 10 }, { name: 'Волк', x: 19, y: 11 },
-      { name: 'Летучая мышь', x: 14, y: 13 }, { name: 'Летучая мышь', x: 18, y: 18 },
-      { name: 'Альфа-волк', x: 15, y: 20 },
+      // entrance
+      { name: 'Летучая мышь', x: 5, y: 13 }, { name: 'Волк', x: 7, y: 16 },
+      // north chamber
+      { name: 'Волк', x: 14, y: 6 }, { name: 'Летучая мышь', x: 17, y: 8 },
+      { name: 'Волк', x: 16, y: 5 },
+      // center
+      { name: 'Волк', x: 14, y: 15 }, { name: 'Альфа-волк', x: 16, y: 17 },
+      { name: 'Летучая мышь', x: 13, y: 14 },
+      // east
+      { name: 'Летучая мышь', x: 24, y: 10 }, { name: 'Волк', x: 25, y: 12 },
+      // south deep (before boss)
+      { name: 'Альфа-волк', x: 15, y: 24 }, { name: 'Волк', x: 18, y: 25 },
+      { name: 'Летучая мышь', x: 20, y: 23 }, { name: 'Волк', x: 13, y: 26 },
+      // alcoves
+      { name: 'Летучая мышь', x: 6, y: 8 }, { name: 'Волк', x: 6, y: 22 },
     ],
     mountains: [
       { name: 'Ледяной волк', x: 11, y: 10 }, { name: 'Ледяной волк', x: 17, y: 11 },
