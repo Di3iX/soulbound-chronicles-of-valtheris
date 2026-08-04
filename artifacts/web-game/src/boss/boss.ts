@@ -12,26 +12,6 @@ export const PASS_BOSS_ID  = 9994; // Владыка перевала (Каме�
 export const ICE_BOSS_ID   = 9993; // Король льда (Ледяная крепость)
 
 /** All reserved boss entity ids. */
-export const ALL_BOSS_IDS: readonly number[] = [
-  BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID,
-];
-
-export function isBossId(id: number): boolean {
-  return (ALL_BOSS_IDS as readonly number[]).includes(id);
-}
-
-/** Mini-bosses (zone mid bosses) vs story bosses — for UI labels. */
-export const MINI_BOSS_IDS: readonly number[] = [FIELD_BOSS_ID];
-
-export function isMiniBossId(id: number): boolean {
-  return (MINI_BOSS_IDS as readonly number[]).includes(id);
-}
-
-export function bossKindLabel(id: number): string {
-  if (isMiniBossId(id)) return 'Мини-босс';
-  if (isBossId(id)) return 'Босс';
-  return '';
-}
 
 export const CAVE_BOSS_DEF: Omit<Enemy, 'id'> = {
   name: 'Главарь гоблинов', emoji: '👑', x: 15, y: 15,
@@ -155,6 +135,23 @@ export function makeIceBossTrophy(): Item {
 }
 
 export const ALL_BOSS_IDS = new Set([BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID]);
+
+export function isBossId(id: number): boolean {
+  return ALL_BOSS_IDS.has(id);
+}
+
+export const MINI_BOSS_IDS = new Set([FIELD_BOSS_ID]);
+
+export function isMiniBossId(id: number): boolean {
+  return MINI_BOSS_IDS.has(id);
+}
+
+export function bossKindLabel(id: number): string {
+  if (isMiniBossId(id)) return 'Мини-босс';
+  if (isBossId(id)) return 'Босс';
+  return '';
+}
+
 
 export interface BossState {
   caveChief:    { firstKillDone: boolean; deadAt?: number };
