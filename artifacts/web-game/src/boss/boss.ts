@@ -32,7 +32,7 @@ export const RUINS_BOSS_DEF: Omit<Enemy, 'id'> = {
 };
 
 export const SWAMP_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Трясинный ужас', emoji: '🫧', x: 15, y: 15,
+  name: 'Трясинный ужас', emoji: '🫧', x: 22, y: 24,
   hp: 1400, maxHp: 1400, baseMaxHp: 1400, rarity: 'common',
   attackInterval: 1700, dmgMin: 26, dmgMax: 42, dead: false,
 };
