@@ -660,6 +660,15 @@ const LOCATIONS: Record<LocationId, Location> = {
   },
 };
 
+
+/** Lightweight UI meta (label / emoji / safe zone) — derived from LOCATIONS. */
+export const LOCATION_META: Record<LocationId, { label: string; emoji: string; isSafeZone: boolean }> =
+  (Object.keys(LOCATIONS) as LocationId[]).reduce((acc, id) => {
+    const loc = LOCATIONS[id];
+    acc[id] = { label: loc.name, emoji: loc.emoji, isSafeZone: loc.isSafeZone };
+    return acc;
+  }, {} as Record<LocationId, { label: string; emoji: string; isSafeZone: boolean }>);
+
 export const LOCATION_SPAWN: Record<LocationId, { x: number; y: number }> =
   (Object.keys(LOCATIONS) as LocationId[]).reduce((acc, id) => {
     acc[id] = LOCATIONS[id].spawn;
