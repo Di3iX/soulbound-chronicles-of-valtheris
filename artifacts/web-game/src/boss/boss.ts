@@ -26,7 +26,7 @@ export const FIELD_BOSS_DEF: Omit<Enemy, 'id'> = {
 };
 
 export const RUINS_BOSS_DEF: Omit<Enemy, 'id'> = {
-  name: 'Хранитель склепа', emoji: '⚰️', x: 15, y: 15,
+  name: 'Хранитель склепа', emoji: '⚰️', x: 19, y: 25,
   hp: 1100, maxHp: 1100, baseMaxHp: 1100, rarity: 'common',
   attackInterval: 1600, dmgMin: 22, dmgMax: 36, dead: false,
 };
