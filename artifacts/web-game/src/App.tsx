@@ -448,6 +448,14 @@ const log = useCallback((msg: string) => {
         openedChestsRef.current = nextOpened;
         setOpenedChests(nextOpened);
         for (const msg of loot.logs) log(msg);
+
+        // Всплывашки над героем (как с мобами).
+        const pp = playerPosRef.current;
+        spawnFloat(`+${loot.gold}💰`, pp.x, pp.y, 'gold');
+        if (loot.item) {
+          setTimeout(() => spawnFloat(`📦 ${loot.item!.name}`, pp.x, pp.y, 'loot'), 200);
+        }
+
         // встать на клетку сундука
         playerPosRef.current = { x: nx, y: ny };
         setPlayerPos({ x: nx, y: ny });
@@ -484,7 +492,7 @@ const log = useCallback((msg: string) => {
       enemiesRef.current = aggroed;
       setEnemies(aggroed);
     }
-  }, [log, showGateNotif, handleLocationTransition]);
+  }, [log, showGateNotif, handleLocationTransition, spawnFloat]);
 
   // ── Floating number cleanup ───────────────────────────────────────────────
   useEffect(() => {
