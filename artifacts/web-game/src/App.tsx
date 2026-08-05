@@ -142,8 +142,6 @@ export default function App() {
   const [lootNotif, setLootNotif]         = useState<string | null>(null);
   const [gateNotif, setGateNotif]         = useState<string | null>(null);
   const gateNotifTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [saveFlash, setSaveFlash]         = useState(false);
-  const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCraft, setShowCraft]         = useState(false);
   const [unlockedRecipes, setUnlockedRecipes] = useState<string[]>(sv?.unlockedRecipes ?? []);
   const [showUpgrade, setShowUpgrade]     = useState(false);
@@ -263,10 +261,6 @@ export default function App() {
     bossState, exploredTiles,
     openedChests,
     unlockedRecipes,
-  }, () => {
-    setSaveFlash(true);
-    if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current);
-    saveFlashTimer.current = setTimeout(() => setSaveFlash(false), 1200);
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -1230,15 +1224,6 @@ const log = useCallback((msg: string) => {
             <div className="absolute top-2 inset-x-2 z-[65] flex items-center gap-2 bg-[#2a0e0e]/95 border border-red-700/70 rounded px-3 py-2 shadow-lg pointer-events-none animate-in fade-in duration-200">
               <span className="text-base shrink-0">⛔</span>
               <span className="text-[12px] font-bold text-red-300 leading-tight">{gateNotif}</span>
-            </div>
-          )}
-
-          {/* "Сохранено" toast */}
-          {saveFlash && (
-            <div className="absolute top-2 right-2 z-[80] pointer-events-none
-              px-2 py-1 rounded bg-black/70 border border-tile-border
-              text-[10px] text-[#8f8] font-mono">
-              💾 Сохранено
             </div>
           )}
 
