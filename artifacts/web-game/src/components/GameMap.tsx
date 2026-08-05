@@ -126,7 +126,14 @@ export default function GameMap({
           className="absolute pointer-events-none z-30 font-bold text-base text-center animate-float w-[10%] h-[10%] flex items-center justify-center drop-shadow-md"
           style={{
             top: `${((num.row - camRow) / VP_ROWS) * 100}%`, left: `${((num.col - camCol) / VP_COLS) * 100}%`,
-            color: num.type === 'player-dmg' ? 'hsl(var(--destructive))' : num.type === 'heal' ? 'hsl(var(--success))' : 'hsl(var(--primary))',
+            color:
+              num.type === 'player-dmg' ? 'hsl(var(--destructive))' :
+              num.type === 'heal' ? 'hsl(var(--success))' :
+              num.type === 'xp' ? '#38bdf8' :
+              num.type === 'gold' ? '#facc15' :
+              num.type === 'loot' ? '#c084fc' :
+              num.type === 'level' ? '#fbbf24' :
+              'hsl(var(--primary))',
           }}>
           {num.value}
         </div>
