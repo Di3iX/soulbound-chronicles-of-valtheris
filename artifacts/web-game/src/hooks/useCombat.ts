@@ -731,8 +731,7 @@ export function useCombat(ctx: CombatCtx) {
     const deadAt = Date.now();
     enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt, aggro: false } : e);
     setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt, aggro: false } : e));
-    playerPosRef.current = { x: ex, y: ey };
-    setPlayerPos({ x: ex, y: ey });
+    // Stay on the player's own tile (MMO-style) — do not step onto the corpse
     log(`💀 ${name} повержен!`);
 
     // Boss intercept — optional overlay; still no generic "victory tablet"
