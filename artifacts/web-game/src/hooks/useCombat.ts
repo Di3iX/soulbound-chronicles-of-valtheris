@@ -201,11 +201,33 @@ export function useCombat(ctx: CombatCtx) {
     log(`💰 Получено ${goldGained} золота!`);
     log(`✨ Получено ${xpGained} опыта!`);
 
+    // Floating numbers above the hero (MMO-style, not only chat)
+    {
+      const pp = playerPosRef.current;
+      spawnFloat(`+${goldGained}💰`, pp.x, pp.y, 'gold');
+      // slight delay so XP doesn't fully stack on gold
+      setTimeout(() => {
+        spawnFloat(`+${xpGained} XP`, pp.x, pp.y, 'xp');
+      }, 180);
+    }
+
     const { leveledUp, level: newLevel, statPointsGained } = grantXp(xpGained);
+    if (leveledUp) {
+      const pp = playerPosRef.current;
+      setTimeout(() => {
+        spawnFloat(`⬆ Ур. ${newLevel}`, pp.x, pp.y, 'level');
+      }, 400);
+    }
 
     const droppedItem = rollLoot(enemyName, rarityDef.itemChanceBonus, rarityDef.guaranteedDrop);
+    if (droppedItem) {
+      const pp = playerPosRef.current;
+      setTimeout(() => {
+        spawnFloat(`📦 ${droppedItem.name}`, pp.x, pp.y, 'loot');
+      }, 320);
+    }
     return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: statPointsGained, droppedItem };
-  }, [log, rollLoot, grantXp]);
+  }, [log, rollLoot, grantXp, spawnFloat]);
 
   // ── Cave Boss: spawn after all normal enemies die ─────────────────────────
   const spawnCaveBoss = useCallback(() => {
