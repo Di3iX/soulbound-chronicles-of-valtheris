@@ -8,6 +8,7 @@ import type { QuestProgress } from './quests/quests';
 import type { SkillProgress } from './skills/skillTree';
 import type { BossState } from './boss/boss';
 import type { OpenedChests } from './world/chests';
+import type { PlayerClassState, PlayerMasteryState } from './classes/playerClass';
 
 /** v0.1.4: endurance renamed to vitality; intelligence added. */
 interface Stats {
@@ -55,10 +56,10 @@ export interface SaveData {
   openedChests?:   OpenedChests;
   /** Optional — missing in pre-craft-tabs saves; defaults to [] on load. */
   unlockedRecipes?: string[];
-  /** Optional — missing in pre-classes saves; defaults to 0 on load. */
-  classPoints?:    number;
-  /** Optional — missing in pre-classes saves; defaults to 0 on load. */
-  masteryPoints?:  number;
+  /** Optional — missing in pre-classes saves; player re-picks archetype on load if absent. */
+  classState?:     PlayerClassState | null;
+  /** Optional — missing in pre-classes saves; defaults via createMasteryState() on load. */
+  masteryState?:   PlayerMasteryState;
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';

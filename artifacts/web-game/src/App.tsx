@@ -41,6 +41,19 @@ import { upgradeItemInInventory, upgradeEquippedItem, ProtectMode } from './upgr
 import { promoteItemTier } from './tierPromote';
 import { updateAggro, stepAggroEnemies, clearAllAggro } from './aggro';
 import { applyEnchant } from './enchant';
+import ClassSelectPanel from './classes/ClassSelectPanel';
+import ClassPanel from './classes/ClassPanel';
+import {
+  createClassState,
+  createMasteryState,
+  grantClassAndMasteryPoints,
+  chooseProfession,
+  chooseSpecialization,
+  archetypeBaseStats,
+  type PlayerClassState,
+  type PlayerMasteryState,
+} from './classes/playerClass';
+import type { ArchetypeId } from './classes/classSystem';
 import ShopPanel from './shop/ShopPanel';
 import CraftPanel from './components/CraftPanel';
 import UpgradePanel from './components/UpgradePanel';
@@ -131,9 +144,13 @@ export default function App() {
   // ── Stats state ────────────────────────────────────────────────────────────
   const [stats, setStats]               = useState<BaseStats>(sv?.stats      ?? { ...INITIAL_BASE_STATS });
   const [statPoints, setStatPoints]     = useState(sv?.statPoints            ?? 0);
-  const [classPoints, setClassPoints]     = useState(sv?.classPoints         ?? 0);
-  const [masteryPoints, setMasteryPoints] = useState(sv?.masteryPoints       ?? 0);
   const [showCharPanel, setShowCharPanel] = useState(false);
+
+  // ── Class / Mastery (см. STEP1_APP.md) ──────────────────────────────────────
+  const [classState, setClassState] = useState<PlayerClassState | null>(sv?.classState ?? null);
+  const [masteryState, setMasteryState] = useState<PlayerMasteryState>(sv?.masteryState ?? createMasteryState());
+  const [showClassSelect, setShowClassSelect] = useState(!sv?.classState);
+  const [showClassPanel, setShowClassPanel] = useState(false);
 
   // ── Inventory / equipment state ────────────────────────────────────────────
   const [equipment, setEquipment]         = useState<Equipment>(sv?.equipment       ?? { ...EMPTY_EQUIPMENT });
@@ -189,8 +206,6 @@ export default function App() {
   const playerXpRef        = useRef(sv?.playerXp          ?? 0);
   const playerGoldRef      = useRef(sv?.playerGold        ?? 0);
   const statPointsRef      = useRef(sv?.statPoints        ?? 0);
-  const classPointsRef     = useRef(sv?.classPoints       ?? 0);
-  const masteryPointsRef   = useRef(sv?.masteryPoints     ?? 0);
   const equipmentRef       = useRef<Equipment>(sv?.equipment        ?? { ...EMPTY_EQUIPMENT });
   const equipBonusesRef    = useRef<EquipBonuses>(sv?.equipBonuses  ?? { ...ZERO_EQUIP_BONUSES });
   const currentLocationRef = useRef<LocationId>(sv?.currentLocation ?? 'village');
@@ -229,8 +244,6 @@ export default function App() {
   useSyncedRef(playerXpRef, playerXp);
   useSyncedRef(playerGoldRef, playerGold);
   useSyncedRef(statPointsRef, statPoints);
-  useSyncedRef(classPointsRef, classPoints);
-  useSyncedRef(masteryPointsRef, masteryPoints);
   useSyncedRef(equipmentRef, equipment);
   useSyncedRef(equipBonusesRef, equipBonuses);
   useSyncedRef(inventoryRef, inventory);
@@ -267,7 +280,7 @@ export default function App() {
     bossState, exploredTiles,
     openedChests,
     unlockedRecipes,
-    classPoints, masteryPoints,
+    classState, masteryState,
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -285,6 +298,35 @@ const log = useCallback((msg: string) => {
   const spawnFloat = useCallback((value: string, col: number, row: number, type: FloatingNum['type']) => {
     setFloatingNums(prev => [...prev, { id: Date.now() + Math.random(), value, col, row, type, timestamp: Date.now() }]);
   }, []);
+
+  // ── Class / Mastery (см. STEP1_APP.md) ──────────────────────────────────────
+  /** StatBlock (str/agi/int/spi/vit/lck) → BaseStats проекта (нет slots под spi/lck пока). */
+  const mapStatBlockToBaseStats = useCallback((block: { str: number; agi: number; int: number; vit: number }): BaseStats => ({
+    strength:     block.str,
+    agility:      block.agi,
+    vitality:     block.vit,
+    intelligence: block.int,
+  }), []);
+
+  const handlePickArchetype = useCallback((id: ArchetypeId) => {
+    const cs = createClassState(id);
+    setClassState(cs);
+    setMasteryState(createMasteryState());
+    setShowClassSelect(false);
+
+    const base = mapStatBlockToBaseStats(archetypeBaseStats(id));
+    statsRef.current = { ...base };
+    setStats({ ...base });
+    log(`Путь выбран: ${id === 'warrior' ? 'Воин' : id === 'ranger' ? 'Следопыт' : id === 'mage' ? 'Маг' : 'Послушник'}`);
+  }, [log, mapStatBlockToBaseStats]);
+
+  const handleLevelUp = useCallback((levelsGained: number) => {
+    if (!classState) return;
+    const r = grantClassAndMasteryPoints(classState, masteryState, levelsGained);
+    setClassState(r.classState);
+    setMasteryState(r.masteryState);
+    r.logs.forEach(log);
+  }, [classState, masteryState, log]);
 
   // ── Stat spending ──────────────────────────────────────────────────────────
   const spendStat = useCallback((stat: keyof BaseStats) => {
@@ -345,14 +387,12 @@ const log = useCallback((msg: string) => {
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
-    classPointsRef, masteryPointsRef,
-    log, spawnFloat,
+    log, spawnFloat, onLevelUp: handleLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
-    setClassPoints, setMasteryPoints,
   });
 
   // ── Location transition ───────────────────────────────────────────────────
@@ -953,7 +993,6 @@ const log = useCallback((msg: string) => {
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     questProgressRef,
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
-    classPointsRef, masteryPointsRef,
     setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
@@ -961,7 +1000,7 @@ const log = useCallback((msg: string) => {
     setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setUnlockedRecipes, setXpToNext,
-    setClassPoints, setMasteryPoints,
+    setClassState, setMasteryState, setShowClassSelect,
   });
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -1115,16 +1154,19 @@ const log = useCallback((msg: string) => {
         skillPoints={skillPoints}
         inventoryCount={inventory.length}
         questProgress={questProgress}
+        classPointsBadge={(classState?.classPoints ?? 0) + masteryState.points}
         showCharPanel={showCharPanel}
         showInventory={showInventory}
         showWorldMap={showWorldMap}
         showQuestPanel={showQuestPanel}
         showSkillPanel={showSkillPanel}
-        onToggleCharPanel={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-        onToggleInventory={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-        onToggleWorldMap={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-        onToggleQuestPanel={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowSkillPanel(false); setSelectedItem(null); }}
-        onToggleSkillPanel={() => { setShowSkillPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setSelectedItem(null); }}
+        showClassPanel={showClassPanel}
+        onToggleCharPanel={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
+        onToggleInventory={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
+        onToggleWorldMap={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
+        onToggleQuestPanel={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
+        onToggleSkillPanel={() => { setShowSkillPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
+        onToggleClassPanel={() => { setShowClassPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setShowSkillPanel(false); setSelectedItem(null); }}
       />
 
       {/* ══ 2. MAP ══ */}
@@ -1402,6 +1444,37 @@ const log = useCallback((msg: string) => {
               onEnchantInventory={handleEnchantInv}
               onEnchantEquipped={handleEnchantEq}
               onClose={() => setShowEnchant(false)}
+            />
+          )}
+
+          {/* ══ CLASS SELECT OVERLAY (z-80) ══════════════════════════════════════
+              Выбор архетипа — на новом персонаже (нет sv.classState) или после
+              полного сброса ("Новая игра").
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showClassSelect && (
+            <ClassSelectPanel onSelect={handlePickArchetype} />
+          )}
+
+          {/* ══ CLASS PANEL OVERLAY (z-70) ═══════════════════════════════════════
+              Текущий путь, очки класса/мастерства, открытые навыки, гейты
+              профессии (20 ур.) / специализации (40 ур.).
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showClassPanel && classState && (
+            <ClassPanel
+              classState={classState}
+              masteryState={masteryState}
+              level={playerLevel}
+              onClose={() => setShowClassPanel(false)}
+              onChooseProfession={(pid) => {
+                const r = chooseProfession(classState, pid as any, playerLevel);
+                if (r.error) log(r.error);
+                else { setClassState(r.state); log('Профессия получена!'); }
+              }}
+              onChooseSpec={(sid) => {
+                const r = chooseSpecialization(classState, sid as any, playerLevel);
+                if (r.error) log(r.error);
+                else { setClassState(r.state); log('Специализация получена!'); }
+              }}
             />
           )}
 
