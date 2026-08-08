@@ -13,7 +13,6 @@ import { EquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, trackKillForQuests } from '../quests/quests';
-import { pointsPerLevel } from '../classes/masteryConstellation';
 import {
   BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID,
   CAVE_BOSS_DEF, FIELD_BOSS_DEF, RUINS_BOSS_DEF, SWAMP_BOSS_DEF, MINE_BOSS_DEF, PASS_BOSS_DEF, ICE_BOSS_DEF,
@@ -57,12 +56,12 @@ export interface CombatCtx {
   skillBonusesRef:   MutableRefObject<SkillBonuses>;
   skillPointsRef:    MutableRefObject<number>;
   statPointsRef:     MutableRefObject<number>;
-  classPointsRef:    MutableRefObject<number>;
-  masteryPointsRef:  MutableRefObject<number>;
   statsRef:          MutableRefObject<BaseStats>;
 
   // ── Shared functions (already-memoized, stable across renders) ────────────
   log: (msg: string) => void;
+  /** Called after grantXp finishes, once per XP grant that leveled up (see classes/playerClass.ts). */
+  onLevelUp?: (levelsGained: number) => void;
   spawnFloat: (value: string, col: number, row: number, type: FloatingNum['type']) => void;
 
   // ── Setters ────────────────────────────────────────────────────────────────
@@ -93,8 +92,6 @@ export interface CombatCtx {
   setSkillPoints: Dispatch<SetStateAction<number>>;
   setSkillsCd: Dispatch<SetStateAction<Record<number, number>>>;
   setStatPoints: Dispatch<SetStateAction<number>>;
-  setClassPoints: Dispatch<SetStateAction<number>>;
-  setMasteryPoints: Dispatch<SetStateAction<number>>;
   setXpToNext: (v: number) => void;
 }
 
@@ -117,14 +114,12 @@ export function useCombat(ctx: CombatCtx) {
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
-    classPointsRef, masteryPointsRef,
-    log, spawnFloat,
+    log, spawnFloat, onLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
-    setClassPoints, setMasteryPoints,
   } = ctx;
 
   // ── Loot drop (called from applyRewards) ──────────────────────────────────
@@ -188,30 +183,14 @@ export function useCombat(ctx: CombatCtx) {
       playerMpRef.current = newMaxMp; setPlayerMp(newMaxMp);
       log(`🌟 Новый уровень ${result.level}! HP и MP восстановлены!`);
 
-      // Классы + Созвездие мастерства (см. INTEGRATION.md): 1 очко каждого за уровень.
+      // Классы + Созвездие мастерства (см. STEP1_APP.md) — очки начисляет App.tsx,
+      // у него есть classState/masteryState, здесь их нет.
       const levelsGained = result.level - levelBefore;
-      let classPointsGained = 0;
-      let masteryPointsGained = 0;
-      for (let i = 0; i < levelsGained; i++) {
-        const p = pointsPerLevel();
-        classPointsGained   += p.classPoints;
-        masteryPointsGained += p.masteryPoints;
-      }
-      if (classPointsGained > 0) {
-        classPointsRef.current += classPointsGained;
-        setClassPoints(p => p + classPointsGained);
-      }
-      if (masteryPointsGained > 0) {
-        masteryPointsRef.current += masteryPointsGained;
-        setMasteryPoints(p => p + masteryPointsGained);
-      }
-      if (classPointsGained > 0 || masteryPointsGained > 0) {
-        log(`✨ +${classPointsGained} очко класса, +${masteryPointsGained} очко мастерства!`);
-      }
+      onLevelUp?.(levelsGained);
     }
 
     return result;
-  }, [log]);
+  }, [log, onLevelUp]);
 
   const applyRewards = useCallback((enemyName: string, rarity: EnemyRarity): KillReward => {
     const reward = REWARD_TABLE[enemyName] ?? { xp: 10, goldMin: 1, goldMax: 3 };

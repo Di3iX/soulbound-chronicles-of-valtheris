@@ -31,6 +31,6 @@ export function usePersistence(
     state.playerPos, state.currentLocation, state.enemies,
     state.questProgress, state.skillProgress, state.skillPoints,
     state.bossState, state.exploredTiles, state.openedChests,
-    state.unlockedRecipes, state.classPoints, state.masteryPoints,
+    state.unlockedRecipes, state.classState, state.masteryState,
   ]);
 }
