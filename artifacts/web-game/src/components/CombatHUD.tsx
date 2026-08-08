@@ -27,6 +27,7 @@ interface CombatHUDProps {
 
   statPoints:  number;
   skillPoints: number;
+  classPointsBadge: number;
   inventoryCount: number;
   questProgress: QuestProgress;
 
@@ -35,12 +36,14 @@ interface CombatHUDProps {
   showWorldMap:     boolean;
   showQuestPanel:   boolean;
   showSkillPanel:   boolean;
+  showClassPanel:   boolean;
 
   onToggleCharPanel:  () => void;
   onToggleInventory:  () => void;
   onToggleWorldMap:   () => void;
   onToggleQuestPanel: () => void;
   onToggleSkillPanel: () => void;
+  onToggleClassPanel: () => void;
 }
 
 /**
@@ -54,9 +57,9 @@ export default function CombatHUD({
   activeEnemy, bossId, bossIds, currentLocation, locationMeta,
   livingEnemiesCount, totalEnemiesCount,
   xpPct, playerXp, xpToNext, playerGold,
-  statPoints, skillPoints, inventoryCount, questProgress,
-  showCharPanel, showInventory, showWorldMap, showQuestPanel, showSkillPanel,
-  onToggleCharPanel, onToggleInventory, onToggleWorldMap, onToggleQuestPanel, onToggleSkillPanel,
+  statPoints, skillPoints, classPointsBadge, inventoryCount, questProgress,
+  showCharPanel, showInventory, showWorldMap, showQuestPanel, showSkillPanel, showClassPanel,
+  onToggleCharPanel, onToggleInventory, onToggleWorldMap, onToggleQuestPanel, onToggleSkillPanel, onToggleClassPanel,
 }: CombatHUDProps) {
   const meta = locationMeta[currentLocation];
   const bossIdSet = new Set(bossIds ?? (bossId != null ? [bossId] : []));
@@ -249,6 +252,19 @@ export default function CombatHUD({
             </span>
           )}
           🌟
+        </button>
+
+        {/* Класс button */}
+        <button
+          onClick={onToggleClassPanel}
+          className={`shrink-0 flex items-center gap-1 px-1.5 py-[2px] rounded border text-[10px] font-bold transition-colors
+            ${showClassPanel ? 'bg-primary/20 border-primary text-primary' : 'bg-[#1e1e28] border-tile-border text-[#aaa]'}`}>
+          {classPointsBadge > 0 && (
+            <span className="w-[13px] h-[13px] rounded-full bg-primary text-[#111] text-[8px] font-black flex items-center justify-center leading-none animate-pulse">
+              {classPointsBadge}
+            </span>
+          )}
+          ⚔️
         </button>
       </div>
 
