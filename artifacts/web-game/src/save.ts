@@ -53,6 +53,12 @@ export interface SaveData {
   exploredTiles?:  ExploredTiles;
   /** Optional — missing in pre-chests saves; defaults to {} on load. */
   openedChests?:   OpenedChests;
+  /** Optional — missing in pre-craft-tabs saves; defaults to [] on load. */
+  unlockedRecipes?: string[];
+  /** Optional — missing in pre-classes saves; defaults to 0 on load. */
+  classPoints?:    number;
+  /** Optional — missing in pre-classes saves; defaults to 0 on load. */
+  masteryPoints?:  number;
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';

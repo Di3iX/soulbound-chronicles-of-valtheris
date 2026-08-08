@@ -131,6 +131,8 @@ export default function App() {
   // ── Stats state ────────────────────────────────────────────────────────────
   const [stats, setStats]               = useState<BaseStats>(sv?.stats      ?? { ...INITIAL_BASE_STATS });
   const [statPoints, setStatPoints]     = useState(sv?.statPoints            ?? 0);
+  const [classPoints, setClassPoints]     = useState(sv?.classPoints         ?? 0);
+  const [masteryPoints, setMasteryPoints] = useState(sv?.masteryPoints       ?? 0);
   const [showCharPanel, setShowCharPanel] = useState(false);
 
   // ── Inventory / equipment state ────────────────────────────────────────────
@@ -187,6 +189,8 @@ export default function App() {
   const playerXpRef        = useRef(sv?.playerXp          ?? 0);
   const playerGoldRef      = useRef(sv?.playerGold        ?? 0);
   const statPointsRef      = useRef(sv?.statPoints        ?? 0);
+  const classPointsRef     = useRef(sv?.classPoints       ?? 0);
+  const masteryPointsRef   = useRef(sv?.masteryPoints     ?? 0);
   const equipmentRef       = useRef<Equipment>(sv?.equipment        ?? { ...EMPTY_EQUIPMENT });
   const equipBonusesRef    = useRef<EquipBonuses>(sv?.equipBonuses  ?? { ...ZERO_EQUIP_BONUSES });
   const currentLocationRef = useRef<LocationId>(sv?.currentLocation ?? 'village');
@@ -225,6 +229,8 @@ export default function App() {
   useSyncedRef(playerXpRef, playerXp);
   useSyncedRef(playerGoldRef, playerGold);
   useSyncedRef(statPointsRef, statPoints);
+  useSyncedRef(classPointsRef, classPoints);
+  useSyncedRef(masteryPointsRef, masteryPoints);
   useSyncedRef(equipmentRef, equipment);
   useSyncedRef(equipBonusesRef, equipBonuses);
   useSyncedRef(inventoryRef, inventory);
@@ -261,6 +267,7 @@ export default function App() {
     bossState, exploredTiles,
     openedChests,
     unlockedRecipes,
+    classPoints, masteryPoints,
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -338,12 +345,14 @@ const log = useCallback((msg: string) => {
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
+    classPointsRef, masteryPointsRef,
     log, spawnFloat,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
+    setClassPoints, setMasteryPoints,
   });
 
   // ── Location transition ───────────────────────────────────────────────────
@@ -944,6 +953,7 @@ const log = useCallback((msg: string) => {
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     questProgressRef,
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
+    classPointsRef, masteryPointsRef,
     setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
@@ -951,6 +961,7 @@ const log = useCallback((msg: string) => {
     setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setUnlockedRecipes, setXpToNext,
+    setClassPoints, setMasteryPoints,
   });
 
   // ── Derived values ────────────────────────────────────────────────────────
