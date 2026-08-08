@@ -43,6 +43,8 @@ import { updateAggro, stepAggroEnemies, clearAllAggro } from './aggro';
 import { applyEnchant } from './enchant';
 import ClassSelectPanel from './classes/ClassSelectPanel';
 import ClassPanel from './classes/ClassPanel';
+import MasteryPanel from './classes/MasteryPanel';
+import TalentPanel from './classes/TalentPanel';
 import {
   createClassState,
   createMasteryState,
@@ -151,6 +153,8 @@ export default function App() {
   const [masteryState, setMasteryState] = useState<PlayerMasteryState>(sv?.masteryState ?? createMasteryState());
   const [showClassSelect, setShowClassSelect] = useState(!sv?.classState);
   const [showClassPanel, setShowClassPanel] = useState(false);
+  const [showMastery, setShowMastery] = useState(false);
+  const [showTalents, setShowTalents] = useState(false);
 
   // ── Inventory / equipment state ────────────────────────────────────────────
   const [equipment, setEquipment]         = useState<Equipment>(sv?.equipment       ?? { ...EMPTY_EQUIPMENT });
@@ -1465,6 +1469,14 @@ const log = useCallback((msg: string) => {
               masteryState={masteryState}
               level={playerLevel}
               onClose={() => setShowClassPanel(false)}
+              onOpenTalents={() => {
+                setShowClassPanel(false);
+                setShowTalents(true);
+              }}
+              onOpenMastery={() => {
+                setShowClassPanel(false);
+                setShowMastery(true);
+              }}
               onChooseProfession={(pid) => {
                 const r = chooseProfession(classState, pid as any, playerLevel);
                 if (r.error) log(r.error);
@@ -1475,6 +1487,30 @@ const log = useCallback((msg: string) => {
                 if (r.error) log(r.error);
                 else { setClassState(r.state); log('Специализация получена!'); }
               }}
+            />
+          )}
+
+          {/* ══ CLASS TALENT TREE OVERLAY (z-75) ═════════════════════════════════
+              Дерево талантов текущего пути (архетип → профессия → спек),
+              трата classPoints.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showTalents && classState && (
+            <TalentPanel
+              classState={classState}
+              onChange={setClassState}
+              onClose={() => setShowTalents(false)}
+            />
+          )}
+
+          {/* ══ MASTERY CONSTELLATION OVERLAY (z-75) ═════════════════════════════
+              255-узловое созвездие (15 веток × 17 узлов), трата masteryPoints.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showMastery && (
+            <MasteryPanel
+              masteryState={masteryState}
+              level={playerLevel}
+              onChange={setMasteryState}
+              onClose={() => setShowMastery(false)}
             />
           )}
 
