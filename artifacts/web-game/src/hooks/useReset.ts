@@ -46,6 +46,8 @@ export interface ResetCtx {
   shieldRef: MutableRefObject<boolean>;
   playerStatusEffectsRef: MutableRefObject<StatusEffect[]>;
   statPointsRef: MutableRefObject<number>;
+  classPointsRef: MutableRefObject<number>;
+  masteryPointsRef: MutableRefObject<number>;
   statsRef: MutableRefObject<BaseStats>;
   xpToNextRef: MutableRefObject<number>;
 
@@ -87,6 +89,8 @@ export interface ResetCtx {
   setSkillProgress: (v: SkillProgress) => void;
   setSkillsCd: Dispatch<SetStateAction<Record<number, number>>>;
   setStatPoints: (v: number) => void;
+  setClassPoints: (v: number) => void;
+  setMasteryPoints: (v: number) => void;
   setStats: (v: BaseStats) => void;
   setUnlockedRecipes: (v: string[]) => void;
   setXpToNext: (v: number) => void;
@@ -107,6 +111,7 @@ export function useReset(ctx: ResetCtx) {
     playerGoldRef, playerHpRef, playerMpRef, playerMaxMpRef, playerLevelRef, playerMaxHpRef, playerPosRef, playerXpRef,
     questProgressRef,
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
+    classPointsRef, masteryPointsRef,
     setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
     setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
@@ -114,6 +119,7 @@ export function useReset(ctx: ResetCtx) {
     setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setUnlockedRecipes, setXpToNext,
+    setClassPoints, setMasteryPoints,
   } = ctx;
 
   // ── Reset current map (respawn in current location — keep all character progress) ──
@@ -201,6 +207,8 @@ export function useReset(ctx: ResetCtx) {
     xpToNextRef.current        = xpRequired(INITIAL_PLAYER_LVL);
     playerGoldRef.current      = 0;
     statPointsRef.current      = 0;
+    classPointsRef.current     = 0;
+    masteryPointsRef.current   = 0;
     statsRef.current           = { ...INITIAL_BASE_STATS };
     equipmentRef.current       = { ...EMPTY_EQUIPMENT };
     equipBonusesRef.current    = { ...ZERO_EQUIP_BONUSES };
@@ -239,6 +247,8 @@ export function useReset(ctx: ResetCtx) {
     setShowBossVictory(false);
     setQuestProgress({});
     setUnlockedRecipes([]);
+    setClassPoints(0);
+    setMasteryPoints(0);
     setEquipment({ ...EMPTY_EQUIPMENT });
     setInventory([]);
     setEquipBonuses({ ...ZERO_EQUIP_BONUSES });

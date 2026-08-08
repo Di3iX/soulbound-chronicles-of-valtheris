@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import {
   Enemy, KillReward, LocationId, Phase, SKILLS,
-  REWARD_TABLE, applyXpGain, RESPAWN_MS, reviveEnemy, tickEnemyRespawns, canRespawnEnemy,
+  REWARD_TABLE, applyXpGain, RESPAWN_MS, reviveEnemy,
   EnemyRarity, ENEMY_RARITY_DEFS,
   StatusEffect, STATUS_EFFECT_DEFS, ENEMY_EFFECT_ON_HIT, SKILL_EFFECT_ON_HIT,
   addStatusEffect, tickStatusEffects, hasStatusEffect, slowMultiplier,
@@ -13,6 +13,7 @@ import { EquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, trackKillForQuests } from '../quests/quests';
+import { pointsPerLevel } from '../classes/masteryConstellation';
 import {
   BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID,
   CAVE_BOSS_DEF, FIELD_BOSS_DEF, RUINS_BOSS_DEF, SWAMP_BOSS_DEF, MINE_BOSS_DEF, PASS_BOSS_DEF, ICE_BOSS_DEF,
@@ -56,6 +57,8 @@ export interface CombatCtx {
   skillBonusesRef:   MutableRefObject<SkillBonuses>;
   skillPointsRef:    MutableRefObject<number>;
   statPointsRef:     MutableRefObject<number>;
+  classPointsRef:    MutableRefObject<number>;
+  masteryPointsRef:  MutableRefObject<number>;
   statsRef:          MutableRefObject<BaseStats>;
 
   // ── Shared functions (already-memoized, stable across renders) ────────────
@@ -90,6 +93,8 @@ export interface CombatCtx {
   setSkillPoints: Dispatch<SetStateAction<number>>;
   setSkillsCd: Dispatch<SetStateAction<Record<number, number>>>;
   setStatPoints: Dispatch<SetStateAction<number>>;
+  setClassPoints: Dispatch<SetStateAction<number>>;
+  setMasteryPoints: Dispatch<SetStateAction<number>>;
   setXpToNext: (v: number) => void;
 }
 
@@ -112,12 +117,14 @@ export function useCombat(ctx: CombatCtx) {
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
+    classPointsRef, masteryPointsRef,
     log, spawnFloat,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory, setLastKillReward,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
+    setClassPoints, setMasteryPoints,
   } = ctx;
 
   // ── Loot drop (called from applyRewards) ──────────────────────────────────
@@ -139,6 +146,7 @@ export function useCombat(ctx: CombatCtx) {
   // Used by applyRewards, handleBossDeath, and the quest-completion handler —
   // previously each of the three duplicated this ~20-line calculation inline.
   const grantXp = useCallback((xpGained: number) => {
+    const levelBefore = playerLevelRef.current;
     const result = applyXpGain(
       playerXpRef.current, playerLevelRef.current,
       playerBonusDmgRef.current, levelHpBonusRef.current, levelMpBonusRef.current,
@@ -179,6 +187,27 @@ export function useCombat(ctx: CombatCtx) {
       playerHpRef.current = newMaxHp; setPlayerHp(newMaxHp);
       playerMpRef.current = newMaxMp; setPlayerMp(newMaxMp);
       log(`🌟 Новый уровень ${result.level}! HP и MP восстановлены!`);
+
+      // Классы + Созвездие мастерства (см. INTEGRATION.md): 1 очко каждого за уровень.
+      const levelsGained = result.level - levelBefore;
+      let classPointsGained = 0;
+      let masteryPointsGained = 0;
+      for (let i = 0; i < levelsGained; i++) {
+        const p = pointsPerLevel();
+        classPointsGained   += p.classPoints;
+        masteryPointsGained += p.masteryPoints;
+      }
+      if (classPointsGained > 0) {
+        classPointsRef.current += classPointsGained;
+        setClassPoints(p => p + classPointsGained);
+      }
+      if (masteryPointsGained > 0) {
+        masteryPointsRef.current += masteryPointsGained;
+        setMasteryPoints(p => p + masteryPointsGained);
+      }
+      if (classPointsGained > 0 || masteryPointsGained > 0) {
+        log(`✨ +${classPointsGained} очко класса, +${masteryPointsGained} очко мастерства!`);
+      }
     }
 
     return result;
@@ -201,33 +230,11 @@ export function useCombat(ctx: CombatCtx) {
     log(`💰 Получено ${goldGained} золота!`);
     log(`✨ Получено ${xpGained} опыта!`);
 
-    // Floating numbers above the hero (MMO-style, not only chat)
-    {
-      const pp = playerPosRef.current;
-      spawnFloat(`+${goldGained}💰`, pp.x, pp.y, 'gold');
-      // slight delay so XP doesn't fully stack on gold
-      setTimeout(() => {
-        spawnFloat(`+${xpGained} XP`, pp.x, pp.y, 'xp');
-      }, 180);
-    }
-
     const { leveledUp, level: newLevel, statPointsGained } = grantXp(xpGained);
-    if (leveledUp) {
-      const pp = playerPosRef.current;
-      setTimeout(() => {
-        spawnFloat(`⬆ Ур. ${newLevel}`, pp.x, pp.y, 'level');
-      }, 400);
-    }
 
     const droppedItem = rollLoot(enemyName, rarityDef.itemChanceBonus, rarityDef.guaranteedDrop);
-    if (droppedItem) {
-      const pp = playerPosRef.current;
-      setTimeout(() => {
-        spawnFloat(`📦 ${droppedItem.name}`, pp.x, pp.y, 'loot');
-      }, 320);
-    }
     return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: statPointsGained, droppedItem };
-  }, [log, rollLoot, grantXp, spawnFloat]);
+  }, [log, rollLoot, grantXp]);
 
   // ── Cave Boss: spawn after all normal enemies die ─────────────────────────
   const spawnCaveBoss = useCallback(() => {
@@ -724,17 +731,18 @@ export function useCombat(ctx: CombatCtx) {
 
   // ── Enemy death ──────────────────────────────────────────────────────────
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string, rarity: EnemyRarity) => {
-    // Stop attack loops immediately
+    phaseRef.current = 'victory';
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
     const deadAt = Date.now();
-    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt, aggro: false } : e);
-    setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt, aggro: false } : e));
-    // Stay on the player's own tile (MMO-style) — do not step onto the corpse
+    enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e);
+    setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e));
+    playerPosRef.current = { x: ex, y: ey };
+    setPlayerPos({ x: ex, y: ey });
     log(`💀 ${name} повержен!`);
 
-    // Boss intercept — optional overlay; still no generic "victory tablet"
+    // Boss intercept — rewards and victory handled separately
     if (id === BOSS_ID) { handleBossDeath(); return; }
     if (id === FIELD_BOSS_ID) { handleFieldBossDeath(); return; }
     if (id === RUINS_BOSS_ID) { handleRuinsBossDeath(); return; }
@@ -743,11 +751,10 @@ export function useCombat(ctx: CombatCtx) {
     if (id === PASS_BOSS_ID) { handlePassBossDeath(); return; }
     if (id === ICE_BOSS_ID) { handleIceBossDeath(); return; }
 
-    // MMO-style: rewards via log / floating notifs only — no blocking victory screen
     const reward = applyRewards(name, rarity);
-    setLastKillReward(reward); // optional short toast in App; clear quickly
-    setTimeout(() => setLastKillReward(null), 2200);
+    setLastKillReward(reward);
 
+    // ── Quest progress (any active quest matching this enemy name) ───────────
     {
       const { progress: qp, logs: qLogs } = trackKillForQuests(questProgressRef.current, name);
       if (qLogs.length) {
@@ -758,13 +765,14 @@ export function useCombat(ctx: CombatCtx) {
     }
 
     const allDead = enemiesRef.current.every(e => e.dead);
-    if (allDead) log('🏆 Локация зачищена. Враги скоро возродятся.');
-
-    // Instant return to explore — keep moving
-    phaseRef.current = 'explore';
-    setPhase('explore');
-    setActiveEnemyId(null);
-    activeEnemyIdRef.current = null;
+    if (allDead) log('🏆 Локация зачищена! Враги возродятся через некоторое время.');
+    setPhase('victory');
+    setTimeout(() => {
+      if (phaseRef.current === 'victory') {
+        phaseRef.current = 'explore'; setPhase('explore');
+        setActiveEnemyId(null); activeEnemyIdRef.current = null;
+      }
+    }, 1500);
   }, [log, applyRewards, handleBossDeath, handleFieldBossDeath, handleRuinsBossDeath, handleSwampBossDeath, handleMineBossDeath, handlePassBossDeath, handleIceBossDeath]);
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -974,7 +982,7 @@ export function useCombat(ctx: CombatCtx) {
       let changed = false;
       const revived = enemiesRef.current.map(e => {
         if (ALL_BOSS_IDS.has(e.id)) return e;
-        if (canRespawnEnemy(e, now)) {
+        if (e.dead && e.deadAt !== undefined && now - e.deadAt >= RESPAWN_MS) {
           changed = true;
           return reviveEnemy(e);
         }
