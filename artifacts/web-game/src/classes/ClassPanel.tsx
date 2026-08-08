@@ -17,6 +17,7 @@ interface Props {
   level: number;
   onClose: () => void;
   onOpenMastery?: () => void;
+  onOpenTalents?: () => void;
   onChooseProfession?: (id: string) => void;
   onChooseSpec?: (id: string) => void;
 }
@@ -27,6 +28,7 @@ export default function ClassPanel({
   level,
   onClose,
   onOpenMastery,
+  onOpenTalents,
   onChooseProfession,
   onChooseSpec,
 }: Props) {
@@ -135,12 +137,21 @@ export default function ClassPanel({
           </div>
         )}
 
-        <div className="flex gap-2 p-3">
+        <div className="flex flex-wrap gap-2 p-3">
+          {onOpenTalents && (
+            <button
+              type="button"
+              onClick={onOpenTalents}
+              className="flex-1 min-w-[40%] rounded-lg bg-amber-600/80 py-2 text-sm font-medium text-white"
+            >
+              ⭐ Таланты
+            </button>
+          )}
           {onOpenMastery && (
             <button
               type="button"
               onClick={onOpenMastery}
-              className="flex-1 rounded-lg bg-violet-600/80 py-2 text-sm font-medium text-white"
+              className="flex-1 min-w-[40%] rounded-lg bg-violet-600/80 py-2 text-sm font-medium text-white"
             >
               🌌 Созвездие
             </button>
@@ -148,7 +159,7 @@ export default function ClassPanel({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg bg-white/10 py-2 text-sm text-white"
+            className="w-full rounded-lg bg-white/10 py-2 text-sm text-white"
           >
             Закрыть
           </button>

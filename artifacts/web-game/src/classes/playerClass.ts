@@ -8,6 +8,7 @@ import {
   type SpecializationId,
   type PlayerClassState,
   type StatBlock,
+  type TalentNode,
   ALL_PATHS,
   ARCHETYPE_PROFESSIONS,
   PROFESSION_SPECS,
@@ -164,4 +165,62 @@ export function unlockedSkills(state: PlayerClassState, level: number) {
 
 export function displayNameForArchetype(id: ArchetypeId): string {
   return ALL_PATHS[id]?.name ?? id;
+}
+
+
+// ── Class talent spending ────────────────────────────────────────────────────
+
+
+export function currentTalentTree(state: PlayerClassState): TalentNode[] {
+  return ALL_PATHS[currentPathId(state)]?.talents ?? [];
+}
+
+export function canSpendClassTalent(
+  state: PlayerClassState,
+  talentId: string,
+): { ok: boolean; reason?: string; node?: TalentNode } {
+  const tree = currentTalentTree(state);
+  const node = tree.find(n => n.id === talentId);
+  if (!node) return { ok: false, reason: 'Нет такого таланта' };
+  const rank = state.spentClassTalents[talentId] ?? 0;
+  if (rank >= node.maxRank) return { ok: false, reason: 'Макс. ранг', node };
+  if (state.classPoints < node.costPerRank) {
+    return { ok: false, reason: 'Нет очков класса', node };
+  }
+  if (node.requires?.length) {
+    for (const req of node.requires) {
+      if ((state.spentClassTalents[req] ?? 0) < 1) {
+        return { ok: false, reason: 'Нужен предыдущий талант', node };
+      }
+    }
+  }
+  return { ok: true, node };
+}
+
+export function spendClassTalent(
+  state: PlayerClassState,
+  talentId: string,
+): PlayerClassState {
+  const check = canSpendClassTalent(state, talentId);
+  if (!check.ok || !check.node) return state;
+  const cost = check.node.costPerRank;
+  return {
+    ...state,
+    classPoints: state.classPoints - cost,
+    spentClassTalents: {
+      ...state.spentClassTalents,
+      [talentId]: (state.spentClassTalents[talentId] ?? 0) + 1,
+    },
+  };
+}
+
+/** Simple aggregate labels for UI (effects are descriptive strings). */
+export function spentTalentSummary(state: PlayerClassState): string[] {
+  const tree = currentTalentTree(state);
+  const lines: string[] = [];
+  for (const n of tree) {
+    const r = state.spentClassTalents[n.id] ?? 0;
+    if (r > 0) lines.push(`${n.name} ${r}/${n.maxRank}`);
+  }
+  return lines;
 }
