@@ -13,6 +13,7 @@ import { EquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, trackKillForQuests } from '../quests/quests';
+import type { CombatReadySkill } from '../classes/classCombatSkills';
 import {
   BOSS_ID, FIELD_BOSS_ID, RUINS_BOSS_ID, SWAMP_BOSS_ID, MINE_BOSS_ID, PASS_BOSS_ID, ICE_BOSS_ID,
   CAVE_BOSS_DEF, FIELD_BOSS_DEF, RUINS_BOSS_DEF, SWAMP_BOSS_DEF, MINE_BOSS_DEF, PASS_BOSS_DEF, ICE_BOSS_DEF,
@@ -27,7 +28,7 @@ import { FloatingNum } from '../types/ui';
 export interface CombatCtx {
   // ── Reactive state (read each render; needed for effect deps / checks) ────
   phase: Phase;
-  skillsCd: Record<number, number>;
+  skillsCd: Record<string, number>;
 
   // ── Refs (mutable, stable identity — safe to read/write directly) ─────────
   activeEnemyIdRef:  MutableRefObject<number | null>;
@@ -90,7 +91,7 @@ export interface CombatCtx {
   setPlayerStatusEffects: (v: StatusEffect[]) => void;
   setShowBossVictory: (v: boolean) => void;
   setSkillPoints: Dispatch<SetStateAction<number>>;
-  setSkillsCd: Dispatch<SetStateAction<Record<number, number>>>;
+  setSkillsCd: Dispatch<SetStateAction<Record<string, number>>>;
   setStatPoints: Dispatch<SetStateAction<number>>;
   setXpToNext: (v: number) => void;
 }
@@ -1135,5 +1136,50 @@ export function useCombat(ctx: CombatCtx) {
     }
   }, [skillsCd, log, spawnFloat, handleEnemyDeath]);
 
-  return { grantXp, useSkill };
+  // ── Class skills (см. STEP4_APP.md) — string id, урон уже посчитан вызывающей
+  //    стороной (classCombatSkills.ts: damageFromSkill по статам), здесь только
+  //    применение: ресурс, КД, урон/лечение врагу-игроку, лог. ────────────────
+  const useClassSkill = useCallback((skill: CombatReadySkill) => {
+    if (phaseRef.current !== 'combat') return;
+    if ((skillsCd[skill.id] ?? 0) > 0) return;
+    if (skill.manaCost > 0 && playerMpRef.current < skill.manaCost) {
+      log('Недостаточно ресурса!');
+      return;
+    }
+    setSkillsCd(prev => ({ ...prev, [skill.id]: skill.maxCd }));
+
+    if (skill.manaCost > 0) {
+      const newMp = playerMpRef.current - skill.manaCost;
+      playerMpRef.current = newMp;
+      setPlayerMp(newMp);
+    }
+
+    if (skill.damage > 0) {
+      const id = activeEnemyIdRef.current;
+      if (id !== null) {
+        const enemy = enemiesRef.current.find(e => e.id === id);
+        if (enemy && !enemy.dead && enemy.hp > 0) {
+          const dmg = applyResistance(skill.damage, skill.damageType, enemy.resistances);
+          const newHp = Math.max(0, enemy.hp - dmg);
+          const skNote = dmg !== skill.damage ? (dmg < skill.damage ? ' (резист)' : ' (слабость!)') : '';
+
+          enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
+          setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
+          spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
+          log(`${skill.emoji} ${skill.name} (${DAMAGE_TYPE_LABEL[skill.damageType]}): ${dmg} урона${skNote}!`);
+          if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity);
+        }
+      }
+    }
+
+    if (skill.healSelf > 0) {
+      const pp = playerPosRef.current;
+      const newHp = Math.min(playerMaxHpRef.current, playerHpRef.current + skill.healSelf);
+      playerHpRef.current = newHp; setPlayerHp(newHp);
+      spawnFloat(`+${skill.healSelf}`, pp.x, pp.y, 'heal');
+      log(`${skill.emoji} ${skill.name}: +${skill.healSelf} HP!`);
+    }
+  }, [skillsCd, log, spawnFloat, handleEnemyDeath]);
+
+  return { grantXp, useSkill, useClassSkill };
 }

@@ -86,7 +86,7 @@ export interface ResetCtx {
   setShowSkillPanel: (v: boolean) => void;
   setSkillPoints: (v: number) => void;
   setSkillProgress: (v: SkillProgress) => void;
-  setSkillsCd: Dispatch<SetStateAction<Record<number, number>>>;
+  setSkillsCd: Dispatch<SetStateAction<Record<string, number>>>;
   setStatPoints: (v: number) => void;
   setClassState: (v: PlayerClassState | null) => void;
   setMasteryState: (v: PlayerMasteryState) => void;
