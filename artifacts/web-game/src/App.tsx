@@ -46,6 +46,15 @@ import ClassPanel from './classes/ClassPanel';
 import MasteryPanel from './classes/MasteryPanel';
 import TalentPanel from './classes/TalentPanel';
 import ClassSkillBar from './classes/ClassSkillBar';
+import TrialPanel from './classes/TrialPanel';
+import {
+  offerTrialIfEligible,
+  getTrial20ForArchetype,
+  getTrial40ForProfession,
+  completeTrial,
+  applyTrialChoice,
+  isTrialReady,
+} from './classes/trials';
 import { getCombatClassSkills, pathResourceLabel } from './classes/classCombatSkills';
 import { SKILLS } from './combat';
 import {
@@ -158,6 +167,7 @@ export default function App() {
   const [showClassPanel, setShowClassPanel] = useState(false);
   const [showMastery, setShowMastery] = useState(false);
   const [showTalents, setShowTalents] = useState(false);
+  const [showTrial, setShowTrial] = useState(false);
 
   // ── Inventory / equipment state ────────────────────────────────────────────
   const [equipment, setEquipment]         = useState<Equipment>(sv?.equipment       ?? { ...EMPTY_EQUIPMENT });
@@ -343,7 +353,16 @@ const log = useCallback((msg: string) => {
     setClassState(r.classState);
     setMasteryState(r.masteryState);
     r.logs.forEach(log);
-  }, [classState, masteryState, log]);
+
+    // Испытания 20/40 (см. STEP5_APP.md). playerLevel здесь — значение ДО этого
+    // прироста (стейт ещё не перерендерился), поэтому + levelsGained = новый уровень.
+    const newLevel = playerLevel + levelsGained;
+    const t = offerTrialIfEligible(questProgress, r.classState, newLevel);
+    if (t.offered) {
+      setQuestProgress(t.progress);
+      if (t.log) log(t.log);
+    }
+  }, [classState, masteryState, log, playerLevel, questProgress]);
 
   // Активные навыки текущего архетипа/профессии (см. STEP4_APP.md).
   // Фоллбэк на старые SKILLS, пока класс не выбран (showClassSelect ещё не пройден).
@@ -358,6 +377,18 @@ const log = useCallback((msg: string) => {
       equipBonuses?.damage ?? 0,
     );
   }, [classState, playerLevel, stats, equipBonuses, mapBaseStatsToStatBlock]);
+
+  // Испытание, доступное сейчас (20 ур. без профессии, либо 40 ур. без специализации).
+  const activeTrial = useMemo(() => {
+    if (!classState) return undefined;
+    if (!classState.profession && playerLevel >= 20) {
+      return getTrial20ForArchetype(classState.archetype);
+    }
+    if (classState.profession && !classState.specialization && playerLevel >= 40) {
+      return getTrial40ForProfession(classState.profession);
+    }
+    return undefined;
+  }, [classState, playerLevel]);
 
   // ── Stat spending ──────────────────────────────────────────────────────────
   const spendStat = useCallback((stat: keyof BaseStats) => {
@@ -493,6 +524,8 @@ const log = useCallback((msg: string) => {
         freeHealsLeft: loadHealState(),
         recoverableXp: getRecoverableXp(),
         healGoldCost: HEAL_COST,
+        activeTrialId: activeTrial?.id,
+        trialReady: activeTrial ? isTrialReady(questProgress, activeTrial.id) : false,
       });
       if (dlg) { setQuestDialogue(dlg); }
       else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
@@ -656,6 +689,12 @@ const log = useCallback((msg: string) => {
       return;
     }
 
+    if (action.kind === 'open_trial') {
+      setQuestDialogue(null);
+      setShowTrial(true);
+      return;
+    }
+
     if (action.kind === 'heal') {
       let free = loadHealState();
       if (free <= 0) {
@@ -721,6 +760,8 @@ const log = useCallback((msg: string) => {
         freeHealsLeft: loadHealState(),
         recoverableXp: getRecoverableXp(),
         healGoldCost: HEAL_COST,
+        activeTrialId: activeTrial?.id,
+        trialReady: activeTrial ? isTrialReady(questProgress, activeTrial.id) : false,
       });
       if (dlg) setQuestDialogue(dlg);
       return;
@@ -820,6 +861,8 @@ const log = useCallback((msg: string) => {
       freeHealsLeft: loadHealState(),
       recoverableXp: getRecoverableXp(),
       healGoldCost: HEAL_COST,
+      activeTrialId: activeTrial?.id,
+      trialReady: activeTrial ? isTrialReady(questProgress, activeTrial.id) : false,
     });
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
@@ -1526,6 +1569,28 @@ const log = useCallback((msg: string) => {
               classState={classState}
               onChange={setClassState}
               onClose={() => setShowTalents(false)}
+            />
+          )}
+
+          {/* ══ TRIAL OVERLAY (z-75) ══════════════════════════════════════════════
+              Испытание 20/40 ур. — сдача квеста + выбор профессии/специализации.
+          ═══════════════════════════════════════════════════════════════════ */}
+          {showTrial && classState && activeTrial && (
+            <TrialPanel
+              trial={activeTrial}
+              progress={questProgress}
+              canChoose={isTrialReady(questProgress, activeTrial.id)}
+              onClose={() => setShowTrial(false)}
+              onChoose={(unlockId) => {
+                const done = completeTrial(questProgress, classState, activeTrial.id, playerLevel);
+                setQuestProgress(done.progress);
+
+                const applied = applyTrialChoice(done.classState, unlockId, activeTrial.tier, playerLevel);
+                if (applied.error) { log(applied.error); return; }
+                setClassState(applied.classState);
+                if (applied.log) log(applied.log);
+                setShowTrial(false);
+              }}
             />
           )}
 
