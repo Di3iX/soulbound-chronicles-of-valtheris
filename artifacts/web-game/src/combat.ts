@@ -187,7 +187,7 @@ export const slowMultiplier = (effects: StatusEffect[] | undefined): number => {
 };
 
 // ── Skills ────────────────────────────────────────────────────────────────────
-export type DamageType = 'physical' | 'fire' | 'electric' | 'ice';
+export type DamageType = 'physical' | 'fire' | 'electric' | 'ice' | 'frost' | 'arcane' | 'holy' | 'nature' | 'shadow';
 
 export const SKILLS = [
   { id: 1, name: 'Удар',    emoji: '⚔️', damage: 28, healSelf: 0,  maxCd: 25, manaCost: 0,  damageType: 'physical' as DamageType },
@@ -222,6 +222,11 @@ export const DAMAGE_TYPE_LABEL: Record<DamageType, string> = {
   fire: 'огонь',
   electric: 'молния',
   ice: 'лёд',
+  frost: 'изморозь',
+  arcane: 'тайная',
+  holy: 'свет',
+  nature: 'природа',
+  shadow: 'тьма',
 }
 
 // ── Progression constants ─────────────────────────────────────────────────────

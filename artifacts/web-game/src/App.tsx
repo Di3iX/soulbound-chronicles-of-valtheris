@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { appendLog } from './game/ui/logger';
 import { loadGame, SaveData } from './save';
 import { usePersistence } from './hooks/usePersistence';
@@ -45,6 +45,9 @@ import ClassSelectPanel from './classes/ClassSelectPanel';
 import ClassPanel from './classes/ClassPanel';
 import MasteryPanel from './classes/MasteryPanel';
 import TalentPanel from './classes/TalentPanel';
+import ClassSkillBar from './classes/ClassSkillBar';
+import { getCombatClassSkills, pathResourceLabel } from './classes/classCombatSkills';
+import { SKILLS } from './combat';
 import {
   createClassState,
   createMasteryState,
@@ -129,7 +132,7 @@ export default function App() {
   const [activeEnemyId, setActiveEnemyId] = useState<number | null>(null);
   const [shieldActive, setShieldActive]   = useState(false);
   const [playerStatusEffects, setPlayerStatusEffects] = useState<StatusEffect[]>([]);
-  const [skillsCd, setSkillsCd]           = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+  const [skillsCd, setSkillsCd]           = useState<Record<string, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const [logs, setLogs]                   = useState<LogEntry[]>([{ id: 0, msg: sv ? '💾 Игра загружена!' : 'Тёмные подземелья ждут...' }]);
   const [floatingNums, setFloatingNums]   = useState<FloatingNum[]>([]);
 
@@ -312,6 +315,16 @@ const log = useCallback((msg: string) => {
     intelligence: block.int,
   }), []);
 
+  /** Обратный маппер для формул урона навыков (StatBlock). spi/lck пока не отслеживаются игрой — базовое значение 5. */
+  const mapBaseStatsToStatBlock = useCallback((base: BaseStats) => ({
+    str: base.strength,
+    agi: base.agility,
+    int: base.intelligence,
+    vit: base.vitality,
+    spi: 5,
+    lck: 5,
+  }), []);
+
   const handlePickArchetype = useCallback((id: ArchetypeId) => {
     const cs = createClassState(id);
     setClassState(cs);
@@ -331,6 +344,20 @@ const log = useCallback((msg: string) => {
     setMasteryState(r.masteryState);
     r.logs.forEach(log);
   }, [classState, masteryState, log]);
+
+  // Активные навыки текущего архетипа/профессии (см. STEP4_APP.md).
+  // Фоллбэк на старые SKILLS, пока класс не выбран (showClassSelect ещё не пройден).
+  const classSkills = useMemo(() => {
+    if (!classState) {
+      return SKILLS.map(s => ({ ...s, id: String(s.id), kind: 'active' as const, description: s.name }));
+    }
+    return getCombatClassSkills(
+      classState,
+      playerLevel,
+      mapBaseStatsToStatBlock(stats),
+      equipBonuses?.damage ?? 0,
+    );
+  }, [classState, playerLevel, stats, equipBonuses, mapBaseStatsToStatBlock]);
 
   // ── Stat spending ──────────────────────────────────────────────────────────
   const spendStat = useCallback((stat: keyof BaseStats) => {
@@ -383,7 +410,7 @@ const log = useCallback((msg: string) => {
   });
 
   // ── Combat: loot, XP/level-up, enemy & boss death, auto-attack loop, skills ─
-  const { grantXp, useSkill } = useCombat({
+  const { grantXp, useClassSkill } = useCombat({
     phase, skillsCd,
     activeEnemyIdRef, bossStateRef,
     currentLocationRef, enemiesRef, enemyAttackTimeout, equipBonusesRef, inventoryRef,
@@ -1551,13 +1578,21 @@ const log = useCallback((msg: string) => {
         ) : null}
       </div>
 
-      {/* ══ 3-4. MOVEMENT + SKILL BAR ══ */}
+      {/* ══ CLASS SKILL BAR (combat only) ══ */}
+      {phase === 'combat' && (
+        <ClassSkillBar
+          skills={classSkills}
+          skillsCd={skillsCd}
+          playerMp={playerMp}
+          resourceLabel={classState ? pathResourceLabel(classState) : 'MP'}
+          onUse={(sk) => useClassSkill(sk)}
+        />
+      )}
+
+      {/* ══ 3-4. MOVEMENT + POTION ══ */}
       <ControlsPanel
         phase={phase}
         movePlayer={movePlayer}
-        skillsCd={skillsCd}
-        playerMp={playerMp}
-        useSkill={useSkill}
         onUsePotion={handleQuickPotion}
         potionCount={potionCount}
         canUsePotion={canUsePotion}

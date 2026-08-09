@@ -1,169 +1,171 @@
-// ─── AGGRO / CHASE SYSTEM ─────────────────────────────────────────────────────
-import type { Enemy } from './combat';
-import { MONSTER_DEFS } from './monsters';
+// ─── AGGRO SYSTEM ────────────────────────────────────────────────────────────
+// Правила (см. AGGRO_SYSTEM.md):
+//  1. Игрок в радиусе аггро → aggro: true. Радиус берётся из enemy.aggroRange,
+//     если задан (см. combat.ts, шаг 4 / camp system); иначе — по редкости,
+//     как аналог "скорости" моба.
+//  2. Раз в ~450мс аггрессивные мобы шагают к игроку (обход стен/воды/скал)
+//  3. Дистанция ≤ 1 → бой (как наступил на моба)
+//  4. Ушёл дальше leash (enemy.leashRange, иначе дефолт) от home → сброс аггро
+//  5. Респавн уже возвращает моба на home без аггро (combat.ts: reviveEnemy) —
+//     здесь home лениво фиксируется как позиция моба при первом касании этой
+//     системой (эквивалентно точке спавна, пока моб ни разу не преследовал).
+import type { Enemy, EnemyRarity } from './combat';
 
-/** Chebyshev distance (king-move in chess) — good for tile aggro. */
-export function distChebyshev(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): number {
-  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+/** Радиус обнаружения по умолчанию, если у моба нет своего aggroRange. */
+const AGGRO_RADIUS: Record<EnemyRarity, number> = {
+  common: 2, uncommon: 3, rare: 3, elite: 4, legendary: 5,
+};
+
+/** Дистанция leash по умолчанию, если у моба нет своего leashRange. */
+const DEFAULT_LEASH_RADIUS = 6;
+
+function aggroRadiusOf(e: Enemy): number {
+  return e.aggroRange ?? AGGRO_RADIUS[e.rarity] ?? 2;
 }
 
-export function distManhattan(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): number {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+function leashRadiusOf(e: Enemy): number {
+  return e.leashRange ?? DEFAULT_LEASH_RADIUS;
 }
 
-/** Default aggro radius by monster speed (tiles). */
-export function aggroRangeFor(name: string): number {
-  const speed = MONSTER_DEFS[name]?.speed ?? 'normal';
-  switch (speed) {
-    case 'very_fast': return 5;
-    case 'fast':      return 4;
-    case 'normal':    return 3;
-    case 'slow':      return 2;
-    default:          return 3;
+function dist(ax: number, ay: number, bx: number, by: number): number {
+  return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+}
+
+/** Один шаг в сторону цели с обходом препятствий (0 = проходимо). */
+function stepToward(
+  fx: number, fy: number, tx: number, ty: number, map: number[][] | undefined,
+): { x: number; y: number } {
+  if (fx === tx && fy === ty) return { x: fx, y: fy };
+
+  const dx = Math.sign(tx - fx);
+  const dy = Math.sign(ty - fy);
+
+  const walkable = (nx: number, ny: number): boolean => {
+    if (nx < 0 || ny < 0) return false;
+    if (!map) return true;
+    if (ny >= map.length) return false;
+    const row = map[ny];
+    if (!row || nx >= row.length) return false;
+    return (row[nx] ?? 1) === 0;
+  };
+
+  const candidates: Array<[number, number]> = [];
+  if (dx !== 0 && dy !== 0) candidates.push([fx + dx, fy + dy]);
+  if (dx !== 0) candidates.push([fx + dx, fy]);
+  if (dy !== 0) candidates.push([fx, fy + dy]);
+
+  for (const [nx, ny] of candidates) {
+    if (walkable(nx, ny)) return { x: nx, y: ny };
   }
-}
-
-/** How far from home a mob may chase before resetting. */
-export function leashRangeFor(name: string): number {
-  return aggroRangeFor(name) + 5;
-}
-
-export function isWalkableTile(tile: number | undefined): boolean {
-  // 0 floor, 4 exit — walkable; 1 wall/tree, 3 water — blocked; 2 rock — blocked
-  return tile === 0 || tile === 4;
-}
-
-function tileAt(map: number[][], x: number, y: number): number | undefined {
-  return map[y]?.[x];
-}
-
-/** Occupy check: another living enemy on tile (optional block). */
-function occupiedByEnemy(enemies: Enemy[], x: number, y: number, selfId: number): boolean {
-  return enemies.some(e => !e.dead && e.id !== selfId && e.x === x && e.y === y);
+  return { x: fx, y: fy }; // всё заблокировано — стоим на месте
 }
 
 /**
- * After player steps: pull aggro on nearby living enemies; leash drop if too far from home.
+ * Вызывается после каждого хода игрока (movePlayer). Помечает aggro: true
+ * тех живых мобов, что оказались в радиусе обнаружения. Возвращает тот же
+ * массив (по ссылке), если ничего не поменялось — чтобы вызывающий код мог
+ * дёшево пропустить лишний setState.
  */
-export function updateAggro(
-  enemies: Enemy[],
-  playerPos: { x: number; y: number },
-): Enemy[] {
+export function updateAggro(enemies: Enemy[], playerPos: { x: number; y: number }): Enemy[] {
   let changed = false;
+
   const next = enemies.map(e => {
     if (e.dead) return e;
-    const home = { x: e.homeX ?? e.x, y: e.homeY ?? e.y };
-    const toPlayer = distChebyshev(e, playerPos);
-    const toHome = distChebyshev(e, home);
-    const aggroR = e.aggroRange ?? aggroRangeFor(e.name);
-    const leashR = e.leashRange ?? leashRangeFor(e.name);
 
-    // Leash break → walk home flag via aggro false (step will return home)
-    if (e.aggro && toHome > leashR) {
-      changed = true;
-      return { ...e, aggro: false };
+    const homeX = e.homeX ?? e.x;
+    const homeY = e.homeY ?? e.y;
+    const needsHomeInit = e.homeX == null || e.homeY == null;
+
+    if (e.aggro) {
+      if (needsHomeInit) {
+        changed = true;
+        return { ...e, homeX, homeY };
+      }
+      return e;
     }
-    // Acquire aggro
-    if (!e.aggro && toPlayer <= aggroR) {
+
+    const radius = aggroRadiusOf(e);
+    if (dist(e.x, e.y, playerPos.x, playerPos.y) <= radius) {
       changed = true;
-      return { ...e, aggro: true };
+      return { ...e, aggro: true, homeX, homeY };
+    }
+
+    if (needsHomeInit) {
+      changed = true;
+      return { ...e, homeX, homeY };
     }
     return e;
   });
+
   return changed ? next : enemies;
 }
 
-/** One greedy step toward target; returns new position or same. */
-export function stepToward(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  map: number[][],
-  enemies: Enemy[],
-  selfId: number,
-): { x: number; y: number } {
-  const dx = Math.sign(to.x - from.x);
-  const dy = Math.sign(to.y - from.y);
-  // Prefer axis that reduces the larger delta first; try diagonal then ortho
-  const tries: [number, number][] = [];
-  if (dx && dy) tries.push([dx, dy]);
-  if (dx) tries.push([dx, 0]);
-  if (dy) tries.push([0, dy]);
-  // alternate ortho if blocked
-  if (dx) tries.push([dx, dy ? 0 : 0]);
-  if (dy) tries.push([0, dy]);
-
-  const seen = new Set<string>();
-  for (const [ox, oy] of tries) {
-    const nx = from.x + ox;
-    const ny = from.y + oy;
-    const key = `${nx},${ny}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (!isWalkableTile(tileAt(map, nx, ny))) continue;
-    if (occupiedByEnemy(enemies, nx, ny, selfId)) continue;
-    return { x: nx, y: ny };
-  }
-  return from;
+export interface AggroStepResult {
+  enemies: Enemy[];
+  /** id моба, вплотную подошедшего к игроку — начать с ним бой, если не null. */
+  engageId: number | null;
 }
 
-export type AggroStepResult = {
-  enemies: Enemy[];
-  /** Enemy id that reached the player (start combat). */
-  engageId: number | null;
-};
-
 /**
- * Move all aggroed (or returning) enemies one step.
- * Engage when Chebyshev distance to player becomes ≤ 1.
+ * Вызывается по таймеру (~450мс) в фазе explore. Двигает аггрессивных мобов
+ * на один шаг к игроку либо обратно домой (если leash превышен), и мобов,
+ * что уже возвращаются домой после сброса аггро. Один бой инициируется за тик.
  */
 export function stepAggroEnemies(
   enemies: Enemy[],
   playerPos: { x: number; y: number },
-  map: number[][],
+  map: number[][] | undefined,
 ): AggroStepResult {
+  let changed = false;
   let engageId: number | null = null;
-  let working = enemies.map(e => ({ ...e }));
 
-  // Sort: closer to player first so packs don't block as badly
-  const order = working
-    .map((e, idx) => ({ idx, e }))
-    .filter(({ e }) => !e.dead && (e.aggro || (e.homeX !== undefined && (e.x !== e.homeX || e.y !== e.homeY))))
-    .sort((a, b) => distChebyshev(a.e, playerPos) - distChebyshev(b.e, playerPos));
+  const next = enemies.map(e => {
+    if (e.dead) return e;
 
-  for (const { idx, e } of order) {
-    if (engageId !== null) break;
-    const home = { x: e.homeX ?? e.x, y: e.homeY ?? e.y };
-    const target = e.aggro ? playerPos : home;
-    // Already adjacent + aggro → engage without moving onto player tile
-    if (e.aggro && distChebyshev(e, playerPos) <= 1) {
-      engageId = e.id;
-      break;
-    }
-    const pos = stepToward(e, target, map, working, e.id);
-    if (pos.x !== e.x || pos.y !== e.y) {
-      working[idx] = { ...working[idx], x: pos.x, y: pos.y };
-    }
-    const cur = working[idx];
-    if (cur.aggro && distChebyshev(cur, playerPos) <= 1) {
-      engageId = cur.id;
-      break;
-    }
-    // Arrived home
-    if (!cur.aggro && cur.x === home.x && cur.y === home.y) {
-      // stay
-    }
-  }
+    const homeX = e.homeX ?? e.x;
+    const homeY = e.homeY ?? e.y;
 
-  return { enemies: working, engageId };
+    if (e.aggro) {
+      // Вплотную к игроку → бой.
+      if (engageId == null && dist(e.x, e.y, playerPos.x, playerPos.y) <= 1) {
+        engageId = e.id;
+        changed = true;
+        return { ...e, aggro: false, homeX, homeY };
+      }
+
+      // Убежал дальше leash от дома → сброс аггро, дальше идёт домой.
+      if (dist(e.x, e.y, homeX, homeY) >= leashRadiusOf(e)) {
+        const stepped = stepToward(e.x, e.y, homeX, homeY, map);
+        changed = true;
+        return { ...e, x: stepped.x, y: stepped.y, aggro: false, homeX, homeY };
+      }
+
+      // Погоня.
+      const stepped = stepToward(e.x, e.y, playerPos.x, playerPos.y, map);
+      if (stepped.x !== e.x || stepped.y !== e.y) changed = true;
+      return { ...e, x: stepped.x, y: stepped.y, homeX, homeY };
+    }
+
+    // Без аггро, но не дома (только что сбросил погоню) — идёт домой.
+    if (e.x !== homeX || e.y !== homeY) {
+      const stepped = stepToward(e.x, e.y, homeX, homeY, map);
+      if (stepped.x !== e.x || stepped.y !== e.y) changed = true;
+      return { ...e, x: stepped.x, y: stepped.y, homeX, homeY };
+    }
+
+    return e;
+  });
+
+  return { enemies: changed ? next : enemies, engageId };
 }
 
-/** Call when combat ends / player flees — clear aggro flags. */
+/** Сбрасывает аггро всем мобам (вызывать после победы/поражения/бегства). */
 export function clearAllAggro(enemies: Enemy[]): Enemy[] {
-  return enemies.map(e => (e.aggro ? { ...e, aggro: false } : e));
+  let changed = false;
+  const next = enemies.map(e => {
+    if (!e.aggro) return e;
+    changed = true;
+    return { ...e, aggro: false };
+  });
+  return changed ? next : enemies;
 }
