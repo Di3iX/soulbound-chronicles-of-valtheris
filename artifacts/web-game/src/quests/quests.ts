@@ -1,4 +1,5 @@
 // ─── QUEST SYSTEM ─────────────────────────────────────────────────────────────
+import { TRIAL_QUEST_DEFS } from '../classes/trials';
 
 export type QuestStatus = 'inactive' | 'active' | 'completed';
 
@@ -165,6 +166,12 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     reward:      { gold: 120, xp: 160, items: ['iron_sword'] },
   },
 };
+
+// Испытания 20/40 (см. STEP5_APP.md) — квесты с npcId: 'elder', killTargets
+// подхватываются trackKillForQuests автоматически, т.к. он читает QUEST_DEFS.
+// TRIAL_QUEST_DEFS импортируется только значением (не типом) — trials.ts берёт
+// у нас только типы QuestDef/QuestProgress, циклической зависимости в рантайме нет.
+Object.assign(QUEST_DEFS, TRIAL_QUEST_DEFS);
 
 export function getQuestEntry(progress: QuestProgress, questId: string): QuestEntry {
   return progress[questId] ?? { status: 'inactive', current: 0 };

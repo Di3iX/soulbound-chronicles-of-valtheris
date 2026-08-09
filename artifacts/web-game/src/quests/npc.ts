@@ -15,6 +15,7 @@ export type DialogAction =
   | { kind: 'open_upgrade' }
   | { kind: 'open_tier' }
   | { kind: 'open_enchant' }
+  | { kind: 'open_trial' }
   | { kind: 'dismiss' };
 
 export interface DialogButton {
@@ -41,6 +42,21 @@ export interface DialogueFlags {
   crystalCount?: number;
   ruinsKeeperFirstKill?: boolean;
   swampHorrorFirstKill?: boolean;
+  mineGuardianFirstKill?: boolean;
+  passLordFirstKill?: boolean;
+  iceKingFirstKill?: boolean;
+  /** Текущий инвентарь игрока (для проверки рецептов у кузнеца и т.п.). */
+  inventory?: Item[];
+  /** Сколько бесплатных лечений осталось сегодня у лекаря. */
+  freeHealsLeft?: number;
+  /** Сколько XP можно вернуть у лекаря после смерти. */
+  recoverableXp?: number;
+  /** Стоимость платного лечения в золоте. */
+  healGoldCost?: number;
+  /** id активного испытания (20/40 ур.), если есть и не завершено. */
+  activeTrialId?: string;
+  /** Цели испытания выполнены — можно сдавать/выбирать путь. */
+  trialReady?: boolean;
 }
 
 function questFlow(
@@ -95,6 +111,20 @@ function questFlow(
 
 function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
   const base = { npcId: 'elder', name: 'Староста', emoji: '👴' };
+
+  // Испытание 20/40 ур. (см. STEP5_APP.md) — приоритетнее обычных квестов, пока активно.
+  if (flags.activeTrialId) {
+    return {
+      ...base,
+      lines: flags.trialReady
+        ? ['Цели испытания выполнены. Готов принять решение?']
+        : ['Испытание ещё не завершено. Убей отмеченные цели и возвращайся.'],
+      buttons: [
+        { label: '🏆 Испытание', action: { kind: 'open_trial' }, primary: true },
+        { label: 'Уйти', action: { kind: 'dismiss' } },
+      ],
+    };
+  }
 
   // Crystal quest (after fields)
   const crystal = getQuestEntry(progress, 'quest_crystal_001');
