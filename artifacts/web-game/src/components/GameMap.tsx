@@ -3,7 +3,6 @@ import { VP_COLS, VP_ROWS, ExploredTiles } from '../world/locations';
 import { Enemy, LocationId } from '../combat';
 import { FloatingNum } from '../types/ui';
 import Minimap from './Minimap';
-import { isBossId, isMiniBossId, bossKindLabel } from '../boss/boss';
 
 interface GameMapProps {
   camCol: number;
@@ -16,9 +15,8 @@ interface GameMapProps {
   playerMaxHp: number;
   playerPos: { x: number; y: number };
   activeEnemy: Enemy | null;
+  enemies: Enemy[];
   bossId: number;
-  /** For minimap boss markers */
-  enemies?: { id: number; x: number; y: number; dead?: boolean }[];
 
   floatingNums: FloatingNum[];
   bossAppearNotif: boolean;
@@ -40,8 +38,7 @@ interface GameMapProps {
  */
 export default function GameMap({
   camCol, camRow, currentMap, renderTileContent,
-  phase, playerHp, playerMaxHp, playerPos, activeEnemy, bossId,
-  enemies = [],
+  phase, playerHp, playerMaxHp, playerPos, activeEnemy, enemies, bossId,
   floatingNums, bossAppearNotif,
   transitioning, currentLocation, locationEmoji,
   exploredTiles, minimapVisible, onToggleMinimap,
@@ -74,7 +71,6 @@ export default function GameMap({
           camRow={camRow}
           visible={minimapVisible}
           onToggle={onToggleMinimap}
-          enemies={enemies}
         />
       )}
 
@@ -90,7 +86,7 @@ export default function GameMap({
       {phase === 'combat' && activeEnemy && activeEnemy.hp > 0 &&
         activeEnemy.x >= camCol && activeEnemy.x < camCol + VP_COLS &&
         activeEnemy.y >= camRow && activeEnemy.y < camRow + VP_ROWS && (
-        (isBossId(activeEnemy.id) || activeEnemy.id === bossId) ? (
+        activeEnemy.id === bossId ? (
           // Boss HP bar — wider, red gradient, name above
           <div className="absolute pointer-events-none z-20 flex flex-col items-center"
             style={{
@@ -99,9 +95,7 @@ export default function GameMap({
               width:      `${(3 / VP_COLS) * 100}%`,
               marginTop:  '-20px',
             }}>
-            <span className="text-[7px] font-black text-red-400 uppercase tracking-wide mb-[2px] leading-none drop-shadow-md">
-              {isMiniBossId(activeEnemy.id) ? '⚔ MINI ' : '👑 BOSS '}{activeEnemy.name}
-            </span>
+            <span className="text-[7px] font-black text-red-400 uppercase tracking-wide mb-[2px] leading-none drop-shadow-md">{activeEnemy.name}</span>
             <div className="w-full h-[5px] bg-[#1a1a1f] border border-red-900/60 rounded-full overflow-hidden shadow-[0_0_4px_rgba(220,38,38,0.5)]">
               <div className="h-full bg-red-600 transition-all duration-300"
                 style={{ width: `${Math.round((activeEnemy.hp / activeEnemy.maxHp) * 100)}%` }} />
@@ -126,14 +120,13 @@ export default function GameMap({
           className="absolute pointer-events-none z-30 font-bold text-base text-center animate-float w-[10%] h-[10%] flex items-center justify-center drop-shadow-md"
           style={{
             top: `${((num.row - camRow) / VP_ROWS) * 100}%`, left: `${((num.col - camCol) / VP_COLS) * 100}%`,
-            color:
-              num.type === 'player-dmg' ? 'hsl(var(--destructive))' :
-              num.type === 'heal' ? 'hsl(var(--success))' :
-              num.type === 'xp' ? '#38bdf8' :
-              num.type === 'gold' ? '#facc15' :
-              num.type === 'loot' ? '#c084fc' :
-              num.type === 'level' ? '#fbbf24' :
-              'hsl(var(--primary))',
+            color: num.type === 'player-dmg' ? 'hsl(var(--destructive))'
+                 : num.type === 'heal'       ? 'hsl(var(--success))'
+                 : num.type === 'gold'       ? '#facc15'
+                 : num.type === 'loot'       ? '#c084fc'
+                 : num.type === 'xp'         ? '#60a5fa'
+                 : num.type === 'level'      ? '#f472b6'
+                 : 'hsl(var(--primary))',
           }}>
           {num.value}
         </div>
