@@ -1,18 +1,9 @@
-export type FloatingNumType =
-  | 'player-dmg'
-  | 'enemy-dmg'
-  | 'heal'
-  | 'xp'
-  | 'gold'
-  | 'loot'
-  | 'level';
-
 export type FloatingNum = {
   id: number;
   value: string;
   col: number;
   row: number;
-  type: FloatingNumType;
+  type: 'player-dmg' | 'enemy-dmg' | 'heal' | 'gold' | 'loot' | 'xp' | 'level';
   timestamp: number;
 };
 
