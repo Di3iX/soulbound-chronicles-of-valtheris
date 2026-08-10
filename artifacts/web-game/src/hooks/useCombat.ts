@@ -72,7 +72,6 @@ export interface CombatCtx {
   setBossState: (v: BossState) => void;
   setEnemies: Dispatch<SetStateAction<Enemy[]>>;
   setInventory: Dispatch<SetStateAction<Item[]>>;
-  setLastKillReward: (v: KillReward) => void;
   setLevelHpBonus: (v: number) => void;
   setLevelMpBonus: (v: number) => void;
   setLootNotif: (v: string | null) => void;
@@ -117,7 +116,7 @@ export function useCombat(ctx: CombatCtx) {
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat, onLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
-    setBossState, setEnemies, setInventory, setLastKillReward,
+    setBossState, setEnemies, setInventory,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
@@ -213,8 +212,31 @@ export function useCombat(ctx: CombatCtx) {
     const { leveledUp, level: newLevel, statPointsGained } = grantXp(xpGained);
 
     const droppedItem = rollLoot(enemyName, rarityDef.itemChanceBonus, rarityDef.guaranteedDrop);
+
+    // Всплывающие цифры над героем (MMO-style) — не только в лог.
+    {
+      const pp = playerPosRef.current;
+      spawnFloat(`+${goldGained}💰`, pp.x, pp.y, 'gold');
+      // небольшая задержка, чтобы XP не слипался с золотом визуально
+      setTimeout(() => {
+        spawnFloat(`+${xpGained} XP`, pp.x, pp.y, 'xp');
+      }, 180);
+    }
+    if (leveledUp) {
+      const pp = playerPosRef.current;
+      setTimeout(() => {
+        spawnFloat(`⬆ Ур. ${newLevel}`, pp.x, pp.y, 'level');
+      }, 400);
+    }
+    if (droppedItem) {
+      const pp = playerPosRef.current;
+      setTimeout(() => {
+        spawnFloat(`📦 ${droppedItem.name}`, pp.x, pp.y, 'loot');
+      }, 320);
+    }
+
     return { xp: xpGained, gold: goldGained, leveledUp, newLevel, statPtsGained: statPointsGained, droppedItem };
-  }, [log, rollLoot, grantXp]);
+  }, [log, rollLoot, grantXp, spawnFloat]);
 
   // ── Cave Boss: spawn after all normal enemies die ─────────────────────────
   const spawnCaveBoss = useCallback(() => {
@@ -731,8 +753,9 @@ export function useCombat(ctx: CombatCtx) {
     if (id === PASS_BOSS_ID) { handlePassBossDeath(); return; }
     if (id === ICE_BOSS_ID) { handleIceBossDeath(); return; }
 
-    const reward = applyRewards(name, rarity);
-    setLastKillReward(reward);
+    // MMO-style: только лог + всплывающие цифры (applyRewards уже вызывает spawnFloat).
+    // НЕ ставим lastKillReward — иначе App может отрисовать большую плашку «Победа».
+    applyRewards(name, rarity);
 
     // ── Quest progress (any active quest matching this enemy name) ───────────
     {
@@ -746,13 +769,10 @@ export function useCombat(ctx: CombatCtx) {
 
     const allDead = enemiesRef.current.every(e => e.dead);
     if (allDead) log('🏆 Локация зачищена! Враги возродятся через некоторое время.');
-    setPhase('victory');
-    setTimeout(() => {
-      if (phaseRef.current === 'victory') {
-        phaseRef.current = 'explore'; setPhase('explore');
-        setActiveEnemyId(null); activeEnemyIdRef.current = null;
-      }
-    }, 1500);
+
+    // Мгновенный возврат в explore — без окна «Победа» и задержки (см. FIX_VICTORY_TABLET.md).
+    phaseRef.current = 'explore'; setPhase('explore');
+    setActiveEnemyId(null); activeEnemyIdRef.current = null;
   }, [log, applyRewards, handleBossDeath, handleFieldBossDeath, handleRuinsBossDeath, handleSwampBossDeath, handleMineBossDeath, handlePassBossDeath, handleIceBossDeath]);
   // ── Combat ────────────────────────────────────────────────────────────────
   useEffect(() => {

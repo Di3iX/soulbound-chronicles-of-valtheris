@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import {
-  Phase, Enemy, LocationId, KillReward, StatusEffect,
+  Phase, Enemy, LocationId, StatusEffect,
   xpRequired, makeLocationEnemies,
 } from '../combat';
 import {
@@ -59,7 +59,6 @@ export interface ResetCtx {
   setEquipment: (v: Equipment) => void;
   setFloatingNums: (v: FloatingNum[]) => void;
   setInventory: Dispatch<SetStateAction<Item[]>>;
-  setLastKillReward: (v: KillReward | null) => void;
   setLevelHpBonus: (v: number) => void;
   setLevelMpBonus: (v: number) => void;
   setExploredTiles: (v: ExploredTiles) => void;
@@ -113,7 +112,7 @@ export function useReset(ctx: ResetCtx) {
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
-    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
+    setInventory, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
     setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
@@ -163,7 +162,6 @@ export function useReset(ctx: ResetCtx) {
     setPlayerStatusEffects([]);
     setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setFloatingNums([]);
-    setLastKillReward(null);
     setLootNotif(null);
     setShowInventory(false);
     setSelectedItem(null);
@@ -227,7 +225,6 @@ export function useReset(ctx: ResetCtx) {
     setPlayerStatusEffects([]);
     setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setFloatingNums([]);
-    setLastKillReward(null);
     setPlayerLevel(INITIAL_PLAYER_LVL);
     setPlayerXp(0);
     setXpToNext(xpRequired(INITIAL_PLAYER_LVL));
