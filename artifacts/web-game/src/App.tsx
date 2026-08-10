@@ -17,7 +17,7 @@ import {
   EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES, calcEquipBonuses,
 } from './equipment';
 import {
-  LocationId, Phase, Enemy, KillReward, StatusEffect,
+  LocationId, Phase, Enemy, StatusEffect,
   xpRequired, makeLocationEnemies, ENEMY_RARITY_DEFS,
 } from './combat';
 import {
@@ -153,7 +153,6 @@ export default function App() {
   const [playerBonusDmg, setPlayerBonusDmg] = useState(sv?.playerBonusDmg ?? 0);
   const [levelHpBonus, setLevelHpBonus]     = useState(sv?.levelHpBonus    ?? 0);
   const [levelMpBonus, setLevelMpBonus]     = useState(sv?.levelMpBonus    ?? 0);
-  const [lastKillReward, setLastKillReward] = useState<KillReward | null>(null);
 
   // ── Stats state ────────────────────────────────────────────────────────────
   const [stats, setStats]               = useState<BaseStats>(sv?.stats      ?? { ...INITIAL_BASE_STATS });
@@ -451,7 +450,7 @@ const log = useCallback((msg: string) => {
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
     log, spawnFloat, onLevelUp: handleLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
-    setBossState, setEnemies, setInventory, setLastKillReward,
+    setBossState, setEnemies, setInventory,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
@@ -1069,7 +1068,7 @@ const log = useCallback((msg: string) => {
     shieldRef, playerStatusEffectsRef, statPointsRef, statsRef, xpToNextRef,
     setActiveEnemyId, setBossState,
     setCurrentLocation, setEnemies, setEquipBonuses, setEquipment, setFloatingNums,
-    setInventory, setLastKillReward, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
+    setInventory, setLevelHpBonus, setLevelMpBonus, setExploredTiles, setLogs, setLootNotif, setPhase,
     setPlayerBonusDmg, setPlayerGold, setPlayerHp, setPlayerMp, setPlayerLevel, setPlayerMaxHp, setPlayerMaxMp,
     setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
@@ -1351,31 +1350,6 @@ const log = useCallback((msg: string) => {
             <div className="absolute top-2 inset-x-2 z-[65] flex items-center gap-2 bg-[#2a0e0e]/95 border border-red-700/70 rounded px-3 py-2 shadow-lg pointer-events-none animate-in fade-in duration-200">
               <span className="text-base shrink-0">⛔</span>
               <span className="text-[12px] font-bold text-red-300 leading-tight">{gateNotif}</span>
-            </div>
-          )}
-
-          {/* Per-kill victory flash */}
-          {phase === 'victory' && (
-            <div className="absolute inset-0 z-50 bg-black/75 flex flex-col items-center justify-center gap-1 rounded backdrop-blur-sm animate-in fade-in duration-300">
-              <h2 className="text-2xl font-bold text-primary drop-shadow-lg">⚔️ ПОБЕДА!</h2>
-              <p className="text-white/70 text-sm">Враг повержен!</p>
-              {lastKillReward && (
-                <div className="mt-1 flex flex-col items-center gap-[2px]">
-                  <span className="text-[13px] font-bold text-[#38bdf8]">+{lastKillReward.xp} опыта</span>
-                  <span className="text-[13px] font-bold text-yellow-400">+{lastKillReward.gold} золота</span>
-                  {lastKillReward.droppedItem && (
-                    <span className={`text-[12px] font-bold mt-1 ${RARITY_STYLE[lastKillReward.droppedItem.rarity].text}`}>
-                      📦 {lastKillReward.droppedItem.name}
-                    </span>
-                  )}
-                </div>
-              )}
-              {lastKillReward?.leveledUp && (
-                <div className="mt-2 px-3 py-1 bg-primary/20 border border-primary rounded-md text-center">
-                  <p className="text-primary font-bold text-sm tracking-wide">НОВЫЙ УРОВЕНЬ!</p>
-                  <p className="text-white text-xs">Уровень {lastKillReward.newLevel}{lastKillReward.statPtsGained > 0 && ` · +${lastKillReward.statPtsGained} очка`}</p>
-                </div>
-              )}
             </div>
           )}
 
