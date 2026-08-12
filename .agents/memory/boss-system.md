@@ -1,39 +1,67 @@
 ---
 name: Boss system architecture
-description: How the boss (Goblin Chief) is structured, spawned, and rewarded — key decisions for future boss work
+description: How bosses are structured, spawned, and rewarded — key decisions for future boss work
 ---
 
-## Current implementation (v0.1.6)
+## Current implementation (post config-driven refactor, 7 bosses)
 
-**Files added:**
-- `src/boss/boss.ts` — BOSS_ID, CAVE_BOSS_DEF, BossState, BossRewardInfo, makeBossTrophy, reward constants
-- `src/boss/BossVictoryPanel.tsx` — victory overlay component
-- `save.ts` — added optional `bossState?: BossState`
+**Files:**
+- `src/boss/boss.ts` — `BOSS_CONFIGS`, the single source of truth for every boss (id, stats,
+  reward, respawn timer, trophy, and combat-flow metadata). All the small helpers
+  (`bossKeyForEnemyId`, `makeTrophyForBoss`, `isBossId`, `isMiniBossId`, `bossKindLabel`,
+  `normalizeBossState`) are derived from this one map.
+- `src/hooks/useCombat.ts` — generic `spawnBoss(key)` / `handleBossDeath(key)` and the
+  respawn-check loop, all driven by iterating `BOSS_CONFIGS`. No boss is hand-coded more
+  than once anywhere in the codebase.
+- `src/hooks/useWorldMovement.ts` — `movePlayer` / `handleLocationTransition` (moved out of
+  App.tsx). The "block exit until boss X is first-killed" gate (e.g. Cave → Ruins) lives here.
+- `src/boss/BossVictoryPanel.tsx` — victory overlay component (unchanged).
+- `save.ts` — `bossState?: BossState`, one entry per boss key (unchanged mechanism, now 7 keys
+  instead of 1).
 
-**BOSS_ID = 9999** — reserved id that never conflicts with makeLocationEnemies (ids 1…N).
-Identify the boss by `enemy.id === BOSS_ID`, NOT by name.
+**Boss ids** — each boss gets a reserved id ≥ 9993 (`caveChief=9999` down to `iceKing=9993`),
+never conflicting with `makeLocationEnemies` (ids 1…N). Identify a boss by
+`bossKeyForEnemyId(enemy.id)`, NOT by name or a hardcoded id comparison.
 
-**Spawn flow:** `handleEnemyDeath` → allDead in Cave → `spawnCaveBoss()` injects boss into enemies array, sets `bossSpawnedThisVisitRef = true`, shows 3.5s notification.
+**Per-boss config shape** (`BossConfig` in `boss.ts`):
+```ts
+{ id, def, reward, respawnMs, trophy, isMiniBoss,
+  locationId, requiresAreaClear, unlockMessage?, firstKillStoryLines }
+```
+- `locationId` / `requiresAreaClear` drive the generic respawn loop (does this boss's location
+  need every other enemy dead first? `fieldBoar` is the one exception — `requiresAreaClear: false`).
+- `unlockMessage` — extra log line shown once, right after first trophy pickup. Only `caveChief`
+  has one today (unlocks the Ruins exit).
+- `firstKillStoryLines` — exactly 2 narrative log lines shown only on the very first kill of that
+  boss (checked by `boss/boss.test.ts`).
 
-**Kill flow:** `handleEnemyDeath` intercepts `id === BOSS_ID` BEFORE `applyRewards`, calls `handleBossDeath()`. Enemy is already marked dead by that point.
+**Spawn flow:** the respawn-check `setInterval` in `useCombat` loops `Object.keys(BOSS_CONFIGS)`,
+checks `currentLocationRef.current === cfg.locationId`, off-cooldown, and area-clear (if
+required) → calls generic `spawnBoss(key)`.
 
-**Why:**
-- `BOSS_ID=9999` avoids modifying combat.ts (which owns LocationId and Enemy types; moving it would break circular import guards).
-- Boss rewards duplicate the level-up loop from `applyRewards` because REWARD_TABLE (in combat.ts, unmodifiable) has no boss entry.
-- `makeBossTrophy()` creates an Item with key `goblin_chief_trophy` that is NOT in ITEM_CATALOG — this is intentional and safe (sell price falls back to rarity, display uses item's own fields).
+**Kill flow:** `handleEnemyDeath` calls `bossKeyForEnemyId(id)`; if it resolves, dispatches to
+generic `handleBossDeath(key)` BEFORE the normal-enemy `applyRewards` path.
 
-**Saved state:** `bossState.caveChief.firstKillDone` — once true: (1) trophy never drops again, (2) Cave→Ruins exit permanently unblocked. SAVE_VERSION stays at 2 (optional field).
+**Why (still true, unchanged reasoning):**
+- Reserved high ids avoid touching `combat.ts` (owns `LocationId`/`Enemy` types).
+- Boss rewards duplicate the level-up XP/gold logic rather than reusing `REWARD_TABLE`
+  (in `combat.ts`) because bosses aren't in that table.
+- Trophy items (`makeTrophyForBoss(key)`) are NOT in `ITEM_CATALOG` — intentional; sell price
+  falls back to rarity, display uses the item's own embedded fields.
 
-**Runtime-only state (not saved):**
-- `bossSpawnedThisVisit` / `bossSpawnedThisVisitRef` — reset on cave entry via `handleLocationTransition`
-- `bossDefeatedThisVisit` / `bossDefeatedThisVisitRef` — reset on cave entry
-- `bossAppearNotif` — 3.5s notification timer
-- `showBossVictory` / `bossRewardInfo` — drives BossVictoryPanel
+**Saved state:** `bossState.<key>.firstKillDone` per boss — once true: trophy never drops again,
+and (for `caveChief` specifically) the Cave→Ruins exit stays permanently unblocked.
 
-**How to apply for future bosses:**
-1. Add a new `BossDef` entry in `boss.ts` with a unique id > 9999.
-2. Add `<locationId>ChiefDefeated: boolean` to BossState.
-3. Wire the allDead check in `handleEnemyDeath` for the new location.
-4. Add a separate `handleBossDeathXxx` callback following the same pattern.
-5. Reset visit flags in `handleLocationTransition` when entering the new location.
-6. Block the downstream exit using `bossStateRef.current.<field>` in `movePlayer`.
+**How to add a new boss (now a single-file change):**
+1. Add one new entry to `BOSS_CONFIGS` in `boss.ts` with a unique id, `locationId`, and exactly
+   2 `firstKillStoryLines`. That's it — spawn, death, reward, respawn, and dispatch are all
+   generic and pick it up automatically.
+2. If this boss should unlock something, set `unlockMessage` and wire the actual gate check in
+   `useWorldMovement.ts`'s `movePlayer` (only `caveChief` does this today).
+3. Add a test case in `boss/boss.test.ts` (the data-integrity tests iterate all boss keys
+   automatically, but story-specific behavior needs an explicit assertion).
+
+**Do NOT** reintroduce per-boss constants (`X_BOSS_ID`, `X_BOSS_DEF`, `makeXBossTrophy()`, a
+`spawnXBoss()` function, etc.) — that pattern was refactored away specifically because it made
+adding/changing a boss require edits in 6+ places. If you're about to copy-paste a boss-handling
+function, put the boss-specific bits in `BOSS_CONFIGS` instead.
