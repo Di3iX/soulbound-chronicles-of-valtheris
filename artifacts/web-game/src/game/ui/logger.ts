@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { LogEntry } from '../types/ui';
+import type { LogEntry } from '../../types/ui';
 
 export function appendLog(
   setLogs: Dispatch<SetStateAction<LogEntry[]>>,
