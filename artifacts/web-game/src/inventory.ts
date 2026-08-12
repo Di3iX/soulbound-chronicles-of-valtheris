@@ -330,7 +330,7 @@ function pickWeighted(pool: AffixDef[], exclude: Set<string>): AffixDef | null {
 }
 
 /** How many affixes to roll by rarity. */
-export function affixCountForRarity(rarity: ItemRarity): number {
+export function affixCountForRarity(rarity: Rarity): number {
   switch (rarity) {
     case 'common':    return Math.random() < 0.35 ? 1 : 0;
     case 'uncommon':  return Math.random() < 0.55 ? 1 : (Math.random() < 0.15 ? 2 : 0);
@@ -349,7 +349,7 @@ function tierAffixScale(tier?: ItemTier): number {
 
 export function rollAffixes(
   type: ItemType,
-  rarity: ItemRarity,
+  rarity: Rarity,
   tier?: ItemTier,
 ): ItemAffix[] {
   if (type === 'consumable') return [];

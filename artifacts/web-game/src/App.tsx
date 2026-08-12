@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { appendLog } from './game/ui/logger';
+import { HEAL_COST, loadHealState, getRecoverableXp } from './game/healerState';
 import { loadGame, SaveData } from './save';
 import { usePersistence } from './hooks/usePersistence';
 import { useCombat } from './hooks/useCombat';
@@ -7,40 +8,36 @@ import { useSyncedRef } from './hooks/useSyncedRef';
 import { useReset } from './hooks/useReset';
 import { useEquipment } from './hooks/useEquipment';
 import { useEconomy } from './hooks/useEconomy';
+import { useItemActions } from './hooks/useItemActions';
+import { useClassProgression } from './hooks/useClassProgression';
+import { useWorldMovement } from './hooks/useWorldMovement';
+import { useQuestActions } from './hooks/useQuestActions';
+import { useGameView } from './hooks/useGameView';
 import {
   Item, ItemType, ItemBonuses, Rarity,
-  ITEM_CATALOG, RARITY_STYLE,
-  makeItem, canEquipItem, TIER_LEVEL_RANGE, ItemTier,
+  RARITY_STYLE,
 } from './inventory';
 import {
   Equipment, EquipBonuses,
-  EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES, calcEquipBonuses,
+  EMPTY_EQUIPMENT, ZERO_EQUIP_BONUSES,
 } from './equipment';
 import {
   LocationId, Phase, Enemy, StatusEffect,
-  xpRequired, makeLocationEnemies, ENEMY_RARITY_DEFS,
+  xpRequired, makeLocationEnemies,
 } from './combat';
 import {
-  BaseStats, ComputedStats, INITIAL_BASE_STATS, INITIAL_HP, INITIAL_MP,
-  computeStats, StatsInput,
+  BaseStats, INITIAL_BASE_STATS, INITIAL_HP, INITIAL_MP,
 } from './stats';
 import {
-  MAP_COLS, MAP_ROWS, VP_COLS, VP_ROWS,
-  LOCATION_META, LOCATION_SPAWN, LOCATION_EXITS, LOCATION_MAPS, LOCATION_NPCS,
-  getLocation, moveToLocation, getAvailableExits,
+  LOCATION_META, LOCATION_SPAWN,
   ExploredTiles, makeInitialExploredTiles, revealAround,
 } from './world/locations';
-import { canEnterLocation } from './world/progression';
 import {
-  CHEST_DEFS, OpenedChests, getChestsAt, getLocationChests, openChest,
+  OpenedChests,
 } from './world/chests';
-import { QuestProgress, QUEST_DEFS } from './quests/quests';
-import { NpcDialogue, DialogAction, getNpcDialogue } from './quests/npc';
-import { CRAFT_RECIPES, craftItem, getRecipe, learnRecipe } from './craft';
-import { upgradeItemInInventory, upgradeEquippedItem, ProtectMode } from './upgrade';
-import { promoteItemTier } from './tierPromote';
-import { updateAggro, stepAggroEnemies, clearAllAggro } from './aggro';
-import { applyEnchant } from './enchant';
+import { renderTileContent as renderTile } from './game/ui/renderTile';
+import { QuestProgress } from './quests/quests';
+import { NpcDialogue } from './quests/npc';
 import ClassSelectPanel from './classes/ClassSelectPanel';
 import ClassPanel from './classes/ClassPanel';
 import MasteryPanel from './classes/MasteryPanel';
@@ -48,26 +45,14 @@ import TalentPanel from './classes/TalentPanel';
 import ClassSkillBar from './classes/ClassSkillBar';
 import TrialPanel from './classes/TrialPanel';
 import {
-  offerTrialIfEligible,
-  getTrial20ForArchetype,
-  getTrial40ForProfession,
-  completeTrial,
-  applyTrialChoice,
   isTrialReady,
 } from './classes/trials';
-import { getCombatClassSkills, pathResourceLabel } from './classes/classCombatSkills';
-import { SKILLS } from './combat';
+import { pathResourceLabel } from './classes/classCombatSkills';
 import {
-  createClassState,
   createMasteryState,
-  grantClassAndMasteryPoints,
-  chooseProfession,
-  chooseSpecialization,
-  archetypeBaseStats,
   type PlayerClassState,
   type PlayerMasteryState,
 } from './classes/playerClass';
-import type { ArchetypeId } from './classes/classSystem';
 import ShopPanel from './shop/ShopPanel';
 import CraftPanel from './components/CraftPanel';
 import UpgradePanel from './components/UpgradePanel';
@@ -88,36 +73,9 @@ import {
   BossState, BossRewardInfo, normalizeBossState,
 } from './boss/boss';
 import BossVictoryPanel from './boss/BossVictoryPanel';
+import QuestDialogueOverlay from './components/QuestDialogueOverlay';
 
 const INITIAL_PLAYER_LVL = 1;
-
-// ─── HEALER ────────────────────────────────────────────────────────────────
-const HEAL_COST     = 25;
-const FREE_PER_DAY  = 10;
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-function loadHealState() {
-  try {
-    const day  = localStorage.getItem('sb_heal_day');
-    const left = Number(localStorage.getItem('sb_free_heals') ?? FREE_PER_DAY);
-    if (day !== todayKey()) {
-      localStorage.setItem('sb_heal_day', todayKey());
-      localStorage.setItem('sb_free_heals', String(FREE_PER_DAY));
-      return FREE_PER_DAY;
-    }
-    return Math.max(0, left);
-  } catch {
-    return FREE_PER_DAY;
-  }
-}
-
-function getRecoverableXp() {
-  try { return Number(sessionStorage.getItem('sb_recoverable_xp') || '0'); }
-  catch { return 0; }
-}
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 // BaseStats (strength / agility / vitality / intelligence) lives in ./stats
@@ -202,6 +160,24 @@ export default function App() {
   const [bossAppearNotif, setBossAppearNotif] = useState(false);
   const [showBossVictory, setShowBossVictory] = useState(false);
   const [bossRewardInfo, setBossRewardInfo]   = useState<BossRewardInfo | null>(null);
+
+  /** The 7 header panels are mutually exclusive — opening one closes the rest.
+   *  `openPanel(null)` closes all of them. Replaces what used to be 9 separate
+   *  copy-paste call sites each manually toggling all 7 setters. */
+  type PanelKey = 'char' | 'inventory' | 'worldMap' | 'quest' | 'shop' | 'skill' | 'class';
+  const openPanel = useCallback((key: PanelKey | null) => {
+    setShowCharPanel(key === 'char');
+    setShowInventory(key === 'inventory');
+    setShowWorldMap(key === 'worldMap');
+    setShowQuestPanel(key === 'quest');
+    setShowShop(key === 'shop');
+    setShowSkillPanel(key === 'skill');
+    setShowClassPanel(key === 'class');
+    setSelectedItem(null);
+  }, []);
+  const togglePanel = useCallback((key: PanelKey, isCurrentlyOpen: boolean) => {
+    openPanel(isCurrentlyOpen ? null : key);
+  }, [openPanel]);
 
   // ── Refs (initialised from save so callbacks see correct values immediately) ─
   const playerHpRef        = useRef(sv?.playerHp    ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
@@ -316,123 +292,53 @@ const log = useCallback((msg: string) => {
   }, []);
 
   // ── Class / Mastery (см. STEP1_APP.md) ──────────────────────────────────────
-  /** StatBlock (str/agi/int/spi/vit/lck) → BaseStats проекта (нет slots под spi/lck пока). */
-  const mapStatBlockToBaseStats = useCallback((block: { str: number; agi: number; int: number; vit: number }): BaseStats => ({
-    strength:     block.str,
-    agility:      block.agi,
-    vitality:     block.vit,
-    intelligence: block.int,
-  }), []);
-
-  /** Обратный маппер для формул урона навыков (StatBlock). spi/lck пока не отслеживаются игрой — базовое значение 5. */
-  const mapBaseStatsToStatBlock = useCallback((base: BaseStats) => ({
-    str: base.strength,
-    agi: base.agility,
-    int: base.intelligence,
-    vit: base.vitality,
-    spi: 5,
-    lck: 5,
-  }), []);
-
-  const handlePickArchetype = useCallback((id: ArchetypeId) => {
-    const cs = createClassState(id);
-    setClassState(cs);
-    setMasteryState(createMasteryState());
-    setShowClassSelect(false);
-
-    const base = mapStatBlockToBaseStats(archetypeBaseStats(id));
-    statsRef.current = { ...base };
-    setStats({ ...base });
-    log(`Путь выбран: ${id === 'warrior' ? 'Воин' : id === 'ranger' ? 'Следопыт' : id === 'mage' ? 'Маг' : 'Послушник'}`);
-  }, [log, mapStatBlockToBaseStats]);
-
-  const handleLevelUp = useCallback((levelsGained: number) => {
-    if (!classState) return;
-    const r = grantClassAndMasteryPoints(classState, masteryState, levelsGained);
-    setClassState(r.classState);
-    setMasteryState(r.masteryState);
-    r.logs.forEach(log);
-
-    // Испытания 20/40 (см. STEP5_APP.md). playerLevel здесь — значение ДО этого
-    // прироста (стейт ещё не перерендерился), поэтому + levelsGained = новый уровень.
-    const newLevel = playerLevel + levelsGained;
-    const t = offerTrialIfEligible(questProgress, r.classState, newLevel);
-    if (t.offered) {
-      setQuestProgress(t.progress);
-      if (t.log) log(t.log);
-    }
-  }, [classState, masteryState, log, playerLevel, questProgress]);
-
-  // Активные навыки текущего архетипа/профессии (см. STEP4_APP.md).
-  // Фоллбэк на старые SKILLS, пока класс не выбран (showClassSelect ещё не пройден).
-  const classSkills = useMemo(() => {
-    if (!classState) {
-      return SKILLS.map(s => ({ ...s, id: String(s.id), kind: 'active' as const, description: s.name }));
-    }
-    return getCombatClassSkills(
-      classState,
-      playerLevel,
-      mapBaseStatsToStatBlock(stats),
-      equipBonuses?.damage ?? 0,
-    );
-  }, [classState, playerLevel, stats, equipBonuses, mapBaseStatsToStatBlock]);
-
-  // Испытание, доступное сейчас (20 ур. без профессии, либо 40 ур. без специализации).
-  const activeTrial = useMemo(() => {
-    if (!classState) return undefined;
-    if (!classState.profession && playerLevel >= 20) {
-      return getTrial20ForArchetype(classState.archetype);
-    }
-    if (classState.profession && !classState.specialization && playerLevel >= 40) {
-      return getTrial40ForProfession(classState.profession);
-    }
-    return undefined;
-  }, [classState, playerLevel]);
-
-  // ── Stat spending ──────────────────────────────────────────────────────────
-  const spendStat = useCallback((stat: keyof BaseStats) => {
-    if (statPointsRef.current <= 0) return;
-    const newStats = { ...statsRef.current, [stat]: statsRef.current[stat] + 1 };
-    statsRef.current = newStats;
-    setStats(newStats);
-    statPointsRef.current -= 1;
-    setStatPoints(p => p - 1);
-    if (stat === 'vitality') {
-      const newMaxHp = computeStats({
-        base: newStats, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: skillBonusesRef.current,
-      }).maxHp;
-      playerMaxHpRef.current = newMaxHp;
-      setPlayerMaxHp(newMaxHp);
-    }
-  }, []);
-
-  // ── Equipment ─────────────────────────────────────────────────────────────
-  const { equipItem: rawEquipItem, unequipItem } = useEquipment({
-    equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
-    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef,
-    setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
-    setPlayerMaxMp, setPlayerMp, setSelectedItem,
+  const {
+    handlePickArchetype, handleLevelUp, spendStat,
+    classSkills, activeTrial,
+    handleChooseProfession, handleChooseSpecialization, handleTrialChoice,
+  } = useClassProgression({
+    classState, masteryState, playerLevel, questProgress, stats, equipBonuses,
+    statsRef, statPointsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    equipBonusesRef, skillBonusesRef, playerMaxHpRef,
+    setClassState, setMasteryState, setShowClassSelect, setShowTrial, setQuestProgress,
+    setStats, setStatPoints, setPlayerMaxHp,
     log,
   });
 
-  // Тир-гейт: нельзя надеть предмет выше уровня персонажа (см. ITEM_TIERS.md).
-  const equipItem = useCallback((item: Item) => {
-    const check = canEquipItem(item, playerLevelRef.current);
-    if (!check.ok) {
-      log(`Нужен ${check.required} уровень.`);
-      showGateNotif(`🔒 Нужен ${check.required} уровень, чтобы надеть предмет`);
-      return;
-    }
-    rawEquipItem(item);
-  }, [rawEquipItem, log, showGateNotif]);
+  /** DialogueFlags shared by every NPC-dialogue call site (boss first-kill flags,
+   *  inventory, healer state, active trial). `crystalCount` varies per call site
+   *  (sometimes computed against a not-yet-committed inventory), so it stays a param. */
+  const buildDialogueFlags = useCallback((crystalCount: number) => ({
+    fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
+    caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
+    ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
+    swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
+    mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
+    passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
+    iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
+    crystalCount,
+    inventory: inventoryRef.current,
+    freeHealsLeft: loadHealState(),
+    recoverableXp: getRecoverableXp(),
+    healGoldCost: HEAL_COST,
+    activeTrialId: activeTrial?.id,
+    trialReady: activeTrial ? isTrialReady(questProgress, activeTrial.id) : false,
+  }), [activeTrial, questProgress]);
+
+  // ── Equipment ─────────────────────────────────────────────────────────────
+  const { equipItem, unequipItem } = useEquipment({
+    equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef, playerLevelRef,
+    setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
+    setPlayerMaxMp, setPlayerMp, setSelectedItem,
+    log, showGateNotif,
+  });
 
   // ── Shop, consumables, skill-point spending ─────────────────────────────────
-  const { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill } = useEconomy({
+  const { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill, handleQuickPotion } = useEconomy({
     playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
     playerMpRef, playerMaxMpRef,
-    playerPosRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
+    playerPosRef, phaseRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
     levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
     setPlayerGold, setInventory, setPlayerHp, setPlayerMp, setSelectedItem, setSkillProgress,
     setSkillPoints, setPlayerMaxHp, setPlayerMaxMp,
@@ -456,605 +362,41 @@ const log = useCallback((msg: string) => {
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   });
 
-  // ── Location transition ───────────────────────────────────────────────────
-  const handleLocationTransition = useCallback((to: LocationId, spawnAt: { x: number; y: number }) => {
-    if (transitioningRef.current) return;
-    if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
-    if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
-    transitioningRef.current = true;
-    setTransitioning(true);
-    setTimeout(() => {
-      const fresh = makeLocationEnemies(to);
-      currentLocationRef.current  = to;
-      playerPosRef.current        = spawnAt;
-      enemiesRef.current          = fresh;
-      phaseRef.current            = 'explore';
-      activeEnemyIdRef.current    = null;
-      transitioningRef.current    = false;
-      setCurrentLocation(to);
-      setPlayerPos(spawnAt);
-      setEnemies(fresh);
-      setPhase('explore');
-      setActiveEnemyId(null);
-      setShieldActive(false);
-      setSkillsCd({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-      setFloatingNums([]);
-      setTransitioning(false);
-      log(`📍 Вы прибыли: ${LOCATION_META[to].label}`);
-      // Restore full HP when entering a safe zone
-      if (getLocation(to).isSafeZone) {
-        const fullHp = playerMaxHpRef.current;
-        playerHpRef.current = fullHp;
-        setPlayerHp(fullHp);
-        log('💚 Добро пожаловать! HP полностью восстановлено.');
-      }
-    }, 800);
-  }, [log]);
-
-  // ── Movement ─────────────────────────────────────────────────────────────
-  const movePlayer = useCallback((dx: number, dy: number) => {
-    if (phaseRef.current !== 'explore') return;
-    if (transitioningRef.current) return;
-    const { x, y } = playerPosRef.current;
-    const nx = x + dx, ny = y + dy;
-    if (nx < 0 || ny < 0 || nx >= MAP_COLS || ny >= MAP_ROWS) { log('Путь заблокирован!'); return; }
-    const currentMap = LOCATION_MAPS[currentLocationRef.current];
-    const tileType = currentMap[ny]?.[nx] ?? 1;
-    // NPC intercept
-    const npc = (LOCATION_NPCS[currentLocationRef.current] ?? []).find(n => n.x === nx && n.y === ny);
-    if (npc) {
-      // Merchant → open shop (same special-case as the "Говорить" button)
-      if (npc.id === 'merchant') {
-        setShowShop(true);
-        setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowSkillPanel(false);
-        return;
-      }
-      const crystalCount = inventoryRef.current.filter(i => i.key === 'black_crystal').length;
-      const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
-        fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
-        caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
-        ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
-        swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
-        mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
-        passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
-        iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
-        crystalCount,
-        inventory: inventoryRef.current,
-        freeHealsLeft: loadHealState(),
-        recoverableXp: getRecoverableXp(),
-        healGoldCost: HEAL_COST,
-        activeTrialId: activeTrial?.id,
-        trialReady: activeTrial ? isTrialReady(questProgress, activeTrial.id) : false,
-      });
-      if (dlg) { setQuestDialogue(dlg); }
-      else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
-      return;
-    }
-    // Enemy intercept
-    const hitEnemy = enemiesRef.current.find(e => !e.dead && e.x === nx && e.y === ny);
-    if (hitEnemy) {
-      phaseRef.current = 'combat'; activeEnemyIdRef.current = hitEnemy.id;
-      setActiveEnemyId(hitEnemy.id); setPhase('combat');
-      log(`⚔️ Бой с ${hitEnemy.name}!`); return;
-    }
-    // Chest intercept
-    {
-      const chest = getChestsAt(currentLocationRef.current, nx, ny, openedChestsRef.current);
-      if (chest) {
-        const loot = openChest(chest);
-        playerGoldRef.current += loot.gold;
-        setPlayerGold(playerGoldRef.current);
-        if (loot.item) {
-          inventoryRef.current = [...inventoryRef.current, loot.item];
-          setInventory(prev => [...prev, loot.item!]);
-          setLootNotif(loot.item.name);
-          setTimeout(() => setLootNotif(null), 2500);
-        }
-        const nextOpened = { ...openedChestsRef.current, [chest.id]: true };
-        openedChestsRef.current = nextOpened;
-        setOpenedChests(nextOpened);
-        for (const msg of loot.logs) log(msg);
-
-        // Всплывашки над героем (как с мобами).
-        const pp = playerPosRef.current;
-        spawnFloat(`+${loot.gold}💰`, pp.x, pp.y, 'gold');
-        if (loot.item) {
-          setTimeout(() => spawnFloat(`📦 ${loot.item!.name}`, pp.x, pp.y, 'loot'), 200);
-        }
-
-        // встать на клетку сундука
-        playerPosRef.current = { x: nx, y: ny };
-        setPlayerPos({ x: nx, y: ny });
-        return;
-      }
-    }
-    // Exit tile intercept
-    if (tileType === 4) {
-      const exits = LOCATION_EXITS[currentLocationRef.current];
-      const exit = exits?.get(`${nx},${ny}`);
-      if (exit) {
-        const gate = canEnterLocation(exit.to, playerLevelRef.current);
-        if (!gate.ok) {
-          log(`⛔ Нужен ${gate.required} уровень, чтобы войти (у вас ${playerLevelRef.current}).`);
-          showGateNotif(`🔒 Нужен ${gate.required} уровень, чтобы войти в «${LOCATION_META[exit.to].label}»`);
-          return;
-        }
-        // Block Cave → Ruins until Goblin Chief has been defeated for the first time
-        if (currentLocationRef.current === 'wolfcave' && exit.to === 'ruins' && !bossStateRef.current.caveChief.firstKillDone) {
-          log('⚠️ Путь заблокирован! Победите Главаря гоблинов, чтобы пройти в Руины.');
-          showGateNotif('⚠️ Победите Главаря гоблинов, чтобы пройти в Руины');
-          return;
-        }
-        handleLocationTransition(exit.to, exit.spawnAt);
-        return;
-      }
-    }
-    if (tileType !== 0) { log('Путь заблокирован!'); return; }
-    playerPosRef.current = { x: nx, y: ny }; setPlayerPos({ x: nx, y: ny });
-
-    // Аггро: подсветить мобов, оказавшихся в радиусе обнаружения (см. aggro.ts)
-    const aggroed = updateAggro(enemiesRef.current, playerPosRef.current);
-    if (aggroed !== enemiesRef.current) {
-      enemiesRef.current = aggroed;
-      setEnemies(aggroed);
-    }
-  }, [log, showGateNotif, handleLocationTransition, spawnFloat]);
-
-  // ── Floating number cleanup ───────────────────────────────────────────────
-  useEffect(() => {
-    if (floatingNums.length === 0) return;
-    const t = setInterval(() => {
-      const now = Date.now();
-      setFloatingNums(prev => prev.filter(f => now - f.timestamp < 1300));
-    }, 200);
-    return () => clearInterval(t);
-  }, [floatingNums]);
-
-  // ── Aggro chase timer (explore only) — see aggro.ts ─────────────────────────
-  useEffect(() => {
-    if (phase !== 'explore') return;
-    const t = setInterval(() => {
-      const map = LOCATION_MAPS[currentLocationRef.current];
-      const { enemies: next, engageId } = stepAggroEnemies(
-        enemiesRef.current,
-        playerPosRef.current,
-        map,
-      );
-      if (next !== enemiesRef.current) {
-        enemiesRef.current = next;
-        setEnemies(next);
-      }
-      if (engageId != null) {
-        const enemy = next.find(e => e.id === engageId);
-        phaseRef.current = 'combat';
-        activeEnemyIdRef.current = engageId;
-        setActiveEnemyId(engageId);
-        setPhase('combat');
-        if (enemy) log(`⚔️ ${enemy.name} догнал вас!`);
-      }
-    }, 450);
-    return () => clearInterval(t);
-  }, [phase, currentLocation, log]);
-
-  // После победы / поражения / бегства / сброса — снять аггро со всех мобов.
-  useEffect(() => {
-    if (phase !== 'explore') return;
-    const cleared = clearAllAggro(enemiesRef.current);
-    if (cleared !== enemiesRef.current) {
-      enemiesRef.current = cleared;
-      setEnemies(cleared);
-    }
-  }, [phase]);
-
-  // ── World map travel ──────────────────────────────────────────────────────
-  const handleWorldMapTravel = useCallback((to: LocationId) => {
-    if (phaseRef.current !== 'explore') return;
-    if (transitioningRef.current) return;
-    const gate = canEnterLocation(to, playerLevelRef.current);
-    if (!gate.ok) {
-      log(`⛔ Нужен ${gate.required} уровень для «${LOCATION_META[to].label}» (у вас ${playerLevelRef.current}).`);
-      showGateNotif(`🔒 Нужен ${gate.required} уровень, чтобы войти в «${LOCATION_META[to].label}»`);
-      return;
-    }
-    setShowWorldMap(false);
-    handleLocationTransition(to, LOCATION_SPAWN[to]);
-  }, [handleLocationTransition, log, showGateNotif]);
+  const { handleLocationTransition, movePlayer, handleWorldMapTravel } = useWorldMovement({
+    phase, currentLocation, floatingNums,
+    transitioningRef, playerAttackTimeout, enemyAttackTimeout, currentLocationRef, playerPosRef,
+    enemiesRef, phaseRef, activeEnemyIdRef, playerHpRef, playerMaxHpRef, playerLevelRef, playerGoldRef,
+    inventoryRef, questProgressRef, openedChestsRef, bossStateRef,
+    setTransitioning, setCurrentLocation, setPlayerPos, setEnemies, setPhase, setActiveEnemyId,
+    setShieldActive, setSkillsCd, setFloatingNums, setPlayerHp, setPlayerGold, setInventory,
+    setLootNotif, setOpenedChests, setQuestDialogue, setNpcDialog, setShowWorldMap,
+    log, showGateNotif, spawnFloat, openPanel, buildDialogueFlags,
+  });
 
   // ── Quest action handler ──────────────────────────────────────────────────
-  const handleQuestAction = useCallback((action: DialogAction) => {
-    if (action.kind === 'dismiss') { setQuestDialogue(null); return; }
-
-    if (action.kind === 'open_craft') {
-      setQuestDialogue(null);
-      setShowCraft(true);
-      return;
-    }
-
-    if (action.kind === 'open_upgrade') {
-      setQuestDialogue(null);
-      setShowUpgrade(true);
-      return;
-    }
-
-    if (action.kind === 'open_tier') {
-      setQuestDialogue(null);
-      setShowTier(true);
-      return;
-    }
-
-    if (action.kind === 'open_enchant') {
-      setQuestDialogue(null);
-      setShowEnchant(true);
-      return;
-    }
-
-    if (action.kind === 'open_trial') {
-      setQuestDialogue(null);
-      setShowTrial(true);
-      return;
-    }
-
-    if (action.kind === 'heal') {
-      let free = loadHealState();
-      if (free <= 0) {
-        if (playerGoldRef.current < HEAL_COST) {
-          log('💰 Не хватает золота на лечение.');
-          return;
-        }
-        playerGoldRef.current -= HEAL_COST;
-        setPlayerGold(playerGoldRef.current);
-        log(`💚 Лечение за ${HEAL_COST} золота.`);
-      } else {
-        free -= 1;
-        localStorage.setItem('sb_free_heals', String(free));
-        localStorage.setItem('sb_heal_day', todayKey());
-        log(`💚 Бесплатное лечение. Осталось сегодня: ${free}`);
-      }
-
-      // Full HP/MP + clear effects
-      playerHpRef.current = playerMaxHpRef.current;
-      setPlayerHp(playerMaxHpRef.current);
-      playerMpRef.current = playerMaxMpRef.current;
-      setPlayerMp(playerMaxMpRef.current);
-      playerStatusEffectsRef.current = [];
-      setPlayerStatusEffects([]);
-
-      // Restore death XP
-      const rec = getRecoverableXp();
-      if (rec > 0) {
-        playerXpRef.current += rec;
-        setPlayerXp(playerXpRef.current);
-        sessionStorage.setItem('sb_recoverable_xp', '0');
-        log(`✨ Лекарь вернул ${rec} опыта.`);
-      }
-
-      setQuestDialogue(null);
-      return;
-    }
-
-    if (action.kind === 'craft') {
-      const recipe = CRAFT_RECIPES.find(r => r.id === action.recipeId);
-      if (!recipe) { setQuestDialogue(null); return; }
-      const result = craftItem(recipe, inventoryRef.current);
-      if (!result.ok) {
-        log(`⚒️ ${result.reason}`);
-        return;
-      }
-      inventoryRef.current = result.inventory;
-      setInventory(result.inventory);
-      setLootNotif(result.item.name);
-      setTimeout(() => setLootNotif(null), 2500);
-      log(`⚒️ Скрафчено: ${result.item.name}!`);
-      // обновить диалог кузнеца (те же кнопки)
-      const dlg = getNpcDialogue('smith', questProgressRef.current, {
-        fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
-        caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
-        ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
-        swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
-        mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
-        passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
-        iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
-        crystalCount: result.inventory.filter(i => i.key === 'black_crystal').length,
-        inventory: inventoryRef.current,
-        freeHealsLeft: loadHealState(),
-        recoverableXp: getRecoverableXp(),
-        healGoldCost: HEAL_COST,
-        activeTrialId: activeTrial?.id,
-        trialReady: activeTrial ? isTrialReady(questProgress, activeTrial.id) : false,
-      });
-      if (dlg) setQuestDialogue(dlg);
-      return;
-    }
-
-    if (action.kind === 'accept_quest') {
-      const updated: QuestProgress = {
-        ...questProgressRef.current,
-        [action.questId]: { status: 'active' as const, current: 0 },
-      };
-      questProgressRef.current = updated;
-      setQuestProgress(updated);
-      log(`📜 Задание принято: ${QUEST_DEFS[action.questId]?.title ?? action.questId}`);
-      setQuestDialogue(null);
-      return;
-    }
-
-    if (action.kind === 'complete_quest') {
-      const def = QUEST_DEFS[action.questId];
-      if (!def) { setQuestDialogue(null); return; }
-
-      // ── Deliver items: consume from inventory (e.g. turn-in quests) ─────────
-      if (def.deliverItems) {
-        const { key, count } = def.deliverItems;
-        let left = count;
-        const nextInv: Item[] = [];
-        for (const it of inventoryRef.current) {
-          if (it.key === key && left > 0) { left -= 1; continue; }
-          nextInv.push(it);
-        }
-        if (left > 0) {
-          log('Не хватает предметов для сдачи!');
-          return;
-        }
-        inventoryRef.current = nextInv;
-        setInventory(nextInv);
-        log(`📦 Сдано: ${count} × ${ITEM_CATALOG[key]?.name ?? key}`);
-      }
-
-      // ── Gold reward ────────────────────────────────────────────────────────
-      playerGoldRef.current += def.reward.gold;
-      setPlayerGold(playerGoldRef.current);
-      log(`💰 Награда: ${def.reward.gold} золота!`);
-
-      // ── XP reward with level-up logic ──────────────────────────────────────
-      const _questXp = Math.floor(def.reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
-      grantXp(_questXp);
-      log(`✨ Награда: ${_questXp} опыта!`);
-
-      // ── Item rewards (only if not already owned) ───────────────────────────
-      for (const itemKey of def.reward.items ?? []) {
-        if (!inventoryRef.current.some(i => i.key === itemKey)) {
-          const item = makeItem(itemKey);
-          inventoryRef.current = [...inventoryRef.current, item];
-          setInventory(prev => [...prev, item]);
-          log(`🎁 Получен предмет: ${item.name}!`);
-        } else {
-          log(`(У вас уже есть ${ITEM_CATALOG[itemKey]?.name ?? itemKey})`);
-        }
-      }
-
-      // ── Mark completed ─────────────────────────────────────────────────────
-      const updated: QuestProgress = {
-        ...questProgressRef.current,
-        [action.questId]: {
-          status:  'completed' as const,
-          current: questProgressRef.current[action.questId]?.current ?? 0,
-        },
-      };
-      questProgressRef.current = updated;
-      setQuestProgress(updated);
-      log('🏆 Задание завершено!');
-      setQuestDialogue(null);
-    }
-  }, [log, grantXp]);
-
-  // ── NPC interact (called by the nearby-NPC Interact button) ──────────────
-  const handleNpcInteract = useCallback((npc: { id: string; name: string; emoji: string }) => {
-    // Merchant → open shop
-    if (npc.id === 'merchant') {
-      setShowShop(true);
-      setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowSkillPanel(false);
-      return;
-    }
-    // Quest NPCs or generic dialog
-    const crystalCount = inventoryRef.current.filter(i => i.key === 'black_crystal').length;
-    const dlg = getNpcDialogue(npc.id, questProgressRef.current, {
-      fieldBoarFirstKill: bossStateRef.current.fieldBoar?.firstKillDone,
-      caveChiefFirstKill: bossStateRef.current.caveChief?.firstKillDone,
-      ruinsKeeperFirstKill: bossStateRef.current.ruinsKeeper?.firstKillDone,
-      swampHorrorFirstKill: bossStateRef.current.swampHorror?.firstKillDone,
-      mineGuardianFirstKill: bossStateRef.current.mineGuardian?.firstKillDone,
-      passLordFirstKill: bossStateRef.current.passLord?.firstKillDone,
-      iceKingFirstKill: bossStateRef.current.iceKing?.firstKillDone,
-      crystalCount,
-      inventory: inventoryRef.current,
-      freeHealsLeft: loadHealState(),
-      recoverableXp: getRecoverableXp(),
-      healGoldCost: HEAL_COST,
-      activeTrialId: activeTrial?.id,
-      trialReady: activeTrial ? isTrialReady(questProgress, activeTrial.id) : false,
-    });
-    if (dlg) { setQuestDialogue(dlg); }
-    else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }
-  }, []);
+  const { handleQuestAction, handleNpcInteract } = useQuestActions({
+    inventoryRef, playerGoldRef, playerHpRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
+    playerStatusEffectsRef, playerXpRef, questProgressRef, skillBonusesRef,
+    setQuestDialogue, setNpcDialog, setShowCraft, setShowUpgrade, setShowTier, setShowEnchant, setShowTrial,
+    setPlayerGold, setPlayerHp, setPlayerMp, setPlayerStatusEffects, setPlayerXp,
+    setInventory, setLootNotif, setQuestProgress,
+    log, grantXp, openPanel, buildDialogueFlags,
+  });
 
   // ── CraftPanel: craft / learn ───────────────────────────────────────────────
-  const handleCraft = useCallback((recipeId: string) => {
-    const recipe = getRecipe(recipeId);
-    if (!recipe) return;
-    const res = craftItem(recipe, inventoryRef.current);
-    if (!res.ok) { log(res.reason); return; }
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    log(`⚒️ Скрафчено: ${res.item.name}`);
-  }, [log]);
-
-  const handleLearn = useCallback((recipeId: string) => {
-    const recipe = getRecipe(recipeId);
-    if (!recipe) return;
-    const res = learnRecipe(recipe, unlockedRecipes, inventoryRef.current);
-    setUnlockedRecipes(res.unlocked);
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    log(res.msg);
-  }, [log, unlockedRecipes]);
-
-  // ── UpgradePanel: upgrade inventory / equipped item ─────────────────────────
-  const handleUpgradeInv = useCallback((itemId: string, protect: ProtectMode = 'none') => {
-    const res = upgradeItemInInventory(itemId, inventoryRef.current, playerGoldRef.current, protect);
-    if (!res.ok) { log(res.reason); return; }
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    playerGoldRef.current = res.gold;
-    setPlayerGold(res.gold);
-    log(res.msg);
-  }, [log]);
-
-  const handleUpgradeEq = useCallback((slot: string, protect: ProtectMode = 'none') => {
-    const item = equipmentRef.current[slot as keyof Equipment];
-    if (!item) return;
-    const res = upgradeEquippedItem(item, inventoryRef.current, playerGoldRef.current, protect);
-    if (!res.ok) { log(res.reason); return; }
-
-    playerGoldRef.current = res.gold;
-    setPlayerGold(res.gold);
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    log(res.msg);
-
-    let newEquipment: Equipment;
-    if (res.success) {
-      // Успех: ставим улучшенный предмет обратно в слот.
-      newEquipment = { ...equipmentRef.current, [slot]: res.item ?? null };
-    } else if (res.failKind === 'destroy') {
-      // Провал с уничтожением: слот пустеет, предмет потерян.
-      newEquipment = { ...equipmentRef.current, [slot]: null };
-    } else if (res.item) {
-      // Провал (safe/downgrade): предмет остаётся надетым, тот же или ослабленный.
-      newEquipment = { ...equipmentRef.current, [slot]: res.item };
-    } else {
-      return;
-    }
-
-    equipmentRef.current = newEquipment;
-    setEquipment(newEquipment);
-
-    // Пересчитать equipBonuses и производные max HP/MP — как при экипировке.
-    const newBonuses = calcEquipBonuses(newEquipment);
-    equipBonusesRef.current = newBonuses;
-    setEquipBonuses(newBonuses);
-
-    const newStats = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
-    });
-    playerMaxHpRef.current = newStats.maxHp;
-    setPlayerMaxHp(newStats.maxHp);
-    playerMaxMpRef.current = newStats.maxMp;
-    setPlayerMaxMp(newStats.maxMp);
-  }, [log]);
-
-  // ── TierPromotePanel: T1→T6 ──────────────────────────────────────────────
-  const handleTierPromoteInv = useCallback((itemId: string) => {
-    const item = inventoryRef.current.find(i => i.id === itemId);
-    if (!item) return;
-
-    const nextTier = Math.min(6, (item.tier ?? 1) + 1) as ItemTier;
-    const requiredLevel = TIER_LEVEL_RANGE[nextTier].min;
-    if (playerLevelRef.current < requiredLevel) {
-      log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
-      showGateNotif(`🔒 Нужен ${requiredLevel} уровень для тира T${nextTier}`);
-      return;
-    }
-
-    const res = promoteItemTier(item, inventoryRef.current, playerGoldRef.current, true);
-    if (!res.ok) { log(res.reason); return; }
-
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    playerGoldRef.current = res.gold;
-    setPlayerGold(res.gold);
-    log(res.msg);
-  }, [log, showGateNotif]);
-
-  const handleTierPromoteEq = useCallback((slot: string) => {
-    const item = equipmentRef.current[slot as keyof Equipment];
-    if (!item) return;
-
-    const nextTier = Math.min(6, (item.tier ?? 1) + 1) as ItemTier;
-    const requiredLevel = TIER_LEVEL_RANGE[nextTier].min;
-    if (playerLevelRef.current < requiredLevel) {
-      log(`Нужен ${requiredLevel} уровень для тира T${nextTier}.`);
-      showGateNotif(`🔒 Нужен ${requiredLevel} уровень для тира T${nextTier}`);
-      return;
-    }
-
-    const res = promoteItemTier(item, inventoryRef.current, playerGoldRef.current, false);
-    if (!res.ok) { log(res.reason); return; }
-
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    playerGoldRef.current = res.gold;
-    setPlayerGold(res.gold);
-    log(res.msg);
-
-    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: res.item };
-    equipmentRef.current = newEquipment;
-    setEquipment(newEquipment);
-
-    // Пересчитать equipBonuses и производные max HP/MP — как при экипировке.
-    const newBonuses = calcEquipBonuses(newEquipment);
-    equipBonusesRef.current = newBonuses;
-    setEquipBonuses(newBonuses);
-
-    const newStats = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
-    });
-    playerMaxHpRef.current = newStats.maxHp;
-    setPlayerMaxHp(newStats.maxHp);
-    playerMaxMpRef.current = newStats.maxMp;
-    setPlayerMaxMp(newStats.maxMp);
-  }, [log, showGateNotif]);
-
-  // ── EnchantPanel: apply enchant (bag / equipped) ─────────────────────────
-  const handleEnchantInv = useCallback((itemId: string, enchantId: string) => {
-    const item = inventoryRef.current.find(i => i.id === itemId);
-    if (!item) return;
-
-    const res = applyEnchant(item, enchantId, inventoryRef.current, playerGoldRef.current, true);
-    if (!res.ok) { log(res.reason); return; }
-
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    playerGoldRef.current = res.gold;
-    setPlayerGold(res.gold);
-    log(res.msg);
-  }, [log]);
-
-  const handleEnchantEq = useCallback((slot: string, enchantId: string) => {
-    const item = equipmentRef.current[slot as keyof Equipment];
-    if (!item) return;
-
-    const res = applyEnchant(item, enchantId, inventoryRef.current, playerGoldRef.current, false);
-    if (!res.ok) { log(res.reason); return; }
-
-    inventoryRef.current = res.inventory;
-    setInventory(res.inventory);
-    playerGoldRef.current = res.gold;
-    setPlayerGold(res.gold);
-    log(res.msg);
-
-    const newEquipment: Equipment = { ...equipmentRef.current, [slot]: res.item };
-    equipmentRef.current = newEquipment;
-    setEquipment(newEquipment);
-
-    // Пересчитать equipBonuses и производные max HP/MP — как при экипировке.
-    const newBonuses = calcEquipBonuses(newEquipment);
-    equipBonusesRef.current = newBonuses;
-    setEquipBonuses(newBonuses);
-
-    const newStats = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-      bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
-    });
-    playerMaxHpRef.current = newStats.maxHp;
-    setPlayerMaxHp(newStats.maxHp);
-    playerMaxMpRef.current = newStats.maxMp;
-    setPlayerMaxMp(newStats.maxMp);
-  }, [log]);
+  const {
+    handleCraft, handleLearn,
+    handleUpgradeInv, handleUpgradeEq,
+    handleTierPromoteInv, handleTierPromoteEq,
+    handleEnchantInv, handleEnchantEq,
+    applyEquipmentUpdate,
+  } = useItemActions({
+    inventoryRef, playerGoldRef, equipmentRef, equipBonusesRef,
+    statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, skillBonusesRef,
+    playerMaxHpRef, playerMaxMpRef, playerLevelRef, unlockedRecipes,
+    setInventory, setPlayerGold, setEquipment, setEquipBonuses, setPlayerMaxHp, setPlayerMaxMp, setUnlockedRecipes,
+    log, showGateNotif,
+  });
 
   // ── Shop: buy ────────────────────────────────────────────────────────────
 
@@ -1076,125 +418,20 @@ const log = useCallback((msg: string) => {
     setClassState, setMasteryState, setShowClassSelect,
   });
 
-  // ── Derived values ────────────────────────────────────────────────────────
-  const activeEnemy   = activeEnemyId !== null ? enemies.find(e => e.id === activeEnemyId) ?? null : null;
-  const livingEnemies = enemies.filter(e => !e.dead);
-  const xpPct         = Math.min(100, Math.round((playerXp / xpToNext) * 100));
-
-  const POTION_KEYS = ['healing_potion', 'greater_healing_potion', 'raw_meat'] as const;
-  const potionCount = inventory.filter(i => (POTION_KEYS as readonly string[]).includes(i.key)).length;
-  const canUsePotion = phase === 'combat' && potionCount > 0 && playerHp < playerMaxHp;
-
-  // All derived character stats — single source of truth from stats.ts
-  const skillBonuses = calcSkillBonuses(skillProgress);
-  const cs: ComputedStats = computeStats({
-    base: stats, levelHpBonus, levelMpBonus, bonusDmg: playerBonusDmg,
-    equip: equipBonuses, skills: skillBonuses,
+  // ── Derived values (combat/stats/camera/nearby-npc) ─────────────────────────
+  const {
+    activeEnemy, livingEnemies, xpPct, potionCount, canUsePotion, cs,
+    camCol, camRow, currentMap, currentNpcs, nearbyNpc,
+  } = useGameView({
+    activeEnemyId, enemies, playerXp, xpToNext, inventory, phase, playerHp, playerMaxHp,
+    stats, levelHpBonus, levelMpBonus, playerBonusDmg, equipBonuses, skillProgress,
+    playerPos, currentLocation, transitioning,
   });
 
-  // ── Camera / viewport ─────────────────────────────────────────────────────
-  const camCol    = Math.max(0, Math.min(MAP_COLS - VP_COLS, playerPos.x - Math.floor(VP_COLS / 2)));
-  const camRow    = Math.max(0, Math.min(MAP_ROWS - VP_ROWS, playerPos.y - Math.floor(VP_ROWS / 2)));
-  const currentMap = LOCATION_MAPS[currentLocation];
-  const currentNpcs = LOCATION_NPCS[currentLocation] ?? [];
-
-  // Adjacent NPC — shows the Interact button when the player is 1 tile away
-  const nearbyNpc = (phase === 'explore' && !transitioning)
-    ? currentNpcs.find(n =>
-        Math.abs(n.x - playerPos.x) <= 1 &&
-        Math.abs(n.y - playerPos.y) <= 1 &&
-        !(n.x === playerPos.x && n.y === playerPos.y),
-      ) ?? null
-    : null;
-
-  // ── Quick potion (combat) ────────────────────────────────────────────────
-  const handleQuickPotion = useCallback(() => {
-    if (phaseRef.current !== 'combat') return;
-    if (playerHpRef.current >= playerMaxHpRef.current) {
-      log('❤️ HP уже максимально!');
-      return;
-    }
-    const order = ['greater_healing_potion', 'healing_potion', 'raw_meat'];
-    const item = order
-      .map(k => inventoryRef.current.find(i => i.key === k))
-      .find(Boolean);
-    if (!item) {
-      log('🧪 Нет зелий в инвентаре!');
-      return;
-    }
-    handleUseItem(item);
-  }, [log, handleUseItem]);
-
-  // ── Tile renderer ─────────────────────────────────────────────────────────
-  const renderTileContent = (gx: number, gy: number, tileType: number) => {
-    if (gx === playerPos.x && gy === playerPos.y)
-      return <div className="w-full h-full tile-player rounded flex items-center justify-center text-lg z-10 relative">🧝</div>;
-    const enemy = livingEnemies.find(e => e.x === gx && e.y === gy);
-    if (enemy) {
-      const isBoss = enemy.id === BOSS_ID;
-      const rarityDef = !isBoss && enemy.rarity !== 'common' ? ENEMY_RARITY_DEFS[enemy.rarity] : null;
-      return (
-        <div className={[
-          'w-full h-full rounded flex items-center justify-center z-10 relative',
-          isBoss ? 'text-2xl' : 'text-lg',
-          enemy.id === activeEnemyId ? 'tile-enemy' : 'tile-enemy-idle',
-          isBoss ? 'ring-2 ring-red-600/60 ring-inset' : '',
-        ].join(' ')}
-          style={rarityDef ? { boxShadow: `inset 0 0 0 2px ${rarityDef.color}` } : undefined}>
-          {enemy.emoji}
-          {isBoss && (
-            <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[7px] font-black text-red-400 whitespace-nowrap uppercase tracking-wider leading-none pointer-events-none drop-shadow">
-              БОСС
-            </span>
-          )}
-          {rarityDef && (enemy.rarity === 'elite' || enemy.rarity === 'legendary') && (
-            <span className="absolute -top-1 -right-1 text-[10px] leading-none drop-shadow pointer-events-none">
-              {rarityDef.emoji}
-            </span>
-          )}
-        </div>
-      );
-    }
-    const npc = currentNpcs.find(n => n.x === gx && n.y === gy);
-    if (npc) return <div className="w-full h-full tile-npc flex items-center justify-center text-sm">{npc.emoji}</div>;
-    const chestHere = getLocationChests(currentLocation, openedChests)
-      .find(c => c.x === gx && c.y === gy);
-    if (chestHere) {
-      return (
-        <div className="w-full h-full flex items-center justify-center text-sm" title={chestHere.opened ? 'Пустой сундук' : 'Сундук'}>
-          {chestHere.opened ? '📭' : '📦'}
-        </div>
-      );
-    }
-    if (tileType === 4) {
-      // Look up which destination this exit leads to, then render themed tile.
-      const exitDef = LOCATION_EXITS[currentLocation]?.get(`${gx},${gy}`);
-      const dest    = exitDef?.to;
-      const src     = currentLocation;
-      // Dirt road: Village ↔ Forest
-      if ((src === 'village' && dest === 'forest') || (src === 'forest' && dest === 'village'))
-        return <div className="w-full h-full tile-exit-road  flex items-center justify-center text-sm" title="Дорога в лес">🛤️</div>;
-      // Cave entrance / exit: Forest ↔ Wolfcave
-      if (src === 'forest' && dest === 'wolfcave')
-        return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Вход в пещеру">🕳️</div>;
-      if (src === 'wolfcave' && dest === 'forest')
-        return <div className="w-full h-full tile-exit-cave  flex items-center justify-center text-sm" title="Выход из пещеры">⛰️</div>;
-      // Stone stairs / ruined gate: Wolfcave ↔ Ruins
-      if (src === 'wolfcave' && dest === 'ruins')
-        return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Врата руин">🏛️</div>;
-      if (src === 'ruins' && dest === 'wolfcave')
-        return <div className="w-full h-full tile-exit-ruins flex items-center justify-center text-sm" title="Разрушенная лестница">🪜</div>;
-      // Wooden bridge / muddy path: Forest ↔ Swamp
-      if ((src === 'forest' && dest === 'swamp') || (src === 'swamp' && dest === 'forest'))
-        return <div className="w-full h-full tile-exit-bridge flex items-center justify-center text-sm" title="Мост в болото">🌉</div>;
-      // Fallback — should never be reached with current map data
-      return <div className="w-full h-full tile-exit flex items-center justify-center text-sm">🚪</div>;
-    }
-    if (tileType === 1) return <div className="w-full h-full tile-tree  flex items-center justify-center text-sm">🌲</div>;
-    if (tileType === 2) return <div className="w-full h-full tile-rock  flex items-center justify-center text-sm">🪨</div>;
-    if (tileType === 3) return <div className="w-full h-full tile-water flex items-center justify-center text-blue-400 text-xs font-bold tracking-tighter opacity-80">〰</div>;
-    return <div className="w-full h-full tile-grass" />;
-  };
+  // ── Tile renderer — logic lives in game/ui/renderTile.tsx; this closure just
+  //    supplies the current state (GameMap calls it as (gx, gy, tileType)). ───
+  const renderTileContent = (gx: number, gy: number, tileType: number) =>
+    renderTile({ gx, gy, tileType, playerPos, livingEnemies, activeEnemyId, currentLocation, currentNpcs, openedChests });
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -1234,12 +471,12 @@ const log = useCallback((msg: string) => {
         showQuestPanel={showQuestPanel}
         showSkillPanel={showSkillPanel}
         showClassPanel={showClassPanel}
-        onToggleCharPanel={() => { setShowCharPanel(v => !v); setShowInventory(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
-        onToggleInventory={() => { setShowInventory(v => !v); setShowCharPanel(false); setShowWorldMap(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
-        onToggleWorldMap={() => { setShowWorldMap(v => !v); setShowCharPanel(false); setShowInventory(false); setShowQuestPanel(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
-        onToggleQuestPanel={() => { setShowQuestPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowSkillPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
-        onToggleSkillPanel={() => { setShowSkillPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setShowClassPanel(false); setSelectedItem(null); }}
-        onToggleClassPanel={() => { setShowClassPanel(v => !v); setShowCharPanel(false); setShowInventory(false); setShowWorldMap(false); setShowShop(false); setShowQuestPanel(false); setShowSkillPanel(false); setSelectedItem(null); }}
+        onToggleCharPanel={() => togglePanel('char', showCharPanel)}
+        onToggleInventory={() => togglePanel('inventory', showInventory)}
+        onToggleWorldMap={() => togglePanel('worldMap', showWorldMap)}
+        onToggleQuestPanel={() => togglePanel('quest', showQuestPanel)}
+        onToggleSkillPanel={() => togglePanel('skill', showSkillPanel)}
+        onToggleClassPanel={() => togglePanel('class', showClassPanel)}
       />
 
       {/* ══ 2. MAP ══ */}
@@ -1282,59 +519,11 @@ const log = useCallback((msg: string) => {
           )}
 
           {questDialogue && (
-            <div
-              className="absolute inset-0 z-[70] bg-black/85 flex flex-col justify-end rounded px-3 pb-3 pt-8 backdrop-blur-[2px]"
-              onClick={() => setQuestDialogue(null)}
-            >
-              <div
-                className="w-full bg-[#0d0d16] border border-tile-border/80 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92%]"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-[#111118] border-b border-tile-border/60 shrink-0">
-                  <span className="text-xl leading-none">{questDialogue.emoji}</span>
-                  <span className="text-sm font-bold text-primary tracking-wide flex-1">{questDialogue.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setQuestDialogue(null)}
-                    className="w-8 h-8 rounded-lg border border-tile-border bg-[#1a1a24] text-[#aaa] text-sm font-bold active:scale-95"
-                    aria-label="Закрыть"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {/* Текст + кнопки В ОДНОМ скролле */}
-                <div className="overflow-y-auto min-h-0 flex-1 overscroll-contain">
-                  <div className="px-4 py-3 space-y-1">
-                    {questDialogue.lines.map((line, i) => (
-                      <p key={i} className="text-[12px] text-[#ccc] leading-relaxed italic">
-                        {i === 0 && '«'}{line}{i === questDialogue.lines.length - 1 && '»'}
-                      </p>
-                    ))}
-                  </div>
-                  <div className="px-4 pb-3 pt-1 flex flex-col gap-[6px] border-t border-tile-border/40">
-                    {questDialogue.buttons.map((btn, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        disabled={!!btn.disabled}
-                        onClick={() => { if (!btn.disabled) handleQuestAction(btn.action); }}
-                        className={`w-full py-2.5 rounded-lg border font-bold text-[12px] active:scale-95 transition-transform ${
-                          btn.disabled
-                            ? 'border-tile-border bg-[#0a0a10] text-[#444] opacity-60 cursor-not-allowed'
-                            : btn.primary
-                              ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_rgba(200,150,42,0.2)]'
-                              : 'border-tile-border bg-[#111118] text-[#ccc]'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <QuestDialogueOverlay
+              dialogue={questDialogue}
+              onClose={() => setQuestDialogue(null)}
+              onAction={handleQuestAction}
+            />
           )}
 
           {/* Loot notification toast */}
@@ -1521,16 +710,8 @@ const log = useCallback((msg: string) => {
                 setShowClassPanel(false);
                 setShowMastery(true);
               }}
-              onChooseProfession={(pid) => {
-                const r = chooseProfession(classState, pid as any, playerLevel);
-                if (r.error) log(r.error);
-                else { setClassState(r.state); log('Профессия получена!'); }
-              }}
-              onChooseSpec={(sid) => {
-                const r = chooseSpecialization(classState, sid as any, playerLevel);
-                if (r.error) log(r.error);
-                else { setClassState(r.state); log('Специализация получена!'); }
-              }}
+              onChooseProfession={handleChooseProfession}
+              onChooseSpec={handleChooseSpecialization}
             />
           )}
 
@@ -1555,16 +736,7 @@ const log = useCallback((msg: string) => {
               progress={questProgress}
               canChoose={isTrialReady(questProgress, activeTrial.id)}
               onClose={() => setShowTrial(false)}
-              onChoose={(unlockId) => {
-                const done = completeTrial(questProgress, classState, activeTrial.id, playerLevel);
-                setQuestProgress(done.progress);
-
-                const applied = applyTrialChoice(done.classState, unlockId, activeTrial.tier, playerLevel);
-                if (applied.error) { log(applied.error); return; }
-                setClassState(applied.classState);
-                if (applied.log) log(applied.log);
-                setShowTrial(false);
-              }}
+              onChoose={handleTrialChoice}
             />
           )}
 
