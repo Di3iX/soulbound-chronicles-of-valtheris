@@ -1,8 +1,9 @@
 import { useCallback } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import { Item } from '../inventory';
+import { Item, canEquipItem } from '../inventory';
 import { Equipment, EquipBonuses, calcEquipBonuses } from '../equipment';
-import { BaseStats, SkillBonuses, computeStats } from '../stats';
+import { BaseStats, computeStats } from '../stats';
+import type { SkillBonuses } from '../skills/skillTree';
 
 export interface EquipmentCtx {
   equipmentRef:    MutableRefObject<Equipment>;
@@ -16,6 +17,7 @@ export interface EquipmentCtx {
   playerHpRef:     MutableRefObject<number>;
   playerMaxMpRef:  MutableRefObject<number>;
   playerMpRef:     MutableRefObject<number>;
+  playerLevelRef:  MutableRefObject<number>;
 
   setEquipment:    (v: Equipment) => void;
   setInventory:    Dispatch<SetStateAction<Item[]>>;
@@ -27,19 +29,20 @@ export interface EquipmentCtx {
   setSelectedItem: (v: Item | null) => void;
 
   log: (msg: string) => void;
+  showGateNotif: (msg: string) => void;
 }
 
 /** Equip/unequip: swaps gear, recalcs equipment bonuses and max HP/MP from scratch each time (no double-counting). */
 export function useEquipment(ctx: EquipmentCtx) {
   const {
     equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
-    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef,
+    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef, playerLevelRef,
     setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
     setPlayerMaxMp, setPlayerMp, setSelectedItem,
-    log,
+    log, showGateNotif,
   } = ctx;
 
-  const equipItem = useCallback((item: Item) => {
+  const rawEquipItem = useCallback((item: Item) => {
     // Rings are the only type with more than one slot: fill an empty ring slot
     // first, falling back to replacing ring1 if both are already occupied.
     const slot: keyof Equipment = item.type === 'ring'
@@ -150,6 +153,17 @@ export function useEquipment(ctx: EquipmentCtx) {
     setSelectedItem(null);
     log(`📤 Снято: ${item.name}`);
   }, [log]);
+
+  // Тир-гейт: нельзя надеть предмет выше уровня персонажа (см. ITEM_TIERS.md).
+  const equipItem = useCallback((item: Item) => {
+    const check = canEquipItem(item, playerLevelRef.current);
+    if (!check.ok) {
+      log(`Нужен ${check.required} уровень.`);
+      showGateNotif(`🔒 Нужен ${check.required} уровень, чтобы надеть предмет`);
+      return;
+    }
+    rawEquipItem(item);
+  }, [rawEquipItem, log, showGateNotif]);
 
   return { equipItem, unequipItem };
 }

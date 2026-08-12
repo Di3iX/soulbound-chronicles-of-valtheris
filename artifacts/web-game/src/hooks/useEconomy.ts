@@ -7,6 +7,7 @@ import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL, CONSUMABLE_MANA } from '../
 import { ALL_SKILLS_MAP } from '../skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from '../skills/skillTree';
 import { FloatingNum } from '../types/ui';
+import type { Phase } from '../combat';
 
 export interface EconomyCtx {
   playerGoldRef:     MutableRefObject<number>;
@@ -18,6 +19,7 @@ export interface EconomyCtx {
   playerMpRef:       MutableRefObject<number>;
   playerMaxMpRef:    MutableRefObject<number>;
   playerPosRef:      MutableRefObject<{ x: number; y: number }>;
+  phaseRef:          MutableRefObject<Phase>;
   skillProgressRef:  MutableRefObject<SkillProgress>;
   skillPointsRef:    MutableRefObject<number>;
   skillBonusesRef:   MutableRefObject<SkillBonuses>;
@@ -49,7 +51,7 @@ export function useEconomy(ctx: EconomyCtx) {
   const {
     playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
     playerMpRef, playerMaxMpRef,
-    playerPosRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
+    playerPosRef, phaseRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
     levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
     setPlayerGold, setInventory, setPlayerHp, setPlayerMp, setSelectedItem, setSkillProgress,
     setSkillPoints, setPlayerMaxHp, setPlayerMaxMp,
@@ -165,5 +167,24 @@ export function useEconomy(ctx: EconomyCtx) {
     log(`⬆️ ${def.name}: уровень ${newLevel}`);
   }, [log]);
 
-  return { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill };
+  // ── Quick potion (combat) — thin wrapper around handleUseItem that auto-picks
+  //    the best available potion, for the one-tap heal button during a fight. ─
+  const handleQuickPotion = useCallback(() => {
+    if (phaseRef.current !== 'combat') return;
+    if (playerHpRef.current >= playerMaxHpRef.current) {
+      log('❤️ HP уже максимально!');
+      return;
+    }
+    const order = ['greater_healing_potion', 'healing_potion', 'raw_meat'];
+    const item = order
+      .map(k => inventoryRef.current.find(i => i.key === k))
+      .find(Boolean);
+    if (!item) {
+      log('🧪 Нет зелий в инвентаре!');
+      return;
+    }
+    handleUseItem(item);
+  }, [log, handleUseItem]);
+
+  return { handleShopBuy, handleShopSell, handleUseItem, handleUpgradeSkill, handleQuickPotion };
 }
