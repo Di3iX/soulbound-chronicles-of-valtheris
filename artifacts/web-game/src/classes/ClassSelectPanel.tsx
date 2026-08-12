@@ -4,9 +4,8 @@
  */
 import {
   ARCHETYPE_LIST,
-  type ArchetypeId,
 } from './playerClass';
-import { ALL_PATHS } from './classSystem';
+import { ALL_PATHS, type ArchetypeId } from './classSystem';
 
 interface Props {
   onSelect: (archetype: ArchetypeId) => void;
