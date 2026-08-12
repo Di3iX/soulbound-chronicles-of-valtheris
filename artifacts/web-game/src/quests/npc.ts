@@ -4,7 +4,7 @@ import {
   getQuestEntry, QUEST_DEFS, canOfferQuest, isQuestCompleted,
 } from './quests';
 import type { Item } from '../inventory';
-import { CRAFT_RECIPES, canCraft, recipeRequirementsText } from '../craft';
+import { CRAFT_RECIPES, canCraft, recipeRequirementsText } from '../items/craft';
 
 export type DialogAction =
   | { kind: 'accept_quest';   questId: string }
