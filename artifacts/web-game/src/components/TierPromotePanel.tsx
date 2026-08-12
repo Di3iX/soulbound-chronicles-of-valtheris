@@ -7,7 +7,7 @@ import {
 import type { Equipment } from '../equipment';
 import {
   canPromoteTier, previewTierPromote, TIER_STAT_MULT,
-} from '../tierPromote';
+} from '../items/tierPromote';
 
 interface Props {
   inventory: Item[];

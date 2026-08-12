@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import type { Item } from '../inventory';
 import { itemDisplayName, formatBonuses, RARITY_STYLE, formatAffixes } from '../inventory';
 import type { Equipment } from '../equipment';
-import { ENCHANT_DEFS, enchantsForItem, type EnchantDef } from '../enchant';
+import { ENCHANT_DEFS, enchantsForItem, type EnchantDef } from '../items/enchant';
 
 interface Props {
   inventory: Item[];

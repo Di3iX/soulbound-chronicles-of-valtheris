@@ -6,7 +6,7 @@ import type { Equipment } from '../equipment';
 import {
   MAX_UPGRADE_LEVEL, canUpgradeItem, previewUpgrade,
   type ProtectMode, PROTECT_LABEL, PROTECT_ITEM_KEY,
-} from '../upgrade';
+} from '../items/upgrade';
 
 interface Props {
   inventory: Item[];

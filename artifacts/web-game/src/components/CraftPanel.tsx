@@ -7,7 +7,7 @@ import {
   CRAFT_RECIPES, CRAFT_TAB_LABEL, RECIPE_RARITY_STYLE, CraftTab, CraftRecipe,
   canCraft, isRecipeUnlocked, recipeRequirementsText, recipeTab,
   type UnlockedRecipes,
-} from '../craft';
+} from '../items/craft';
 
 interface Props {
   inventory: Item[];
