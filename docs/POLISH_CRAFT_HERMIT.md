@@ -1,7 +1,7 @@
 # Полировка: крафт + отшельник
 
 ## Файлы
-- `src/craft/craft.ts` или `src/craft.ts`
+- `src/items/craft.ts`
 - `src/quests/quests.ts`
 - `src/quests/npc.ts`
 
