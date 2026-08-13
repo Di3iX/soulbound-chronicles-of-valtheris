@@ -10,7 +10,7 @@ import {
 } from '../combat';
 import { Item, DROP_TABLES, makeItem } from '../inventory';
 import { EquipBonuses } from '../equipment';
-import { BaseStats, computeStats } from '../stats';
+import { BaseStats, computeStats, type MasteryBonuses } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
 import { QuestProgress, trackKillForQuests } from '../quests/quests';
 import type { CombatReadySkill } from '../classes/classCombatSkills';
@@ -22,7 +22,7 @@ import {
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
 import type { PlayerMasteryState } from '../classes/playerClass';
-import { sumMasteryBonuses } from '../classes/masteryConstellation';
+import { scaleXp, scaleGold, lifestealHeal, masteryFromState } from '../classes/masteryCombat';
 
 export interface CombatCtx {
   // ── Reactive state (read each render; needed for effect deps / checks) ────
@@ -57,7 +57,7 @@ export interface CombatCtx {
   skillPointsRef:    MutableRefObject<number>;
   statPointsRef:     MutableRefObject<number>;
   statsRef:          MutableRefObject<BaseStats>;
-  masteryStateRef:   MutableRefObject<PlayerMasteryState>;
+  masteryStateRef?:  MutableRefObject<PlayerMasteryState>;
 
   // ── Shared functions (already-memoized, stable across renders) ────────────
   log: (msg: string) => void;
@@ -122,6 +122,19 @@ export function useCombat(ctx: CombatCtx) {
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   } = ctx;
 
+  // ── Mastery Constellation bonuses (see STEP7_COMBAT_MASTERY.md) ────────────
+  const masteryBag = (): MasteryBonuses => masteryFromState(masteryStateRef?.current);
+
+  const statsWithMastery = () => computeStats({
+    base: statsRef.current,
+    levelHpBonus: levelHpBonusRef.current,
+    levelMpBonus: levelMpBonusRef.current,
+    bonusDmg: playerBonusDmgRef.current,
+    equip: equipBonusesRef.current,
+    skills: skillBonusesRef.current,
+    mastery: masteryBag(),
+  });
+
   // ── Loot drop (called from applyRewards) ──────────────────────────────────
   const rollLoot = useCallback((enemyName: string, itemChanceBonus = 0, guaranteed = false): Item | undefined => {
     const table = DROP_TABLES[enemyName];
@@ -151,7 +164,7 @@ export function useCombat(ctx: CombatCtx) {
     const newStats = computeStats({
       base: statsRef.current, levelHpBonus: result.levelHpBonus, levelMpBonus: result.levelMpBonus,
       bonusDmg: result.bonusDmg, equip: equipBonusesRef.current,
-      skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
+      skills: skillBonusesRef.current, mastery: masteryBag(),
     });
     const newMaxHp = newStats.maxHp;
     const newMaxMp = newStats.maxMp;
@@ -197,11 +210,19 @@ export function useCombat(ctx: CombatCtx) {
     const rarityDef = ENEMY_RARITY_DEFS[rarity];
 
     const baseGold = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
-    const goldGained = Math.round(baseGold * rarityDef.goldMult);
+    const mb = masteryBag();
+    const goldGained = scaleGold(
+      Math.round(baseGold * rarityDef.goldMult),
+      mb,
+    );
     playerGoldRef.current += goldGained;
     setPlayerGold(playerGoldRef.current);
 
-    const xpGained = Math.floor(reward.xp * rarityDef.xpMult * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    const xpGained = scaleXp(
+      reward.xp * rarityDef.xpMult,
+      skillBonusesRef.current.xpBonusPct,
+      mb,
+    );
 
     if (rarity !== 'common') {
       log(`${rarityDef.emoji} ${rarityDef.label} противник повержен!`);
@@ -261,12 +282,14 @@ export function useCombat(ctx: CombatCtx) {
     log(`${cfg.def.emoji} ${cfg.def.name} повержен!`);
 
     // Gold
-    playerGoldRef.current += cfg.reward.gold;
+    const mb = masteryBag();
+    const goldGained = scaleGold(cfg.reward.gold, mb);
+    playerGoldRef.current += goldGained;
     setPlayerGold(playerGoldRef.current);
-    log(`💰 Получено ${cfg.reward.gold} золота!`);
+    log(`💰 Получено ${goldGained} золота!`);
 
-    // XP with Wisdom bonus
-    const xpGained = Math.floor(cfg.reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+    // XP with Wisdom + mastery bonus
+    const xpGained = scaleXp(cfg.reward.xp, skillBonusesRef.current.xpBonusPct, mb);
     log(`✨ Получено ${xpGained} опыта!`);
 
     const { leveledUp, level: newLevel } = grantXp(xpGained);
@@ -304,7 +327,7 @@ export function useCombat(ctx: CombatCtx) {
     // Show boss victory overlay
     setActiveEnemyId(null);
     activeEnemyIdRef.current = null;
-    setBossRewardInfo({ xp: xpGained, gold: cfg.reward.gold, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
+    setBossRewardInfo({ xp: xpGained, gold: goldGained, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
     setShowBossVictory(true);
 
     {
@@ -322,15 +345,12 @@ export function useCombat(ctx: CombatCtx) {
 
   // ── Enemy death ──────────────────────────────────────────────────────────
   const handleEnemyDeath = useCallback((id: number, ex: number, ey: number, name: string, rarity: EnemyRarity) => {
-    phaseRef.current = 'victory';
     if (playerAttackTimeout.current) { clearTimeout(playerAttackTimeout.current); playerAttackTimeout.current = null; }
     if (enemyAttackTimeout.current)  { clearTimeout(enemyAttackTimeout.current);  enemyAttackTimeout.current  = null; }
 
     const deadAt = Date.now();
     enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e);
     setEnemies(prev => prev.map(e => e.id === id ? { ...e, dead: true, hp: 0, deadAt } : e));
-    playerPosRef.current = { x: ex, y: ey };
-    setPlayerPos({ x: ex, y: ey });
     log(`💀 ${name} повержен!`);
 
     // Boss intercept — rewards and victory handled separately
@@ -378,11 +398,7 @@ export function useCombat(ctx: CombatCtx) {
       }
 
       // Compute all character stats from central module (pure, cheap)
-      const _cs = computeStats({
-        base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
-      });
+      const _cs = statsWithMastery();
       let dmg = Math.floor(Math.random() * (_cs.dmgMax - _cs.dmgMin + 1)) + _cs.dmgMin;
       const isCrit = Math.random() * 100 < _cs.critChance;
       if (isCrit) dmg = Math.floor(dmg * _cs.critDamageMult);
@@ -396,6 +412,15 @@ export function useCombat(ctx: CombatCtx) {
       const resistNote = dmg !== rawDmg ? (dmg < rawDmg ? ' (резист)' : ' (слабость)') : '';
       log(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона${resistNote}!`);
 
+      // Vampirism — heal from damage dealt (Constellation: Вампиризм)
+      const heal = lifestealHeal(dmg, masteryBag());
+      if (heal > 0) {
+        const next = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
+        playerHpRef.current = next;
+        setPlayerHp(next);
+        spawnFloat(`+${heal}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
+      }
+
       if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity); return; }
 
       // Same stats as above — nothing changed them in between, so no need to recompute.
@@ -405,11 +430,7 @@ export function useCombat(ctx: CombatCtx) {
       }
     };
 
-    const _firstCs = computeStats({
-      base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-      bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-      skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
-    });
+    const _firstCs = statsWithMastery();
     playerAttackTimeout.current = setTimeout(doPlayerAttack, _firstCs.attackInterval);
 
     const doEnemyAttack = () => {
@@ -427,11 +448,7 @@ export function useCombat(ctx: CombatCtx) {
       }
 
       // Compute defensive stats
-      const _defCs = computeStats({
-        base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
-      });
+      const _defCs = statsWithMastery();
       const pp = playerPosRef.current;
 
       // Dodge check
@@ -704,6 +721,16 @@ export function useCombat(ctx: CombatCtx) {
           setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
           spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
           log(`${skill.emoji} ${skill.name} (${DAMAGE_TYPE_LABEL[skill.damageType]}): ${dmg} урона${skNote}!`);
+
+          // Vampirism — heal from damage dealt (Constellation: Вампиризм)
+          const heal = lifestealHeal(dmg, masteryBag());
+          if (heal > 0) {
+            const next = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
+            playerHpRef.current = next;
+            setPlayerHp(next);
+            spawnFloat(`+${heal}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
+          }
+
           if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity);
         }
       }
