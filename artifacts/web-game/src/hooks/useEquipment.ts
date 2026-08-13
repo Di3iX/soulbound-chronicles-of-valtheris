@@ -4,6 +4,8 @@ import { Item, canEquipItem } from '../inventory';
 import { Equipment, EquipBonuses, calcEquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import type { SkillBonuses } from '../skills/skillTree';
+import type { PlayerMasteryState } from '../classes/playerClass';
+import { sumMasteryBonuses } from '../classes/masteryConstellation';
 
 export interface EquipmentCtx {
   equipmentRef:    MutableRefObject<Equipment>;
@@ -13,6 +15,7 @@ export interface EquipmentCtx {
   levelMpBonusRef: MutableRefObject<number>;
   playerBonusDmgRef: MutableRefObject<number>;
   skillBonusesRef: MutableRefObject<SkillBonuses>;
+  masteryStateRef: MutableRefObject<PlayerMasteryState>;
   playerMaxHpRef:  MutableRefObject<number>;
   playerHpRef:     MutableRefObject<number>;
   playerMaxMpRef:  MutableRefObject<number>;
@@ -36,7 +39,7 @@ export interface EquipmentCtx {
 export function useEquipment(ctx: EquipmentCtx) {
   const {
     equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
-    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef, playerLevelRef,
+    skillBonusesRef, masteryStateRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef, playerLevelRef,
     setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
     setPlayerMaxMp, setPlayerMp, setSelectedItem,
     log, showGateNotif,
@@ -71,7 +74,7 @@ export function useEquipment(ctx: EquipmentCtx) {
     const newStats = computeStats({
       base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
+      skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
     });
     const newMaxHp = newStats.maxHp;
     const newMaxMp = newStats.maxMp;
@@ -121,7 +124,7 @@ export function useEquipment(ctx: EquipmentCtx) {
     const newStats = computeStats({
       base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
+      skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
     });
     const newMaxHp = newStats.maxHp;
     const newMaxMp = newStats.maxMp;

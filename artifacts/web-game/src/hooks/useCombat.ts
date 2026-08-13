@@ -21,6 +21,8 @@ import {
   ALL_BOSS_IDS,
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
+import type { PlayerMasteryState } from '../classes/playerClass';
+import { sumMasteryBonuses } from '../classes/masteryConstellation';
 
 export interface CombatCtx {
   // ── Reactive state (read each render; needed for effect deps / checks) ────
@@ -55,6 +57,7 @@ export interface CombatCtx {
   skillPointsRef:    MutableRefObject<number>;
   statPointsRef:     MutableRefObject<number>;
   statsRef:          MutableRefObject<BaseStats>;
+  masteryStateRef:   MutableRefObject<PlayerMasteryState>;
 
   // ── Shared functions (already-memoized, stable across renders) ────────────
   log: (msg: string) => void;
@@ -110,7 +113,7 @@ export function useCombat(ctx: CombatCtx) {
     levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
-    shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
+    shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef, masteryStateRef,
     log, spawnFloat, onLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory,
@@ -148,7 +151,7 @@ export function useCombat(ctx: CombatCtx) {
     const newStats = computeStats({
       base: statsRef.current, levelHpBonus: result.levelHpBonus, levelMpBonus: result.levelMpBonus,
       bonusDmg: result.bonusDmg, equip: equipBonusesRef.current,
-      skills: skillBonusesRef.current,
+      skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
     });
     const newMaxHp = newStats.maxHp;
     const newMaxMp = newStats.maxMp;
@@ -378,7 +381,7 @@ export function useCombat(ctx: CombatCtx) {
       const _cs = computeStats({
         base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: skillBonusesRef.current,
+        skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
       });
       let dmg = Math.floor(Math.random() * (_cs.dmgMax - _cs.dmgMin + 1)) + _cs.dmgMin;
       const isCrit = Math.random() * 100 < _cs.critChance;
@@ -405,7 +408,7 @@ export function useCombat(ctx: CombatCtx) {
     const _firstCs = computeStats({
       base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-      skills: skillBonusesRef.current,
+      skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
     });
     playerAttackTimeout.current = setTimeout(doPlayerAttack, _firstCs.attackInterval);
 
@@ -427,7 +430,7 @@ export function useCombat(ctx: CombatCtx) {
       const _defCs = computeStats({
         base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: skillBonusesRef.current,
+        skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
       });
       const pp = playerPosRef.current;
 

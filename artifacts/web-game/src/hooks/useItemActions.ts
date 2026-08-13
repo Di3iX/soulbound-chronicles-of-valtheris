@@ -15,6 +15,8 @@ import { getRecipe, craftItem, learnRecipe } from '../items/craft';
 import { upgradeItemInInventory, upgradeEquippedItem, type ProtectMode } from '../items/upgrade';
 import { promoteItemTier } from '../items/tierPromote';
 import { applyEnchant } from '../items/enchant';
+import type { PlayerMasteryState } from '../classes/playerClass';
+import { sumMasteryBonuses } from '../classes/masteryConstellation';
 
 export interface ItemActionsCtx {
   inventoryRef:      MutableRefObject<Item[]>;
@@ -26,6 +28,7 @@ export interface ItemActionsCtx {
   levelMpBonusRef:   MutableRefObject<number>;
   playerBonusDmgRef: MutableRefObject<number>;
   skillBonusesRef:   MutableRefObject<SkillBonuses>;
+  masteryStateRef:   MutableRefObject<PlayerMasteryState>;
   playerMaxHpRef:    MutableRefObject<number>;
   playerMaxMpRef:    MutableRefObject<number>;
   playerLevelRef:    MutableRefObject<number>;
@@ -46,7 +49,7 @@ export interface ItemActionsCtx {
 export function useItemActions(ctx: ItemActionsCtx) {
   const {
     inventoryRef, playerGoldRef, equipmentRef, equipBonusesRef,
-    statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, skillBonusesRef,
+    statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, skillBonusesRef, masteryStateRef,
     playerMaxHpRef, playerMaxMpRef, playerLevelRef, unlockedRecipes,
     setInventory, setPlayerGold, setEquipment, setEquipBonuses, setPlayerMaxHp, setPlayerMaxMp, setUnlockedRecipes,
     log, showGateNotif,
@@ -97,7 +100,7 @@ export function useItemActions(ctx: ItemActionsCtx) {
     const newStats = computeStats({
       base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
-      skills: skillBonusesRef.current,
+      skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
     });
     playerMaxHpRef.current = newStats.maxHp;
     setPlayerMaxHp(newStats.maxHp);

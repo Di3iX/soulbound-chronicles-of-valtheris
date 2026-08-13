@@ -8,6 +8,8 @@ import { ALL_SKILLS_MAP } from '../skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from '../skills/skillTree';
 import { FloatingNum } from '../types/ui';
 import type { Phase } from '../combat';
+import type { PlayerMasteryState } from '../classes/playerClass';
+import { sumMasteryBonuses } from '../classes/masteryConstellation';
 
 export interface EconomyCtx {
   playerGoldRef:     MutableRefObject<number>;
@@ -27,6 +29,7 @@ export interface EconomyCtx {
   levelHpBonusRef:   MutableRefObject<number>;
   levelMpBonusRef:   MutableRefObject<number>;
   playerBonusDmgRef: MutableRefObject<number>;
+  masteryStateRef:   MutableRefObject<PlayerMasteryState>;
 
   setPlayerGold:    (v: number) => void;
   setInventory:     Dispatch<SetStateAction<Item[]>>;
@@ -52,7 +55,7 @@ export function useEconomy(ctx: EconomyCtx) {
     playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
     playerMpRef, playerMaxMpRef,
     playerPosRef, phaseRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
-    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, masteryStateRef,
     setPlayerGold, setInventory, setPlayerHp, setPlayerMp, setSelectedItem, setSkillProgress,
     setSkillPoints, setPlayerMaxHp, setPlayerMaxMp,
     log, spawnFloat,
@@ -147,7 +150,7 @@ export function useEconomy(ctx: EconomyCtx) {
       const newMaxHp = computeStats({
         base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: newBonuses,
+        skills: newBonuses, mastery: sumMasteryBonuses(masteryStateRef.current),
       }).maxHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
@@ -158,7 +161,7 @@ export function useEconomy(ctx: EconomyCtx) {
       const newMaxMp = computeStats({
         base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
-        skills: newBonuses,
+        skills: newBonuses, mastery: sumMasteryBonuses(masteryStateRef.current),
       }).maxMp;
       playerMaxMpRef.current = newMaxMp;
       setPlayerMaxMp(newMaxMp);
