@@ -23,6 +23,10 @@ import {
 import { FloatingNum } from '../types/ui';
 import type { PlayerMasteryState } from '../classes/playerClass';
 import { scaleXp, scaleGold, lifestealHeal, masteryFromState } from '../classes/masteryCombat';
+import {
+  canSpend, spendResource, gainResource, rageOnHit, rageOnDamaged,
+  type ClassResourceState,
+} from '../classes/classResource';
 
 export interface CombatCtx {
   // ── Reactive state (read each render; needed for effect deps / checks) ────
@@ -58,6 +62,7 @@ export interface CombatCtx {
   statPointsRef:     MutableRefObject<number>;
   statsRef:          MutableRefObject<BaseStats>;
   masteryStateRef?:  MutableRefObject<PlayerMasteryState>;
+  classResourceRef?: MutableRefObject<ClassResourceState>;
 
   // ── Shared functions (already-memoized, stable across renders) ────────────
   log: (msg: string) => void;
@@ -82,6 +87,7 @@ export interface CombatCtx {
   setPlayerLevel: (v: number) => void;
   setPlayerMaxHp: (v: number) => void;
   setPlayerMp: (v: number) => void;
+  setClassResource?: (v: ClassResourceState) => void;
   setPlayerMaxMp: (v: number) => void;
   setPlayerPos: (v: { x: number; y: number }) => void;
   setPlayerXp: (v: number) => void;
@@ -119,6 +125,7 @@ export function useCombat(ctx: CombatCtx) {
     setBossState, setEnemies, setInventory,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
+    classResourceRef, setClassResource,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   } = ctx;
 
@@ -134,6 +141,15 @@ export function useCombat(ctx: CombatCtx) {
     skills: skillBonusesRef.current,
     mastery: masteryBag(),
   });
+
+  // ── Rage: gained on dealing / taking damage (STEP8_CLASS_RESOURCE.md) ──────
+  const gainRageIfApplicable = (amount: number) => {
+    const cr = classResourceRef?.current;
+    if (!cr || cr.type !== 'rage') return;
+    const next = gainResource(cr, amount);
+    classResourceRef!.current = next;
+    setClassResource?.(next);
+  };
 
   // ── Loot drop (called from applyRewards) ──────────────────────────────────
   const rollLoot = useCallback((enemyName: string, itemChanceBonus = 0, guaranteed = false): Item | undefined => {
@@ -420,6 +436,7 @@ export function useCombat(ctx: CombatCtx) {
         setPlayerHp(next);
         spawnFloat(`+${heal}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
       }
+      gainRageIfApplicable(rageOnHit());
 
       if (newHp === 0) { handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity); return; }
 
@@ -493,6 +510,7 @@ export function useCombat(ctx: CombatCtx) {
       const prevHp = playerHpRef.current;
       const newHp  = Math.max(0, prevHp - dmg);
       playerHpRef.current = newHp; setPlayerHp(newHp);
+      gainRageIfApplicable(rageOnDamaged());
 
       // Status effect on hit — chance reduced by matching player resists
       const onHit = ENEMY_EFFECT_ON_HIT[enemy.name];
@@ -696,16 +714,29 @@ export function useCombat(ctx: CombatCtx) {
   const useClassSkill = useCallback((skill: CombatReadySkill) => {
     if (phaseRef.current !== 'combat') return;
     if ((skillsCd[skill.id] ?? 0) > 0) return;
-    if (skill.manaCost > 0 && playerMpRef.current < skill.manaCost) {
-      log('Недостаточно ресурса!');
-      return;
+    if (skill.manaCost > 0) {
+      if (classResourceRef?.current) {
+        if (!canSpend(classResourceRef.current, skill.manaCost)) {
+          log(`Недостаточно: ${classResourceRef.current.name}!`);
+          return;
+        }
+      } else if (playerMpRef.current < skill.manaCost) {
+        log('Недостаточно ресурса!');
+        return;
+      }
     }
     setSkillsCd(prev => ({ ...prev, [skill.id]: skill.maxCd }));
 
     if (skill.manaCost > 0) {
-      const newMp = playerMpRef.current - skill.manaCost;
-      playerMpRef.current = newMp;
-      setPlayerMp(newMp);
+      if (classResourceRef?.current) {
+        const next = spendResource(classResourceRef.current, skill.manaCost);
+        classResourceRef.current = next;
+        setClassResource?.(next);
+      } else {
+        const newMp = playerMpRef.current - skill.manaCost;
+        playerMpRef.current = newMp;
+        setPlayerMp(newMp);
+      }
     }
 
     if (skill.damage > 0) {
@@ -730,6 +761,7 @@ export function useCombat(ctx: CombatCtx) {
             setPlayerHp(next);
             spawnFloat(`+${heal}`, playerPosRef.current.x, playerPosRef.current.y, 'heal');
           }
+          gainRageIfApplicable(rageOnHit());
 
           if (newHp === 0) handleEnemyDeath(id, enemy.x, enemy.y, enemy.name, enemy.rarity);
         }

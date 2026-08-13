@@ -16,6 +16,7 @@ import { BossState, INITIAL_BOSS_STATE } from '../boss/boss';
 import { FloatingNum, LogEntry } from '../types/ui';
 import { clearSave } from '../save';
 import { createMasteryState, type PlayerClassState, type PlayerMasteryState } from '../classes/playerClass';
+import { createResourceState, type ClassResourceState } from '../classes/classResource';
 
 const INITIAL_PLAYER_LVL = 1;
 
@@ -89,6 +90,7 @@ export interface ResetCtx {
   setStatPoints: (v: number) => void;
   setClassState: (v: PlayerClassState | null) => void;
   setMasteryState: (v: PlayerMasteryState) => void;
+  setClassResource: (v: ClassResourceState) => void;
   setShowClassSelect: (v: boolean) => void;
   setStats: (v: BaseStats) => void;
   setUnlockedRecipes: (v: string[]) => void;
@@ -117,7 +119,7 @@ export function useReset(ctx: ResetCtx) {
     setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setUnlockedRecipes, setXpToNext,
-    setClassState, setMasteryState, setShowClassSelect,
+    setClassState, setMasteryState, setClassResource, setShowClassSelect,
   } = ctx;
 
   // ── Reset current map (respawn in current location — keep all character progress) ──
@@ -243,6 +245,7 @@ export function useReset(ctx: ResetCtx) {
     setUnlockedRecipes([]);
     setClassState(null);
     setMasteryState(createMasteryState());
+    setClassResource(createResourceState(null));
     setShowClassSelect(true);
     setEquipment({ ...EMPTY_EQUIPMENT });
     setInventory([]);

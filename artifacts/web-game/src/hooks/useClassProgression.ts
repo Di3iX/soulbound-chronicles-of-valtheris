@@ -19,6 +19,7 @@ import {
   completeTrial, applyTrialChoice,
 } from '../classes/trials';
 import { sumMasteryBonuses } from '../classes/masteryConstellation';
+import { resetResourceForPath, type ClassResourceState } from '../classes/classResource';
 
 export interface ClassProgressionCtx {
   classState:   PlayerClassState | null;
@@ -39,6 +40,7 @@ export interface ClassProgressionCtx {
 
   setClassState:      Dispatch<SetStateAction<PlayerClassState | null>>;
   setMasteryState:    Dispatch<SetStateAction<PlayerMasteryState>>;
+  setClassResource:   Dispatch<SetStateAction<ClassResourceState>>;
   setShowClassSelect: Dispatch<SetStateAction<boolean>>;
   setShowTrial:       Dispatch<SetStateAction<boolean>>;
   setQuestProgress:   Dispatch<SetStateAction<QuestProgress>>;
@@ -54,7 +56,7 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     classState, masteryState, playerLevel, questProgress, stats, equipBonuses,
     statsRef, statPointsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
     equipBonusesRef, skillBonusesRef, playerMaxHpRef,
-    setClassState, setMasteryState, setShowClassSelect, setShowTrial, setQuestProgress,
+    setClassState, setMasteryState, setClassResource, setShowClassSelect, setShowTrial, setQuestProgress,
     setStats, setStatPoints, setPlayerMaxHp,
     log,
   } = ctx;
@@ -81,13 +83,14 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     const cs = createClassState(id);
     setClassState(cs);
     setMasteryState(createMasteryState());
+    setClassResource(resetResourceForPath(cs));
     setShowClassSelect(false);
 
     const base = mapStatBlockToBaseStats(archetypeBaseStats(id));
     statsRef.current = { ...base };
     setStats({ ...base });
     log(`Путь выбран: ${id === 'warrior' ? 'Воин' : id === 'ranger' ? 'Следопыт' : id === 'mage' ? 'Маг' : 'Послушник'}`);
-  }, [log, mapStatBlockToBaseStats, setClassState, setMasteryState, setShowClassSelect, setStats, statsRef]);
+  }, [log, mapStatBlockToBaseStats, setClassState, setMasteryState, setClassResource, setShowClassSelect, setStats, statsRef]);
 
   const handleLevelUp = useCallback((levelsGained: number) => {
     if (!classState) return;
@@ -153,8 +156,12 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     if (!classState) return;
     const r = chooseProfession(classState, pid as Parameters<typeof chooseProfession>[1], playerLevel);
     if (r.error) log(r.error);
-    else { setClassState(r.state); log('Профессия получена!'); }
-  }, [classState, playerLevel, log, setClassState]);
+    else {
+      setClassState(r.state);
+      setClassResource(resetResourceForPath(r.state));
+      log('Профессия получена!');
+    }
+  }, [classState, playerLevel, log, setClassState, setClassResource]);
 
   const handleChooseSpecialization = useCallback((sid: string) => {
     if (!classState) return;
