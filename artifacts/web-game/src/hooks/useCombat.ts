@@ -27,6 +27,10 @@ import {
   canSpend, spendResource, gainResource, rageOnHit, rageOnDamaged,
   type ClassResourceState,
 } from '../classes/classResource';
+import {
+  hasCcImmunity, legendaryDamageBonusPct, hasAbsoluteBlock, hasFreeSkills, consumeGuaranteedCrit,
+  type LegendaryState,
+} from '../classes/legendaryTalents';
 
 export interface CombatCtx {
   // ── Reactive state (read each render; needed for effect deps / checks) ────
@@ -63,6 +67,7 @@ export interface CombatCtx {
   statsRef:          MutableRefObject<BaseStats>;
   masteryStateRef?:  MutableRefObject<PlayerMasteryState>;
   classResourceRef?: MutableRefObject<ClassResourceState>;
+  legendaryStateRef?: MutableRefObject<LegendaryState>;
 
   // ── Shared functions (already-memoized, stable across renders) ────────────
   log: (msg: string) => void;
@@ -88,6 +93,7 @@ export interface CombatCtx {
   setPlayerMaxHp: (v: number) => void;
   setPlayerMp: (v: number) => void;
   setClassResource?: (v: ClassResourceState) => void;
+  setLegendaryState?: (v: LegendaryState) => void;
   setPlayerMaxMp: (v: number) => void;
   setPlayerPos: (v: { x: number; y: number }) => void;
   setPlayerXp: (v: number) => void;
@@ -126,6 +132,7 @@ export function useCombat(ctx: CombatCtx) {
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     classResourceRef, setClassResource,
+    legendaryStateRef, setLegendaryState,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
   } = ctx;
 
@@ -149,6 +156,30 @@ export function useCombat(ctx: CombatCtx) {
     const next = gainResource(cr, amount);
     classResourceRef!.current = next;
     setClassResource?.(next);
+  };
+
+  // ── Legendary talents (STEP9_LEGENDARY.md) ──────────────────────────────────
+  const legendaryDmgBonusPct = () =>
+    legendaryStateRef?.current ? legendaryDamageBonusPct(legendaryStateRef.current) : 0;
+
+  const hasLegendaryCcImmunity = () =>
+    !!legendaryStateRef?.current && hasCcImmunity(legendaryStateRef.current);
+
+  const hasLegendaryAbsoluteBlock = () =>
+    !!legendaryStateRef?.current && hasAbsoluteBlock(legendaryStateRef.current);
+
+  const hasLegendaryFreeSkills = () =>
+    !!legendaryStateRef?.current && hasFreeSkills(legendaryStateRef.current);
+
+  /** Consumes one stack of guaranteed-crit buff (if active) and syncs state. Returns whether this hit crits. */
+  const consumeLegendaryCrit = (): boolean => {
+    if (!legendaryStateRef?.current) return false;
+    const critRoll = consumeGuaranteedCrit(legendaryStateRef.current);
+    if (critRoll.state !== legendaryStateRef.current) {
+      legendaryStateRef.current = critRoll.state;
+      setLegendaryState?.(critRoll.state);
+    }
+    return critRoll.crit;
   };
 
   // ── Loot drop (called from applyRewards) ──────────────────────────────────
@@ -416,8 +447,17 @@ export function useCombat(ctx: CombatCtx) {
       // Compute all character stats from central module (pure, cheap)
       const _cs = statsWithMastery();
       let dmg = Math.floor(Math.random() * (_cs.dmgMax - _cs.dmgMin + 1)) + _cs.dmgMin;
-      const isCrit = Math.random() * 100 < _cs.critChance;
+      let isCrit = Math.random() * 100 < _cs.critChance;
       if (isCrit) dmg = Math.floor(dmg * _cs.critDamageMult);
+
+      // Legendary: bonus damage window + guaranteed crits
+      const legendBonus = legendaryDmgBonusPct();
+      if (legendBonus > 0) dmg = Math.floor(dmg * (1 + legendBonus / 100));
+      if (consumeLegendaryCrit() && !isCrit) {
+        isCrit = true;
+        dmg = Math.floor(dmg * _cs.critDamageMult);
+      }
+
       const rawDmg = dmg;
       dmg = applyResistance(dmg, 'physical', enemy.resistances);
       const newHp = Math.max(0, enemy.hp - dmg);
@@ -507,6 +547,13 @@ export function useCombat(ctx: CombatCtx) {
       spawnFloat(isBlocked ? `🛡️${dmg}` : dmg.toString(), pp.x, pp.y, 'player-dmg');
       log(`${enemy.emoji} ${enemy.name} атакует на ${dmg} урона!${isBlocked ? ' (блок!)' : ''}${typeNote}`);
 
+      // Legendary: absolute block — fully negates this hit
+      if (hasLegendaryAbsoluteBlock()) {
+        dmg = 0;
+        spawnFloat('БЛОК!', pp.x, pp.y, 'heal');
+        log('🛡️ Абсолютный блок поглощает урон!');
+      }
+
       const prevHp = playerHpRef.current;
       const newHp  = Math.max(0, prevHp - dmg);
       playerHpRef.current = newHp; setPlayerHp(newHp);
@@ -522,11 +569,15 @@ export function useCombat(ctx: CombatCtx) {
         });
         const finalChance = onHit.chance * chanceMult;
         if (Math.random() < finalChance) {
-          const nextEffects = addStatusEffect(playerStatusEffectsRef.current, onHit.effect);
-          playerStatusEffectsRef.current = nextEffects;
-          setPlayerStatusEffects(nextEffects);
-          const def = STATUS_EFFECT_DEFS[onHit.effect];
-          log(`${def.icon} Вы получаете эффект «${def.label}»!`);
+          if (onHit.effect === 'stun' && hasLegendaryCcImmunity()) {
+            log('✨ Иммунитет к контролю блокирует оглушение!');
+          } else {
+            const nextEffects = addStatusEffect(playerStatusEffectsRef.current, onHit.effect);
+            playerStatusEffectsRef.current = nextEffects;
+            setPlayerStatusEffects(nextEffects);
+            const def = STATUS_EFFECT_DEFS[onHit.effect];
+            log(`${def.icon} Вы получаете эффект «${def.label}»!`);
+          }
         }
       }
 
@@ -714,26 +765,30 @@ export function useCombat(ctx: CombatCtx) {
   const useClassSkill = useCallback((skill: CombatReadySkill) => {
     if (phaseRef.current !== 'combat') return;
     if ((skillsCd[skill.id] ?? 0) > 0) return;
-    if (skill.manaCost > 0) {
+
+    // Legendary: free skills window makes resource cost 0
+    const cost = hasLegendaryFreeSkills() ? 0 : skill.manaCost;
+
+    if (cost > 0) {
       if (classResourceRef?.current) {
-        if (!canSpend(classResourceRef.current, skill.manaCost)) {
+        if (!canSpend(classResourceRef.current, cost)) {
           log(`Недостаточно: ${classResourceRef.current.name}!`);
           return;
         }
-      } else if (playerMpRef.current < skill.manaCost) {
+      } else if (playerMpRef.current < cost) {
         log('Недостаточно ресурса!');
         return;
       }
     }
     setSkillsCd(prev => ({ ...prev, [skill.id]: skill.maxCd }));
 
-    if (skill.manaCost > 0) {
+    if (cost > 0) {
       if (classResourceRef?.current) {
-        const next = spendResource(classResourceRef.current, skill.manaCost);
+        const next = spendResource(classResourceRef.current, cost);
         classResourceRef.current = next;
         setClassResource?.(next);
       } else {
-        const newMp = playerMpRef.current - skill.manaCost;
+        const newMp = playerMpRef.current - cost;
         playerMpRef.current = newMp;
         setPlayerMp(newMp);
       }
@@ -744,9 +799,12 @@ export function useCombat(ctx: CombatCtx) {
       if (id !== null) {
         const enemy = enemiesRef.current.find(e => e.id === id);
         if (enemy && !enemy.dead && enemy.hp > 0) {
-          const dmg = applyResistance(skill.damage, skill.damageType, enemy.resistances);
+          let rawDmg = skill.damage;
+          const legendBonus = legendaryDmgBonusPct();
+          if (legendBonus > 0) rawDmg = Math.floor(rawDmg * (1 + legendBonus / 100));
+          const dmg = applyResistance(rawDmg, skill.damageType, enemy.resistances);
           const newHp = Math.max(0, enemy.hp - dmg);
-          const skNote = dmg !== skill.damage ? (dmg < skill.damage ? ' (резист)' : ' (слабость!)') : '';
+          const skNote = dmg !== rawDmg ? (dmg < rawDmg ? ' (резист)' : ' (слабость!)') : '';
 
           enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
           setEnemies(prev => prev.map(e => e.id === id ? { ...e, hp: newHp } : e));
