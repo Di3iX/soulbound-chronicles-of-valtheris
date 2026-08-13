@@ -10,6 +10,7 @@ import type { BossState } from './boss/boss';
 import type { OpenedChests } from './world/chests';
 import type { PlayerClassState, PlayerMasteryState } from './classes/playerClass';
 import type { ClassResourceState } from './classes/classResource';
+import type { LegendaryState } from './classes/legendaryTalents';
 
 /** v0.1.4: endurance renamed to vitality; intelligence added. */
 interface Stats {
@@ -63,6 +64,8 @@ export interface SaveData {
   masteryState?:   PlayerMasteryState;
   /** Optional — missing in pre-resource saves; defaults via createResourceState() on load (STEP8). */
   classResource?:  ClassResourceState;
+  /** Optional — missing in pre-legendary saves; defaults via createLegendaryState() on load (STEP9). */
+  legendaryState?: LegendaryState;
 }
 
 const SAVE_KEY     = 'dungeon_rpg_v1';

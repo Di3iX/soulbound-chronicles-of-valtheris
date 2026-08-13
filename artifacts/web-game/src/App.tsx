@@ -57,6 +57,11 @@ import {
   type ClassResourceState,
 } from './classes/classResource';
 import ResourceBar from './classes/ResourceBar';
+import {
+  createLegendaryState, tickLegendary,
+  type LegendaryState,
+} from './classes/legendaryTalents';
+import LegendaryButton from './classes/LegendaryButton';
 import ShopPanel from './shop/ShopPanel';
 import CraftPanel from './components/CraftPanel';
 import UpgradePanel from './components/UpgradePanel';
@@ -126,6 +131,9 @@ export default function App() {
   const [masteryState, setMasteryState] = useState<PlayerMasteryState>(sv?.masteryState ?? createMasteryState());
   const [classResource, setClassResource] = useState<ClassResourceState>(
     () => sv?.classResource ?? createResourceState(classState),
+  );
+  const [legendaryState, setLegendaryState] = useState<LegendaryState>(
+    () => sv?.legendaryState ?? createLegendaryState(),
   );
   const [showClassSelect, setShowClassSelect] = useState(!sv?.classState);
   const [showClassPanel, setShowClassPanel] = useState(false);
@@ -200,6 +208,7 @@ export default function App() {
   const statsRef           = useRef<BaseStats>(sv?.stats  ?? { ...INITIAL_BASE_STATS });
   const masteryStateRef    = useRef<PlayerMasteryState>(masteryState);
   const classResourceRef   = useRef<ClassResourceState>(classResource);
+  const legendaryStateRef  = useRef<LegendaryState>(legendaryState);
   const playerBonusDmgRef  = useRef(sv?.playerBonusDmg   ?? 0);
   const levelHpBonusRef    = useRef(sv?.levelHpBonus      ?? 0);
   const levelMpBonusRef    = useRef(sv?.levelMpBonus      ?? 0);
@@ -240,6 +249,7 @@ export default function App() {
   useSyncedRef(statsRef, stats);
   useSyncedRef(masteryStateRef, masteryState);
   useSyncedRef(classResourceRef, classResource);
+  useSyncedRef(legendaryStateRef, legendaryState);
   useSyncedRef(playerBonusDmgRef, playerBonusDmg);
   useSyncedRef(levelHpBonusRef, levelHpBonus);
   useSyncedRef(levelMpBonusRef, levelMpBonus);
@@ -268,6 +278,18 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  // ── Legendary buff tick: clears expired active buff (see STEP9_LEGENDARY.md) ─
+  useEffect(() => {
+    const t = setInterval(() => {
+      setLegendaryState(s => {
+        const next = tickLegendary(s);
+        legendaryStateRef.current = next;
+        return next;
+      });
+    }, 500);
+    return () => clearInterval(t);
+  }, []);
+
   // ── Fog of war: reveal tiles around the player as they move ────────────────
   useEffect(() => {
     const grid = exploredTilesRef.current[currentLocation];
@@ -293,7 +315,7 @@ export default function App() {
     bossState, exploredTiles,
     openedChests,
     unlockedRecipes,
-    classState, masteryState, classResource,
+    classState, masteryState, classResource, legendaryState,
   });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -375,14 +397,14 @@ const log = useCallback((msg: string) => {
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef, masteryStateRef,
-    classResourceRef,
+    classResourceRef, legendaryStateRef,
     log, spawnFloat, onLevelUp: handleLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory,
     setLevelHpBonus, setLevelMpBonus, setLootNotif, setPhase, setPlayerBonusDmg, setPlayerGold, setPlayerHp,
     setPlayerLevel, setPlayerMaxHp, setPlayerMp, setPlayerMaxMp, setPlayerPos, setPlayerXp, setQuestProgress,
     setShieldActive, setPlayerStatusEffects, setShowBossVictory, setSkillPoints, setSkillsCd, setStatPoints, setXpToNext,
-    setClassResource,
+    setClassResource, setLegendaryState,
   });
 
   const { handleLocationTransition, movePlayer, handleWorldMapTravel } = useWorldMovement({
@@ -438,7 +460,7 @@ const log = useCallback((msg: string) => {
     setPlayerPos, setPlayerXp, setQuestProgress, setSelectedItem, setShieldActive, setPlayerStatusEffects, setShowBossVictory,
     setShowCharPanel, setShowInventory, setShowShop, setShowSkillPanel, setSkillPoints,
     setSkillProgress, setSkillsCd, setStatPoints, setStats, setUnlockedRecipes, setXpToNext,
-    setClassState, setMasteryState, setClassResource, setShowClassSelect,
+    setClassState, setMasteryState, setClassResource, setLegendaryState, setShowClassSelect,
   });
 
   // ── Derived values (combat/stats/camera/nearby-npc) ─────────────────────────
@@ -816,13 +838,23 @@ const log = useCallback((msg: string) => {
       {phase === 'combat' && (
         <>
           {classState && <ResourceBar resource={classResource} className="px-2 mt-0.5 mb-1" />}
-          <ClassSkillBar
-            skills={classSkills}
-            skillsCd={skillsCd}
-            playerMp={classResource.current}
-            resourceLabel={classResource.name}
-            onUse={(sk) => useClassSkill(sk)}
-          />
+          <div className="flex flex-wrap items-center justify-center gap-1.5 px-2 py-1">
+            <ClassSkillBar
+              skills={classSkills}
+              skillsCd={skillsCd}
+              playerMp={classResource.current}
+              resourceLabel={classResource.name}
+              onUse={(sk) => useClassSkill(sk)}
+            />
+            <LegendaryButton
+              classState={classState}
+              level={playerLevel}
+              legendaryState={legendaryState}
+              onChange={setLegendaryState}
+              onLog={log}
+              disabled={phase !== 'combat'}
+            />
+          </div>
         </>
       )}
 
