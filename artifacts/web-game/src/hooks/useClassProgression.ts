@@ -1,6 +1,4 @@
 // ─── CLASS PROGRESSION (archetype, profession, specialization, trials, stat points) ─
-// Extracted from App.tsx: everything about the class/mastery system and base-stat
-// spending. Touches questProgress only for trial-eligibility bookkeeping.
 import { useCallback, useMemo } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { BaseStats } from '../stats';
@@ -20,6 +18,7 @@ import {
   offerTrialIfEligible, getTrial20ForArchetype, getTrial40ForProfession,
   completeTrial, applyTrialChoice,
 } from '../classes/trials';
+import { sumMasteryBonuses } from '../classes/masteryConstellation';
 
 export interface ClassProgressionCtx {
   classState:   PlayerClassState | null;
@@ -60,7 +59,6 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     log,
   } = ctx;
 
-  /** StatBlock (str/agi/int/spi/vit/lck) → BaseStats проекта (нет slots под spi/lck пока). */
   const mapStatBlockToBaseStats = useCallback((block: { str: number; agi: number; int: number; vit: number }): BaseStats => ({
     strength:     block.str,
     agility:      block.agi,
@@ -68,7 +66,6 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     intelligence: block.int,
   }), []);
 
-  /** Обратный маппер для формул урона навыков (StatBlock). spi/lck пока не отслеживаются игрой — базовое значение 5. */
   const mapBaseStatsToStatBlock = useCallback((base: BaseStats) => ({
     str: base.strength,
     agi: base.agility,
@@ -77,6 +74,8 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     spi: 5,
     lck: 5,
   }), []);
+
+  const masteryBonuses = useMemo(() => sumMasteryBonuses(masteryState), [masteryState]);
 
   const handlePickArchetype = useCallback((id: ArchetypeId) => {
     const cs = createClassState(id);
@@ -88,7 +87,7 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     statsRef.current = { ...base };
     setStats({ ...base });
     log(`Путь выбран: ${id === 'warrior' ? 'Воин' : id === 'ranger' ? 'Следопыт' : id === 'mage' ? 'Маг' : 'Послушник'}`);
-  }, [log, mapStatBlockToBaseStats]);
+  }, [log, mapStatBlockToBaseStats, setClassState, setMasteryState, setShowClassSelect, setStats, statsRef]);
 
   const handleLevelUp = useCallback((levelsGained: number) => {
     if (!classState) return;
@@ -97,18 +96,14 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     setMasteryState(r.masteryState);
     r.logs.forEach(log);
 
-    // Испытания 20/40 (см. STEP5_APP.md). playerLevel здесь — значение ДО этого
-    // прироста (стейт ещё не перерендерился), поэтому + levelsGained = новый уровень.
     const newLevel = playerLevel + levelsGained;
     const t = offerTrialIfEligible(questProgress, r.classState, newLevel);
     if (t.offered) {
       setQuestProgress(t.progress);
       if (t.log) log(t.log);
     }
-  }, [classState, masteryState, log, playerLevel, questProgress]);
+  }, [classState, masteryState, log, playerLevel, questProgress, setClassState, setMasteryState, setQuestProgress]);
 
-  // Активные навыки текущего архетипа/профессии (см. STEP4_APP.md).
-  // Фоллбэк на старые SKILLS, пока класс не выбран (showClassSelect ещё не пройден).
   const classSkills = useMemo(() => {
     if (!classState) {
       return SKILLS.map(s => ({ ...s, id: String(s.id), kind: 'active' as const, description: s.name }));
@@ -121,7 +116,6 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     );
   }, [classState, playerLevel, stats, equipBonuses, mapBaseStatsToStatBlock]);
 
-  // Испытание, доступное сейчас (20 ур. без профессии, либо 40 ур. без специализации).
   const activeTrial = useMemo(() => {
     if (!classState) return undefined;
     if (!classState.profession && playerLevel >= 20) {
@@ -133,7 +127,6 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     return undefined;
   }, [classState, playerLevel]);
 
-  // ── Stat spending ──────────────────────────────────────────────────────────
   const spendStat = useCallback((stat: keyof BaseStats) => {
     if (statPointsRef.current <= 0) return;
     const newStats = { ...statsRef.current, [stat]: statsRef.current[stat] + 1 };
@@ -143,31 +136,33 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     setStatPoints(p => p - 1);
     if (stat === 'vitality') {
       const newMaxHp = computeStats({
-        base: newStats, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
-        bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
+        base: newStats,
+        levelHpBonus: levelHpBonusRef.current,
+        levelMpBonus: levelMpBonusRef.current,
+        bonusDmg: playerBonusDmgRef.current,
+        equip: equipBonusesRef.current,
         skills: skillBonusesRef.current,
+        mastery: sumMasteryBonuses(masteryState),
       }).maxHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
     }
-  }, []);
+  }, [masteryState, statsRef, statPointsRef, setStats, setStatPoints, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, equipBonusesRef, skillBonusesRef, playerMaxHpRef, setPlayerMaxHp]);
 
-  // ── ClassPanel: profession / specialization choice ──────────────────────────
   const handleChooseProfession = useCallback((pid: string) => {
     if (!classState) return;
     const r = chooseProfession(classState, pid as Parameters<typeof chooseProfession>[1], playerLevel);
     if (r.error) log(r.error);
     else { setClassState(r.state); log('Профессия получена!'); }
-  }, [classState, playerLevel, log]);
+  }, [classState, playerLevel, log, setClassState]);
 
   const handleChooseSpecialization = useCallback((sid: string) => {
     if (!classState) return;
     const r = chooseSpecialization(classState, sid as Parameters<typeof chooseSpecialization>[1], playerLevel);
     if (r.error) log(r.error);
     else { setClassState(r.state); log('Специализация получена!'); }
-  }, [classState, playerLevel, log]);
+  }, [classState, playerLevel, log, setClassState]);
 
-  // ── TrialPanel: complete the 20/40 trial and apply the player's unlock choice ──
   const handleTrialChoice = useCallback((unlockId: string) => {
     if (!classState || !activeTrial) return;
     const done = completeTrial(questProgress, classState, activeTrial.id, playerLevel);
@@ -178,11 +173,11 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     setClassState(applied.classState);
     if (applied.log) log(applied.log);
     setShowTrial(false);
-  }, [classState, activeTrial, questProgress, playerLevel, log]);
+  }, [classState, activeTrial, questProgress, playerLevel, log, setQuestProgress, setClassState, setShowTrial]);
 
   return {
     handlePickArchetype, handleLevelUp, spendStat,
-    classSkills, activeTrial,
+    classSkills, activeTrial, masteryBonuses,
     handleChooseProfession, handleChooseSpecialization, handleTrialChoice,
   };
 }
