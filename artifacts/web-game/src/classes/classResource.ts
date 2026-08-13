@@ -6,6 +6,10 @@ import type { ArchetypeId, ProfessionId, ResourceType } from './classSystem';
 import { ALL_PATHS } from './classSystem';
 import type { PlayerClassState } from './playerClass';
 import { currentPathId } from './playerClass';
+import {
+  RESOURCE_MAX_BASE, RESOURCE_MAX_PER_LEVEL,
+  REGEN_COMBAT, RAGE_ON_HIT, RAGE_ON_DAMAGED, RAGE_DECAY_OOC,
+} from './balance';
 
 export interface ClassResourceState {
   type: ResourceType;
@@ -14,7 +18,7 @@ export interface ClassResourceState {
   max: number;
 }
 
-const MAX_DEFAULT = 100;
+const MAX_DEFAULT = RESOURCE_MAX_BASE;
 
 const RESOURCE_LABEL: Record<ResourceType, string> = {
   rage: 'Ярость',
@@ -84,32 +88,17 @@ export function gainResource(r: ClassResourceState, amount: number): ClassResour
 
 /** Passive regen per second while in combat (and optionally out). */
 export function regenPerSecond(type: ResourceType): number {
-  switch (type) {
-    case 'mana':
-      return 5;
-    case 'focus':
-      return 6;
-    case 'faith':
-      return 4;
-    case 'essence':
-      return 4;
-    case 'stamina':
-      return 8; // high OOC feel; in combat still ticks
-    case 'rage':
-      return -5; // decays out of hits; applied carefully by caller
-    default:
-      return 0;
-  }
+  return REGEN_COMBAT[type] ?? 0;
 }
 
 /** Rage gain on dealing a hit. */
 export function rageOnHit(): number {
-  return 10;
+  return RAGE_ON_HIT;
 }
 
 /** Rage gain when taking damage. */
 export function rageOnDamaged(): number {
-  return 15;
+  return RAGE_ON_DAMAGED;
 }
 
 /**
@@ -126,7 +115,7 @@ export function tickResource(
   // Rage: only decay when in combat (out of combat snap toward 0 faster)
   if (r.type === 'rage') {
     if (!inCombat) {
-      return clampResource({ ...r, current: Math.max(0, r.current - 10) });
+      return clampResource({ ...r, current: Math.max(0, r.current - RAGE_DECAY_OOC) });
     }
     // mild decay each second even in combat if not hitting
     return clampResource({ ...r, current: r.current + per });
@@ -159,5 +148,5 @@ export function resourceBarColor(type: ResourceType): string {
 }
 
 export function defaultMaxForLevel(level: number): number {
-  return MAX_DEFAULT + Math.floor(Math.max(0, level - 1) * 2);
+  return MAX_DEFAULT + Math.floor(Math.max(0, level - 1) * RESOURCE_MAX_PER_LEVEL);
 }
