@@ -1,164 +1,193 @@
-// ─── STATS MODULE (v0.1.4) ────────────────────────────────────────────────────
-// Single source of truth for all character stat calculations.
-// Combat, equipment, inventory, and all future systems must read from
-// computeStats() — never compute derived stats inline.
+// ─── STATS MODULE ─────────────────────────────────────────────────────────────
+// Single source of truth for character stat calculations.
+// Includes optional Mastery Constellation bonuses.
 
 import type { EquipBonuses } from './equipment';
-import type { SkillBonuses }  from './skills/skillTree';
+import type { SkillBonuses } from './skills/skillTree';
 
-// ── Constants ────────────────────────────────────────────────────────────────
-export const INITIAL_HP              = 100;
-export const INITIAL_MP              = 50;
-const        BASE_DMG_MIN            = 8;
-const        BASE_DMG_MAX            = 16;
-const        BASE_ATTACK_INTERVAL_MS = 1500;
-const        MIN_ATTACK_INTERVAL_MS  = 500;
+export const INITIAL_HP = 100;
+export const INITIAL_MP = 50;
+const BASE_DMG_MIN = 8;
+const BASE_DMG_MAX = 16;
+const BASE_ATTACK_INTERVAL_MS = 1500;
+const MIN_ATTACK_INTERVAL_MS = 500;
 
-// ── Base (player-allocatable) stats ──────────────────────────────────────────
 /** Stats the player distributes points into. */
 export interface BaseStats {
-  strength:     number;  // +2 dmg/pt · +0.5 defense/pt · +0.2% crit/pt
-  agility:      number;  // −3% attack interval/pt · +0.5% dodge/pt
-  vitality:     number;  // +10 max HP/pt
-  intelligence: number;  // +0.5% total damage/pt
+  strength: number;
+  agility: number;
+  vitality: number;
+  intelligence: number;
 }
 
 export const INITIAL_BASE_STATS: BaseStats = {
-  strength:     5,
-  agility:      5,
-  vitality:     5,
+  strength: 5,
+  agility: 5,
+  vitality: 5,
   intelligence: 5,
 };
 
-// ── Fully-computed final stat values ─────────────────────────────────────────
+/**
+ * Flat bag from sumMasteryBonuses() (masteryConstellation.ts).
+ * Keys: str, agi, int, vit, spi, lck, armor_pct, haste_pct, lifesteal_pct,
+ * regen_pct, craft_success_pct, gold_pct, xp_pct, pet_pct, element_pct
+ */
+export type MasteryBonuses = Record<string, number>;
+
 export interface ComputedStats {
-  // Effective totals (base + equipment)
-  totalStrength:     number;
-  totalAgility:      number;
-  totalVitality:     number;
+  totalStrength: number;
+  totalAgility: number;
+  totalVitality: number;
   totalIntelligence: number;
 
-  // HP
-  maxHp:         number;
-  // MP
-  maxMp:         number;
+  maxHp: number;
+  maxMp: number;
 
-  // Offense
-  dmgMin:        number;
-  dmgMax:        number;
-  critChance:    number;    // 0–75 %
-  critDamagePct: number;    // e.g. 175 → shown as "175%"
-  critDamageMult: number;   // e.g. 1.75 — multiply hit damage by this on crit
+  dmgMin: number;
+  dmgMax: number;
+  critChance: number;
+  critDamagePct: number;
+  critDamageMult: number;
 
-  // Defense
-  defense:       number;    // flat; applied as dmg × 100/(100+defense)
-  dodgeChance:   number;    // 0–60 %
-  blockChance:   number;    // 0–50 % — halves incoming damage when it triggers
-  fireResist:     number;   // % — from equipment only, can be pushed negative by cursed gear
+  defense: number;
+  dodgeChance: number;
+  blockChance: number;
+  fireResist: number;
   electricResist: number;
-  iceResist:      number;
+  iceResist: number;
 
-  // Speed
-  attackInterval:    number; // ms
-  attackIntervalSec: string; // formatted for display, e.g. "1.5"
+  attackInterval: number;
+  attackIntervalSec: string;
+
+  /** From mastery — for combat / economy readers */
+  lifestealPct: number;
+  xpBonusPct: number;
+  goldBonusPct: number;
+  craftSuccessPct: number;
+  elementBonusPct: number;
+  hastePct: number;
 }
 
-// ── Input bundle passed to computeStats ──────────────────────────────────────
 export interface StatsInput {
-  base:         BaseStats;
-  levelHpBonus: number;   // HP gained from level-ups
-  levelMpBonus: number;   // MP gained from level-ups
-  bonusDmg:     number;   // flat damage gained from level-ups
-  equip:        EquipBonuses;
-  skills:       SkillBonuses;
+  base: BaseStats;
+  levelHpBonus: number;
+  levelMpBonus: number;
+  bonusDmg: number;
+  equip: EquipBonuses;
+  skills: SkillBonuses;
+  /** Optional — if omitted, treated as {}. */
+  mastery?: MasteryBonuses;
 }
 
-// ── Internal helpers ─────────────────────────────────────────────────────────
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-// ── Core computation ─────────────────────────────────────────────────────────
+function m(bonuses: MasteryBonuses | undefined, key: string): number {
+  return bonuses?.[key] ?? 0;
+}
+
 /**
- * Derive all final character stats from base allocation + gear + skill tree.
- * Pure function — no side-effects, safe to call every render.
+ * Derive all final character stats from base + gear + skill tree + mastery.
+ * Pure function — safe to call every render.
  */
 export function computeStats(input: StatsInput): ComputedStats {
   const { base, levelHpBonus, levelMpBonus, bonusDmg, equip, skills } = input;
+  const mastery = input.mastery ?? {};
 
-  // ── Effective totals ───────────────────────────────────────────────────────
-  const totalStrength     = base.strength     + (equip.strength     ?? 0);
-  const totalAgility      = base.agility      + (equip.agility      ?? 0);
-  const totalVitality     = base.vitality     + (equip.vitality     ?? 0);
-  const totalIntelligence = base.intelligence + (equip.intelligence ?? 0);
+  // Mastery primary stats (constellation nodes)
+  const mStr = m(mastery, 'str');
+  const mAgi = m(mastery, 'agi');
+  const mInt = m(mastery, 'int');
+  const mVit = m(mastery, 'vit');
+  // spi / lck reserved for future BaseStats expansion
+  const mArmorPct = m(mastery, 'armor_pct');
+  const mHastePct = m(mastery, 'haste_pct');
+  const mLifesteal = m(mastery, 'lifesteal_pct');
+  const mXp = m(mastery, 'xp_pct');
+  const mGold = m(mastery, 'gold_pct');
+  const mCraft = m(mastery, 'craft_success_pct');
+  const mElement = m(mastery, 'element_pct');
 
-  // ── HP ────────────────────────────────────────────────────────────────────
-  const maxHp = INITIAL_HP
-    + levelHpBonus
-    + totalVitality * 10
-    + (equip.hp ?? 0)
-    + skills.bonusHp;
+  const totalStrength = base.strength + (equip.strength ?? 0) + mStr;
+  const totalAgility = base.agility + (equip.agility ?? 0) + mAgi;
+  const totalVitality = base.vitality + (equip.vitality ?? 0) + mVit;
+  const totalIntelligence = base.intelligence + (equip.intelligence ?? 0) + mInt;
 
-  // ── MP ────────────────────────────────────────────────────────────────────
-  const maxMp = INITIAL_MP
-    + levelMpBonus
-    + (equip.mana ?? 0)
-    + skills.bonusMana;
+  const maxHp =
+    INITIAL_HP +
+    levelHpBonus +
+    totalVitality * 10 +
+    (equip.hp ?? 0) +
+    skills.bonusHp;
 
-  // ── Damage ────────────────────────────────────────────────────────────────
-  const intBonus  = 1 + totalIntelligence * 0.005;  // +0.5% per INT
-  const skillMult = 1 + skills.damagePct  / 100;
+  const maxMp =
+    INITIAL_MP + levelMpBonus + (equip.mana ?? 0) + skills.bonusMana;
+
+  const intBonus = 1 + totalIntelligence * 0.005;
+  const skillMult = 1 + skills.damagePct / 100;
   const totalMult = intBonus * skillMult;
-  const flatDmg   = bonusDmg + totalStrength * 2 + (equip.damage ?? 0);
-  const dmgMin    = Math.floor((BASE_DMG_MIN + flatDmg) * totalMult);
-  const dmgMax    = Math.floor((BASE_DMG_MAX + flatDmg) * totalMult);
+  const flatDmg = bonusDmg + totalStrength * 2 + (equip.damage ?? 0);
+  const dmgMin = Math.floor((BASE_DMG_MIN + flatDmg) * totalMult);
+  const dmgMax = Math.floor((BASE_DMG_MAX + flatDmg) * totalMult);
 
-  // ── Critical hit ──────────────────────────────────────────────────────────
+  // Luck mastery lightly feeds crit
+  const mLck = m(mastery, 'lck');
   const critChance = clamp(
-    5 + totalStrength * 0.2 + (equip.critChance ?? 0) + skills.critChancePct,
-    0, 75,
+    5 + totalStrength * 0.2 + mLck * 0.3 + (equip.critChance ?? 0) + skills.critChancePct,
+    0,
+    75,
   );
-  const critDamagePct  = 150 + (equip.critDamage ?? 0);
+  const critDamagePct = 150 + (equip.critDamage ?? 0);
   const critDamageMult = critDamagePct / 100;
 
-  // ── Defense ───────────────────────────────────────────────────────────────
-  const defense = Math.floor(totalStrength * 0.5 + (equip.defense ?? 0));
+  const defenseBase = totalStrength * 0.5 + (equip.defense ?? 0);
+  const defense = Math.floor(defenseBase * (1 + mArmorPct / 100));
 
-  // ── Dodge ─────────────────────────────────────────────────────────────────
-  const dodgeChance = clamp(
-    totalAgility * 0.5 + (equip.dodgeChance ?? 0),
-    0, 60,
+  const dodgeChance = clamp(totalAgility * 0.5 + (equip.dodgeChance ?? 0), 0, 60);
+
+  const blockChance = clamp(5 + totalVitality * 0.3 + (equip.blockChance ?? 0), 0, 50);
+
+  const fireResist = (equip.fireResist ?? 0) + mElement * 0.5;
+  const electricResist = (equip.electricResist ?? 0) + mElement * 0.5;
+  const iceResist = (equip.iceResist ?? 0) + mElement * 0.5;
+
+  const baseInt = Math.max(
+    MIN_ATTACK_INTERVAL_MS,
+    Math.floor(BASE_ATTACK_INTERVAL_MS * (1 - 0.03 * totalAgility)),
   );
-
-  // ── Block ─────────────────────────────────────────────────────────────────
-  const blockChance = clamp(
-    5 + totalVitality * 0.3 + (equip.blockChance ?? 0),
-    0, 50,
+  const penalized = Math.floor(baseInt * (1 + (equip.atkSpeedPenalty ?? 0) / 100));
+  const afterSkills = Math.floor(penalized * (1 - skills.attackSpeedPct / 100));
+  const attackInterval = Math.max(
+    MIN_ATTACK_INTERVAL_MS,
+    Math.floor(afterSkills * (1 - mHastePct / 100)),
   );
-
-  // ── Elemental resistances — equipment only, no clamp (cursed gear can go negative) ─
-  const fireResist     = equip.fireResist     ?? 0;
-  const electricResist = equip.electricResist ?? 0;
-  const iceResist       = equip.iceResist      ?? 0;
-
-  // ── Attack speed ──────────────────────────────────────────────────────────
-  const baseInt    = Math.max(MIN_ATTACK_INTERVAL_MS, Math.floor(BASE_ATTACK_INTERVAL_MS * (1 - 0.03 * totalAgility)));
-  const penalized  = Math.floor(baseInt * (1 + (equip.atkSpeedPenalty ?? 0) / 100));
-  const attackInterval = Math.max(MIN_ATTACK_INTERVAL_MS, Math.floor(penalized * (1 - skills.attackSpeedPct / 100)));
 
   return {
-    totalStrength, totalAgility, totalVitality, totalIntelligence,
+    totalStrength,
+    totalAgility,
+    totalVitality,
+    totalIntelligence,
     maxHp,
     maxMp,
-    dmgMin, dmgMax,
-    critChance:    Math.round(critChance    * 10) / 10,
+    dmgMin,
+    dmgMax,
+    critChance: Math.round(critChance * 10) / 10,
     critDamagePct,
     critDamageMult,
     defense,
-    dodgeChance:   Math.round(dodgeChance  * 10) / 10,
-    blockChance:   Math.round(blockChance  * 10) / 10,
-    fireResist, electricResist, iceResist,
+    dodgeChance: Math.round(dodgeChance * 10) / 10,
+    blockChance: Math.round(blockChance * 10) / 10,
+    fireResist,
+    electricResist,
+    iceResist,
     attackInterval,
     attackIntervalSec: (attackInterval / 1000).toFixed(1),
+    lifestealPct: mLifesteal,
+    xpBonusPct: mXp,
+    goldBonusPct: mGold,
+    craftSuccessPct: mCraft,
+    elementBonusPct: mElement,
+    hastePct: mHastePct,
   };
 }
