@@ -191,6 +191,7 @@ export default function App() {
   const enemiesRef         = useRef<Enemy[]>(sv?.enemies  ?? []);
   const activeEnemyIdRef   = useRef<number | null>(null);
   const statsRef           = useRef<BaseStats>(sv?.stats  ?? { ...INITIAL_BASE_STATS });
+  const masteryStateRef    = useRef<PlayerMasteryState>(masteryState);
   const playerBonusDmgRef  = useRef(sv?.playerBonusDmg   ?? 0);
   const levelHpBonusRef    = useRef(sv?.levelHpBonus      ?? 0);
   const levelMpBonusRef    = useRef(sv?.levelMpBonus      ?? 0);
@@ -229,6 +230,7 @@ export default function App() {
   useSyncedRef(currentLocationRef, currentLocation);
   useSyncedRef(transitioningRef, transitioning);
   useSyncedRef(statsRef, stats);
+  useSyncedRef(masteryStateRef, masteryState);
   useSyncedRef(playerBonusDmgRef, playerBonusDmg);
   useSyncedRef(levelHpBonusRef, levelHpBonus);
   useSyncedRef(levelMpBonusRef, levelMpBonus);
@@ -328,7 +330,7 @@ const log = useCallback((msg: string) => {
   // ── Equipment ─────────────────────────────────────────────────────────────
   const { equipItem, unequipItem } = useEquipment({
     equipmentRef, equipBonusesRef, statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
-    skillBonusesRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef, playerLevelRef,
+    skillBonusesRef, masteryStateRef, playerMaxHpRef, playerHpRef, playerMaxMpRef, playerMpRef, playerLevelRef,
     setEquipment, setInventory, setEquipBonuses, setPlayerMaxHp, setPlayerHp,
     setPlayerMaxMp, setPlayerMp, setSelectedItem,
     log, showGateNotif,
@@ -339,7 +341,7 @@ const log = useCallback((msg: string) => {
     playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
     playerMpRef, playerMaxMpRef,
     playerPosRef, phaseRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
-    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef,
+    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, masteryStateRef,
     setPlayerGold, setInventory, setPlayerHp, setPlayerMp, setSelectedItem, setSkillProgress,
     setSkillPoints, setPlayerMaxHp, setPlayerMaxMp,
     log, spawnFloat,
@@ -353,7 +355,7 @@ const log = useCallback((msg: string) => {
     levelHpBonusRef, levelMpBonusRef, phaseRef, playerAttackTimeout, playerBonusDmgRef, playerGoldRef,
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
-    shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef,
+    shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef, masteryStateRef,
     log, spawnFloat, onLevelUp: handleLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory,
@@ -392,7 +394,7 @@ const log = useCallback((msg: string) => {
     applyEquipmentUpdate,
   } = useItemActions({
     inventoryRef, playerGoldRef, equipmentRef, equipBonusesRef,
-    statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, skillBonusesRef,
+    statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, skillBonusesRef, masteryStateRef,
     playerMaxHpRef, playerMaxMpRef, playerLevelRef, unlockedRecipes,
     setInventory, setPlayerGold, setEquipment, setEquipBonuses, setPlayerMaxHp, setPlayerMaxMp, setUnlockedRecipes,
     log, showGateNotif,
@@ -424,7 +426,7 @@ const log = useCallback((msg: string) => {
     camCol, camRow, currentMap, currentNpcs, nearbyNpc,
   } = useGameView({
     activeEnemyId, enemies, playerXp, xpToNext, inventory, phase, playerHp, playerMaxHp,
-    stats, levelHpBonus, levelMpBonus, playerBonusDmg, equipBonuses, skillProgress,
+    stats, levelHpBonus, levelMpBonus, playerBonusDmg, equipBonuses, skillProgress, masteryState,
     playerPos, currentLocation, transitioning,
   });
 
