@@ -22,7 +22,7 @@ import {
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
 import type { PlayerMasteryState, PlayerClassState } from '../classes/playerClass';
-import { scaleXp, scaleGold, lifestealHeal, masteryFromState } from '../classes/masteryCombat';
+import { scaleXp, scaleGold, lifestealHeal, totalLifestealHeal, masteryFromState } from '../classes/masteryCombat';
 import { sumClassTalentBonuses } from '../classes/talentBonuses';
 import {
   canSpend, spendResource, gainResource, rageOnHit, rageOnDamaged,
@@ -266,9 +266,11 @@ export function useCombat(ctx: CombatCtx) {
 
     const baseGold = Math.floor(Math.random() * (reward.goldMax - reward.goldMin + 1)) + reward.goldMin;
     const mb = masteryBag();
+    const tb = classTalentBag();
     const goldGained = scaleGold(
       Math.round(baseGold * rarityDef.goldMult),
       mb,
+      tb.goldPct,
     );
     playerGoldRef.current += goldGained;
     setPlayerGold(playerGoldRef.current);
@@ -277,6 +279,7 @@ export function useCombat(ctx: CombatCtx) {
       reward.xp * rarityDef.xpMult,
       skillBonusesRef.current.xpBonusPct,
       mb,
+      tb.xpPct,
     );
 
     if (rarity !== 'common') {
@@ -336,15 +339,16 @@ export function useCombat(ctx: CombatCtx) {
     const cfg = BOSS_CONFIGS[key];
     log(`${cfg.def.emoji} ${cfg.def.name} повержен!`);
 
-    // Gold
+    // Gold (+ mastery trade + class talent)
     const mb = masteryBag();
-    const goldGained = scaleGold(cfg.reward.gold, mb);
+    const tb = classTalentBag();
+    const goldGained = scaleGold(cfg.reward.gold, mb, tb.goldPct);
     playerGoldRef.current += goldGained;
     setPlayerGold(playerGoldRef.current);
     log(`💰 Получено ${goldGained} золота!`);
 
-    // XP with Wisdom + mastery bonus
-    const xpGained = scaleXp(cfg.reward.xp, skillBonusesRef.current.xpBonusPct, mb);
+    // XP with skill tree + mastery + class talent
+    const xpGained = scaleXp(cfg.reward.xp, skillBonusesRef.current.xpBonusPct, mb, tb.xpPct);
     log(`✨ Получено ${xpGained} опыта!`);
 
     const { leveledUp, level: newLevel } = grantXp(xpGained);
@@ -483,8 +487,8 @@ export function useCombat(ctx: CombatCtx) {
       const resistNote = dmg !== rawDmg ? (dmg < rawDmg ? ' (резист)' : ' (слабость)') : '';
       log(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона${resistNote}!`);
 
-      // Vampirism — heal from damage dealt (Constellation + class talent «Железная хватка»)
-      const heal = lifestealHeal(dmg, masteryBag()) + Math.floor((dmg * tb.lifestealPct) / 100);
+      // Vampirism — mastery + class talent
+      const heal = totalLifestealHeal(dmg, masteryBag(), tb);
       if (heal > 0) {
         const next = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
         playerHpRef.current = next;
@@ -833,8 +837,8 @@ export function useCombat(ctx: CombatCtx) {
           spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
           log(`${skill.emoji} ${skill.name} (${DAMAGE_TYPE_LABEL[skill.damageType]}): ${dmg} урона${skNote}!`);
 
-          // Vampirism — heal from damage dealt (Constellation + class talent «Железная хватка»)
-          const heal = lifestealHeal(dmg, masteryBag()) + Math.floor((dmg * tb.lifestealPct) / 100);
+          // Vampirism — mastery + class talent
+          const heal = totalLifestealHeal(dmg, masteryBag(), tb);
           if (heal > 0) {
             const next = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
             playerHpRef.current = next;

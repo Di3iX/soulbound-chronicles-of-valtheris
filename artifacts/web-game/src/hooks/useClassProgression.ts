@@ -180,9 +180,11 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
     const applied = applyTrialChoice(done.classState, unlockId, activeTrial.tier, playerLevel);
     if (applied.error) { log(applied.error); return; }
     setClassState(applied.classState);
+    // Profession/spec may change resource type (e.g. warrior → duelist stamina)
+    setClassResource(resetResourceForPath(applied.classState));
     if (applied.log) log(applied.log);
     setShowTrial(false);
-  }, [classState, activeTrial, questProgress, playerLevel, log, setQuestProgress, setClassState, setShowTrial]);
+  }, [classState, activeTrial, questProgress, playerLevel, log, setQuestProgress, setClassState, setClassResource, setShowTrial]);
 
   return {
     handlePickArchetype, handleLevelUp, spendStat,
