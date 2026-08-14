@@ -275,3 +275,44 @@ export function consumeGuaranteedCrit(state: LegendaryState, now = Date.now()): 
     crit: true,
   };
 }
+
+/** Instant effects when player presses ★ (heal / clear CC). Combat ticks still handle timed buffs. */
+export interface LegendaryInstantResult {
+  healToFull?: boolean;
+  healPct?: number;
+  clearCc?: boolean;
+  log: string[];
+}
+
+export function applyLegendaryInstantEffects(def: LegendaryDef): LegendaryInstantResult {
+  const log: string[] = [];
+  const r: LegendaryInstantResult = { log };
+  switch (def.effect.kind) {
+    case 'full_heal_immune':
+      r.healToFull = true;
+      log.push(`★ ${def.name}: полное исцеление!`);
+      break;
+    case 'raid_heal_pct':
+      r.healPct = def.effect.hpPct;
+      log.push(`★ ${def.name}: исцеление на ${def.effect.hpPct}%!`);
+      break;
+    case 'bubble_clear_cc':
+      r.clearCc = true;
+      log.push(`★ ${def.name}: щит и сброс контроля!`);
+      break;
+    case 'bubble_on_ally':
+      r.clearCc = true;
+      r.healPct = 15;
+      log.push(`★ ${def.name}: защита!`);
+      break;
+    default:
+      log.push(`★ ${def.name}!`);
+  }
+  return r;
+}
+
+export function hasFullHealImmune(state: LegendaryState, now = Date.now()): boolean {
+  const a = state.active;
+  if (!a || a.endsAt <= now) return false;
+  return a.effect.kind === 'full_heal_immune';
+}
