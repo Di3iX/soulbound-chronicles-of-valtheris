@@ -68,6 +68,16 @@ export interface ComputedStats {
   hastePct: number;
 }
 
+export interface ClassTalentStatBonuses {
+  damagePct?: number;
+  armorPct?: number;
+  maxHpPct?: number;
+  critChancePct?: number;
+  critDamagePct?: number;
+  attackSpeedPct?: number;
+  allStatsPct?: number;
+}
+
 export interface StatsInput {
   base: BaseStats;
   levelHpBonus: number;
@@ -77,6 +87,8 @@ export interface StatsInput {
   skills: SkillBonuses;
   /** Optional — if omitted, treated as {}. */
   mastery?: MasteryBonuses;
+  /** Optional — from sumClassTalentBonuses(). */
+  classTalent?: ClassTalentStatBonuses;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -94,6 +106,8 @@ function m(bonuses: MasteryBonuses | undefined, key: string): number {
 export function computeStats(input: StatsInput): ComputedStats {
   const { base, levelHpBonus, levelMpBonus, bonusDmg, equip, skills } = input;
   const mastery = input.mastery ?? {};
+  const ct = input.classTalent ?? {};
+  const allPct = 1 + (ct.allStatsPct ?? 0) / 100;
 
   // Mastery primary stats (constellation nodes)
   const mStr = m(mastery, 'str');
@@ -109,23 +123,24 @@ export function computeStats(input: StatsInput): ComputedStats {
   const mCraft = m(mastery, 'craft_success_pct');
   const mElement = m(mastery, 'element_pct');
 
-  const totalStrength = base.strength + (equip.strength ?? 0) + mStr;
-  const totalAgility = base.agility + (equip.agility ?? 0) + mAgi;
-  const totalVitality = base.vitality + (equip.vitality ?? 0) + mVit;
-  const totalIntelligence = base.intelligence + (equip.intelligence ?? 0) + mInt;
+  const totalStrength = Math.floor((base.strength + (equip.strength ?? 0) + mStr) * allPct);
+  const totalAgility = Math.floor((base.agility + (equip.agility ?? 0) + mAgi) * allPct);
+  const totalVitality = Math.floor((base.vitality + (equip.vitality ?? 0) + mVit) * allPct);
+  const totalIntelligence = Math.floor((base.intelligence + (equip.intelligence ?? 0) + mInt) * allPct);
 
-  const maxHp =
+  const maxHpBase =
     INITIAL_HP +
     levelHpBonus +
     totalVitality * 10 +
     (equip.hp ?? 0) +
     skills.bonusHp;
+  const maxHp = Math.floor(maxHpBase * (1 + (ct.maxHpPct ?? 0) / 100));
 
   const maxMp =
     INITIAL_MP + levelMpBonus + (equip.mana ?? 0) + skills.bonusMana;
 
   const intBonus = 1 + totalIntelligence * 0.005;
-  const skillMult = 1 + skills.damagePct / 100;
+  const skillMult = 1 + skills.damagePct / 100 + (ct.damagePct ?? 0) / 100;
   const totalMult = intBonus * skillMult;
   const flatDmg = bonusDmg + totalStrength * 2 + (equip.damage ?? 0);
   const dmgMin = Math.floor((BASE_DMG_MIN + flatDmg) * totalMult);
@@ -134,15 +149,15 @@ export function computeStats(input: StatsInput): ComputedStats {
   // Luck mastery lightly feeds crit
   const mLck = m(mastery, 'lck');
   const critChance = clamp(
-    5 + totalStrength * 0.2 + mLck * 0.3 + (equip.critChance ?? 0) + skills.critChancePct,
+    5 + totalStrength * 0.2 + mLck * 0.3 + (equip.critChance ?? 0) + skills.critChancePct + (ct.critChancePct ?? 0),
     0,
     75,
   );
-  const critDamagePct = 150 + (equip.critDamage ?? 0);
+  const critDamagePct = 150 + (equip.critDamage ?? 0) + (ct.critDamagePct ?? 0);
   const critDamageMult = critDamagePct / 100;
 
   const defenseBase = totalStrength * 0.5 + (equip.defense ?? 0);
-  const defense = Math.floor(defenseBase * (1 + mArmorPct / 100));
+  const defense = Math.floor(defenseBase * (1 + mArmorPct / 100) * (1 + (ct.armorPct ?? 0) / 100));
 
   const dodgeChance = clamp(totalAgility * 0.5 + (equip.dodgeChance ?? 0), 0, 60);
 
@@ -160,7 +175,7 @@ export function computeStats(input: StatsInput): ComputedStats {
   const afterSkills = Math.floor(penalized * (1 - skills.attackSpeedPct / 100));
   const attackInterval = Math.max(
     MIN_ATTACK_INTERVAL_MS,
-    Math.floor(afterSkills * (1 - mHastePct / 100)),
+    Math.floor(afterSkills * (1 - mHastePct / 100) * (1 - (ct.attackSpeedPct ?? 0) / 100)),
   );
 
   return {
