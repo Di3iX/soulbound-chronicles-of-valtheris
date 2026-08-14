@@ -59,6 +59,7 @@ import {
 import ResourceBar from './classes/ResourceBar';
 import {
   createLegendaryState, tickLegendary,
+  legendaryForPath, applyLegendaryInstantEffects,
   type LegendaryState,
 } from './classes/legendaryTalents';
 import LegendaryButton from './classes/LegendaryButton';
@@ -852,9 +853,29 @@ const log = useCallback((msg: string) => {
               classState={classState}
               level={playerLevel}
               legendaryState={legendaryState}
-              onChange={setLegendaryState}
               onLog={log}
               disabled={phase !== 'combat'}
+              onChange={(next) => {
+                setLegendaryState(next);
+                const def = legendaryForPath(classState);
+                if (!def) return;
+                const inst = applyLegendaryInstantEffects(def);
+                inst.log.forEach(log);
+                if (inst.healToFull) {
+                  playerHpRef.current = playerMaxHpRef.current;
+                  setPlayerHp(playerMaxHpRef.current);
+                } else if (inst.healPct) {
+                  const heal = Math.floor(playerMaxHpRef.current * inst.healPct / 100);
+                  const nextHp = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
+                  playerHpRef.current = nextHp;
+                  setPlayerHp(nextHp);
+                  spawnFloat(`+${heal}`, playerPos.x, playerPos.y, 'heal');
+                }
+                if (inst.clearCc) {
+                  playerStatusEffectsRef.current = [];
+                  setPlayerStatusEffects([]);
+                }
+              }}
             />
           </div>
         </>
