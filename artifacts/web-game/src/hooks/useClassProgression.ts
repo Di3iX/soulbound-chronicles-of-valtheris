@@ -19,6 +19,7 @@ import {
   completeTrial, applyTrialChoice,
 } from '../classes/trials';
 import { sumMasteryBonuses } from '../classes/masteryConstellation';
+import { sumClassTalentBonuses } from '../classes/talentBonuses';
 import { resetResourceForPath, type ClassResourceState } from '../classes/classResource';
 
 export interface ClassProgressionCtx {
@@ -146,11 +147,12 @@ export function useClassProgression(ctx: ClassProgressionCtx) {
         equip: equipBonusesRef.current,
         skills: skillBonusesRef.current,
         mastery: sumMasteryBonuses(masteryState),
+        classTalent: sumClassTalentBonuses(classState),
       }).maxHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
     }
-  }, [masteryState, statsRef, statPointsRef, setStats, setStatPoints, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, equipBonusesRef, skillBonusesRef, playerMaxHpRef, setPlayerMaxHp]);
+  }, [masteryState, classState, statsRef, statPointsRef, setStats, setStatPoints, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, equipBonusesRef, skillBonusesRef, playerMaxHpRef, setPlayerMaxHp]);
 
   const handleChooseProfession = useCallback((pid: string) => {
     if (!classState) return;

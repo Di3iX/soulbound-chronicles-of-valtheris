@@ -8,8 +8,9 @@ import { ALL_SKILLS_MAP } from '../skills/skills';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from '../skills/skillTree';
 import { FloatingNum } from '../types/ui';
 import type { Phase } from '../combat';
-import type { PlayerMasteryState } from '../classes/playerClass';
+import type { PlayerMasteryState, PlayerClassState } from '../classes/playerClass';
 import { sumMasteryBonuses } from '../classes/masteryConstellation';
+import { sumClassTalentBonuses } from '../classes/talentBonuses';
 
 export interface EconomyCtx {
   playerGoldRef:     MutableRefObject<number>;
@@ -30,6 +31,7 @@ export interface EconomyCtx {
   levelMpBonusRef:   MutableRefObject<number>;
   playerBonusDmgRef: MutableRefObject<number>;
   masteryStateRef:   MutableRefObject<PlayerMasteryState>;
+  classStateRef:     MutableRefObject<PlayerClassState | null>;
 
   setPlayerGold:    (v: number) => void;
   setInventory:     Dispatch<SetStateAction<Item[]>>;
@@ -55,7 +57,7 @@ export function useEconomy(ctx: EconomyCtx) {
     playerGoldRef, inventoryRef, equipmentRef, equipBonusesRef, playerHpRef, playerMaxHpRef,
     playerMpRef, playerMaxMpRef,
     playerPosRef, phaseRef, skillProgressRef, skillPointsRef, skillBonusesRef, statsRef,
-    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, masteryStateRef,
+    levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, masteryStateRef, classStateRef,
     setPlayerGold, setInventory, setPlayerHp, setPlayerMp, setSelectedItem, setSkillProgress,
     setSkillPoints, setPlayerMaxHp, setPlayerMaxMp,
     log, spawnFloat,
@@ -151,6 +153,7 @@ export function useEconomy(ctx: EconomyCtx) {
         base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
         skills: newBonuses, mastery: sumMasteryBonuses(masteryStateRef.current),
+        classTalent: sumClassTalentBonuses(classStateRef.current),
       }).maxHp;
       playerMaxHpRef.current = newMaxHp;
       setPlayerMaxHp(newMaxHp);
@@ -162,6 +165,7 @@ export function useEconomy(ctx: EconomyCtx) {
         base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
         bonusDmg: playerBonusDmgRef.current, equip: equipBonusesRef.current,
         skills: newBonuses, mastery: sumMasteryBonuses(masteryStateRef.current),
+        classTalent: sumClassTalentBonuses(classStateRef.current),
       }).maxMp;
       playerMaxMpRef.current = newMaxMp;
       setPlayerMaxMp(newMaxMp);

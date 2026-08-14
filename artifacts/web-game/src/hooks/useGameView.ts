@@ -8,8 +8,9 @@ import type { EquipBonuses } from '../equipment';
 import type { Item } from '../inventory';
 import { calcSkillBonuses, type SkillProgress } from '../skills/skillTree';
 import { MAP_COLS, MAP_ROWS, VP_COLS, VP_ROWS, LOCATION_MAPS, LOCATION_NPCS, type NpcDef } from '../world/locations';
-import type { PlayerMasteryState } from '../classes/playerClass';
+import type { PlayerMasteryState, PlayerClassState } from '../classes/playerClass';
 import { sumMasteryBonuses } from '../classes/masteryConstellation';
+import { sumClassTalentBonuses } from '../classes/talentBonuses';
 
 const POTION_KEYS = ['healing_potion', 'greater_healing_potion', 'raw_meat'] as const;
 
@@ -29,6 +30,7 @@ export interface GameViewInput {
   equipBonuses:  EquipBonuses;
   skillProgress: SkillProgress;
   masteryState:  PlayerMasteryState;
+  classState:    PlayerClassState | null;
   playerPos:     { x: number; y: number };
   currentLocation: LocationId;
   transitioning: boolean;
@@ -37,7 +39,7 @@ export interface GameViewInput {
 export function useGameView(input: GameViewInput) {
   const {
     activeEnemyId, enemies, playerXp, xpToNext, inventory, phase, playerHp, playerMaxHp,
-    stats, levelHpBonus, levelMpBonus, playerBonusDmg, equipBonuses, skillProgress, masteryState,
+    stats, levelHpBonus, levelMpBonus, playerBonusDmg, equipBonuses, skillProgress, masteryState, classState,
     playerPos, currentLocation, transitioning,
   } = input;
 
@@ -53,6 +55,7 @@ export function useGameView(input: GameViewInput) {
   const cs: ComputedStats = computeStats({
     base: stats, levelHpBonus, levelMpBonus, bonusDmg: playerBonusDmg,
     equip: equipBonuses, skills: skillBonuses, mastery: sumMasteryBonuses(masteryState),
+    classTalent: sumClassTalentBonuses(classState),
   });
 
   const camCol     = Math.max(0, Math.min(MAP_COLS - VP_COLS, playerPos.x - Math.floor(VP_COLS / 2)));

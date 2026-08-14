@@ -15,8 +15,9 @@ import { getRecipe, craftItem, learnRecipe } from '../items/craft';
 import { upgradeItemInInventory, upgradeEquippedItem, type ProtectMode } from '../items/upgrade';
 import { promoteItemTier } from '../items/tierPromote';
 import { applyEnchant } from '../items/enchant';
-import type { PlayerMasteryState } from '../classes/playerClass';
+import type { PlayerMasteryState, PlayerClassState } from '../classes/playerClass';
 import { sumMasteryBonuses } from '../classes/masteryConstellation';
+import { sumClassTalentBonuses } from '../classes/talentBonuses';
 
 export interface ItemActionsCtx {
   inventoryRef:      MutableRefObject<Item[]>;
@@ -29,6 +30,7 @@ export interface ItemActionsCtx {
   playerBonusDmgRef: MutableRefObject<number>;
   skillBonusesRef:   MutableRefObject<SkillBonuses>;
   masteryStateRef:   MutableRefObject<PlayerMasteryState>;
+  classStateRef:     MutableRefObject<PlayerClassState | null>;
   playerMaxHpRef:    MutableRefObject<number>;
   playerMaxMpRef:    MutableRefObject<number>;
   playerLevelRef:    MutableRefObject<number>;
@@ -49,7 +51,7 @@ export interface ItemActionsCtx {
 export function useItemActions(ctx: ItemActionsCtx) {
   const {
     inventoryRef, playerGoldRef, equipmentRef, equipBonusesRef,
-    statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, skillBonusesRef, masteryStateRef,
+    statsRef, levelHpBonusRef, levelMpBonusRef, playerBonusDmgRef, skillBonusesRef, masteryStateRef, classStateRef,
     playerMaxHpRef, playerMaxMpRef, playerLevelRef, unlockedRecipes,
     setInventory, setPlayerGold, setEquipment, setEquipBonuses, setPlayerMaxHp, setPlayerMaxMp, setUnlockedRecipes,
     log, showGateNotif,
@@ -101,6 +103,7 @@ export function useItemActions(ctx: ItemActionsCtx) {
       base: statsRef.current, levelHpBonus: levelHpBonusRef.current, levelMpBonus: levelMpBonusRef.current,
       bonusDmg: playerBonusDmgRef.current, equip: newBonuses,
       skills: skillBonusesRef.current, mastery: sumMasteryBonuses(masteryStateRef.current),
+      classTalent: sumClassTalentBonuses(classStateRef.current),
     });
     playerMaxHpRef.current = newStats.maxHp;
     setPlayerMaxHp(newStats.maxHp);

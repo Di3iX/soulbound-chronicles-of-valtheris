@@ -21,8 +21,9 @@ import {
   ALL_BOSS_IDS,
 } from '../boss/boss';
 import { FloatingNum } from '../types/ui';
-import type { PlayerMasteryState } from '../classes/playerClass';
+import type { PlayerMasteryState, PlayerClassState } from '../classes/playerClass';
 import { scaleXp, scaleGold, lifestealHeal, masteryFromState } from '../classes/masteryCombat';
+import { sumClassTalentBonuses } from '../classes/talentBonuses';
 import {
   canSpend, spendResource, gainResource, rageOnHit, rageOnDamaged,
   type ClassResourceState,
@@ -66,6 +67,7 @@ export interface CombatCtx {
   statPointsRef:     MutableRefObject<number>;
   statsRef:          MutableRefObject<BaseStats>;
   masteryStateRef?:  MutableRefObject<PlayerMasteryState>;
+  classStateRef?:    MutableRefObject<PlayerClassState | null>;
   classResourceRef?: MutableRefObject<ClassResourceState>;
   legendaryStateRef?: MutableRefObject<LegendaryState>;
 
@@ -126,6 +128,7 @@ export function useCombat(ctx: CombatCtx) {
     playerHpRef, playerLevelRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerPosRef, playerXpRef, questProgressRef,
     shieldRef, playerStatusEffectsRef, skillBonusesRef, skillPointsRef, statPointsRef, statsRef, masteryStateRef,
+    classStateRef,
     log, spawnFloat, onLevelUp,
     setActiveEnemyId, setBossAppearNotif, setBossRewardInfo,
     setBossState, setEnemies, setInventory,
@@ -139,6 +142,9 @@ export function useCombat(ctx: CombatCtx) {
   // ── Mastery Constellation bonuses (see STEP7_COMBAT_MASTERY.md) ────────────
   const masteryBag = (): MasteryBonuses => masteryFromState(masteryStateRef?.current);
 
+  // ── Class talent bonuses (see STEP11_TALENT_BONUSES.md) ────────────────────
+  const classTalentBag = () => sumClassTalentBonuses(classStateRef?.current ?? null);
+
   const statsWithMastery = () => computeStats({
     base: statsRef.current,
     levelHpBonus: levelHpBonusRef.current,
@@ -147,6 +153,7 @@ export function useCombat(ctx: CombatCtx) {
     equip: equipBonusesRef.current,
     skills: skillBonusesRef.current,
     mastery: masteryBag(),
+    classTalent: classTalentBag(),
   });
 
   // ── Rage: gained on dealing / taking damage (STEP8_CLASS_RESOURCE.md) ──────
@@ -212,6 +219,7 @@ export function useCombat(ctx: CombatCtx) {
       base: statsRef.current, levelHpBonus: result.levelHpBonus, levelMpBonus: result.levelMpBonus,
       bonusDmg: result.bonusDmg, equip: equipBonusesRef.current,
       skills: skillBonusesRef.current, mastery: masteryBag(),
+      classTalent: classTalentBag(),
     });
     const newMaxHp = newStats.maxHp;
     const newMaxMp = newStats.maxMp;
@@ -460,6 +468,13 @@ export function useCombat(ctx: CombatCtx) {
 
       const rawDmg = dmg;
       dmg = applyResistance(dmg, 'physical', enemy.resistances);
+
+      // Class talent: execute bonus vs targets under 30% HP
+      const tb = classTalentBag();
+      if (tb.executePct > 0 && enemy.hp / enemy.maxHp < 0.3) {
+        dmg = Math.floor(dmg * (1 + tb.executePct / 100));
+      }
+
       const newHp = Math.max(0, enemy.hp - dmg);
 
       enemiesRef.current = enemiesRef.current.map(e => e.id === id ? { ...e, hp: newHp } : e);
@@ -468,8 +483,8 @@ export function useCombat(ctx: CombatCtx) {
       const resistNote = dmg !== rawDmg ? (dmg < rawDmg ? ' (резист)' : ' (слабость)') : '';
       log(`${isCrit ? '💥 Крит! ' : ''}⚔️ Воин наносит ${dmg} урона${resistNote}!`);
 
-      // Vampirism — heal from damage dealt (Constellation: Вампиризм)
-      const heal = lifestealHeal(dmg, masteryBag());
+      // Vampirism — heal from damage dealt (Constellation + class talent «Железная хватка»)
+      const heal = lifestealHeal(dmg, masteryBag()) + Math.floor((dmg * tb.lifestealPct) / 100);
       if (heal > 0) {
         const next = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
         playerHpRef.current = next;
@@ -802,7 +817,14 @@ export function useCombat(ctx: CombatCtx) {
           let rawDmg = skill.damage;
           const legendBonus = legendaryDmgBonusPct();
           if (legendBonus > 0) rawDmg = Math.floor(rawDmg * (1 + legendBonus / 100));
-          const dmg = applyResistance(rawDmg, skill.damageType, enemy.resistances);
+          let dmg = applyResistance(rawDmg, skill.damageType, enemy.resistances);
+
+          // Class talent: execute bonus vs targets under 30% HP
+          const tb = classTalentBag();
+          if (tb.executePct > 0 && enemy.hp / enemy.maxHp < 0.3) {
+            dmg = Math.floor(dmg * (1 + tb.executePct / 100));
+          }
+
           const newHp = Math.max(0, enemy.hp - dmg);
           const skNote = dmg !== rawDmg ? (dmg < rawDmg ? ' (резист)' : ' (слабость!)') : '';
 
@@ -811,8 +833,8 @@ export function useCombat(ctx: CombatCtx) {
           spawnFloat(dmg.toString(), enemy.x, enemy.y, 'enemy-dmg');
           log(`${skill.emoji} ${skill.name} (${DAMAGE_TYPE_LABEL[skill.damageType]}): ${dmg} урона${skNote}!`);
 
-          // Vampirism — heal from damage dealt (Constellation: Вампиризм)
-          const heal = lifestealHeal(dmg, masteryBag());
+          // Vampirism — heal from damage dealt (Constellation + class talent «Железная хватка»)
+          const heal = lifestealHeal(dmg, masteryBag()) + Math.floor((dmg * tb.lifestealPct) / 100);
           if (heal > 0) {
             const next = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
             playerHpRef.current = next;
