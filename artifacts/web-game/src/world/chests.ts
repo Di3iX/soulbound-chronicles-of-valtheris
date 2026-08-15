@@ -57,7 +57,7 @@ export const CHEST_DEFS: ChestDef[] = [
   {
     id: 'darkforest_clearing',
     location: 'darkforest',
-    x: 6, y: 6,
+    x: 8, y: 8,
     goldMin: 25, goldMax: 50,
     itemPool: ['greater_healing_potion', 'mana_potion', 'leather_armor'],
     itemChance: 0.65,
@@ -65,7 +65,7 @@ export const CHEST_DEFS: ChestDef[] = [
   {
     id: 'darkforest_ruins',
     location: 'darkforest',
-    x: 14, y: 12,
+    x: 20, y: 20,
     goldMin: 30, goldMax: 55,
     itemPool: ['iron_sword', 'wolf_hide', 'healing_potion'],
     itemChance: 0.55,
