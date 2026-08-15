@@ -126,6 +126,29 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
     };
   }
 
+  // 1) Intro — first talk with elder
+  const intro = getQuestEntry(progress, 'quest_intro_001');
+  if (canOfferQuest(progress, 'quest_intro_001') || intro.status === 'active') {
+    if (intro.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_intro_001',
+        base,
+        [
+          'Добро пожаловать в Дубовую Долину, путник.',
+          'Я староста. Земли вокруг ещё держатся, но зверь ведёт себя странно.',
+          'Сходи к фермеру на Тихие поля — ему нужна помощь с крысами.',
+          'А когда разберёшься — возвращайся. Мне есть что рассказать.',
+        ],
+        ['Иди к фермеру на юг — к Тихим полям.'],
+        [
+          'Хорошо, что выслушал. Держи немного золота на дорогу.',
+          'Фермер укажет, с чего начать.',
+        ],
+      );
+    }
+  }
+
   // Crystal quest (after fields)
   const crystal = getQuestEntry(progress, 'quest_crystal_001');
   if (canOfferQuest(progress, 'quest_crystal_001') || crystal.status === 'active') {
@@ -546,35 +569,70 @@ function elderDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialog
 
 function farmerDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialogue {
   const base = { npcId: 'farmer', name: 'Фермер', emoji: '👨' };
-  const entry = getQuestEntry(progress, 'quest_fields_001');
 
-  if (entry.status !== 'completed') {
-    return questFlow(
-      progress,
-      'quest_fields_001',
-      base,
-      [
-        'Здорово, путник. Крысы и кабаны портят урожай.',
-        'В борозде нашёл чёрный камень — холодный, как ночь.',
-        'Убей 5 крыс или молодых кабанов. Награда скромная, но честная.',
-      ],
-      [
-        'Они всё ещё рыщут по полям. Держись дороги.',
-        'Если увидишь Огромного Кабана — это уже не мой огород.',
-      ],
-      [
-        'Спасибо! Теперь можно сеять спокойно.',
-        'Тот чёрный камень я отнёс старосте. Поговори с ним в деревне.',
-      ],
-    );
+  // 2) Крысы
+  const rats = getQuestEntry(progress, 'quest_rats_001');
+  if (canOfferQuest(progress, 'quest_rats_001') || (rats.status === 'active')) {
+    if (rats.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_rats_001',
+        base,
+        [
+          'Здорово, путник. Крысы у амбара сжирают зерно.',
+          'Убей 5 крыс — без них посевная встанет.',
+        ],
+        ['Крысы шныряют по полям у амбара. Давай, не тяни.'],
+        ['Спасибо! Зерно в безопасности. Но кабаны всё ещё топчут огород…'],
+      );
+    }
+  }
+
+  // 3) Кабаны
+  const boars = getQuestEntry(progress, 'quest_boars_001');
+  if (canOfferQuest(progress, 'quest_boars_001') || (boars.status === 'active')) {
+    if (boars.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_boars_001',
+        base,
+        [
+          'Молодые кабаны вытоптали грядки.',
+          'Прикончи 3 молодых кабанов — тогда можно сеять.',
+        ],
+        ['Кабаны бродят по южной и западной части полей.'],
+        ['Отличная работа! Огород снова наш.'],
+      );
+    }
+  }
+
+  // 4) Общая зачистка полей
+  const fields = getQuestEntry(progress, 'quest_fields_001');
+  if (canOfferQuest(progress, 'quest_fields_001') || (fields.status === 'active')) {
+    if (fields.status !== 'completed') {
+      return questFlow(
+        progress,
+        'quest_fields_001',
+        base,
+        [
+          'Ещё просьба: прореди 5 крыс или кабанов — поля кишат зверём.',
+          'В борозде нашёл чёрный камень. Отнёс старосте — поговори с ним потом.',
+        ],
+        ['Держись дороги. Зверь сегодня злой.'],
+        [
+          'Спасибо! Теперь можно сеять спокойно.',
+          'Староста ждёт тебя в деревне — у него есть дело посерьёзнее.',
+        ],
+      );
+    }
   }
 
   const lines = [
     'Поля пока живы. Спасибо ещё раз.',
-    'Староста копается в этих кристаллах — говорит, плохая примета.',
+    'Староста копается в кристаллах — говорит, плохая примета.',
   ];
   if (flags.fieldBoarFirstKill) {
-    lines.push('Слышал, ты положил Огромного Кабана. Земля после него пахнет гарью и железом.');
+    lines.push('Слышал, ты положил Огромного Кабана. Земля после него пахнет гарью.');
   }
   return {
     ...base,

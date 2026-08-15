@@ -27,26 +27,57 @@ export interface QuestEntry {
 export type QuestProgress = Record<string, QuestEntry>;
 
 export const QUEST_DEFS: Record<string, QuestDef> = {
+  // ── Цепочка 1–4: деревня + Тихие поля ─────────────────────────────────────
+  quest_intro_001: {
+    id:          'quest_intro_001',
+    title:       'Добро пожаловать',
+    description: 'Староста Дубовой Долины хочет поговорить с тобой — слушай внимательно.',
+    npcId:       'elder',
+    objective:   { description: 'Выслушать старосту', required: 0 },
+    killTargets: [],
+    reward:      { gold: 50, xp: 25 },
+  },
+  quest_rats_001: {
+    id:          'quest_rats_001',
+    title:       'Крысы у амбара',
+    description: 'Фермер просит извести крыс у амбара — они портят зерно.',
+    npcId:       'farmer',
+    objective:   { description: 'Убить крыс', required: 5 },
+    killTargets: ['Крыса'],
+    reward:      { gold: 30, xp: 40, items: ['healing_potion'] },
+    requiresQuest: 'quest_intro_001',
+  },
+  quest_boars_001: {
+    id:          'quest_boars_001',
+    title:       'Помощь фермеру',
+    description: 'Молодые кабаны вытоптали огород. Фермер просит отбить трёх зверей.',
+    npcId:       'farmer',
+    objective:   { description: 'Убить молодых кабанов', required: 3 },
+    killTargets: ['Молодой кабан'],
+    reward:      { gold: 45, xp: 55, items: ['raw_meat'] },
+    requiresQuest: 'quest_rats_001',
+  },
   quest_fields_001: {
     id:          'quest_fields_001',
     title:       'Чума на полях',
-    description: 'Фермер просит избавить поля от крыс и молодых кабанов.',
+    description: 'Фермер просит дополнительно проредить крыс и кабанов на полях.',
     npcId:       'farmer',
     objective:   { description: 'Убить крыс или молодых кабанов', required: 5 },
     killTargets: ['Крыса', 'Молодой кабан'],
     reward:      { gold: 40, xp: 60, items: ['healing_potion'] },
+    requiresQuest: 'quest_boars_001',
   },
   quest_crystal_001: {
     id:          'quest_crystal_001',
-    title:       'Чёрные кристаллы',
-    description: 'Староста просит убить Огромного Кабана — тварь, возле которой находят чёрные кристаллы.',
+    title:       'Охота на кабана',
+    description: 'Староста просит убить Огромного Кабана — мини-босса Тихих полей.',
     npcId:       'elder',
-    objective:   { description: 'Убить Огромного Кабана (мини-босс на полях)', required: 1 },
+    objective:   { description: 'Убить Огромного Кабана', required: 1 },
     killTargets: ['Огромный Кабан'],
     reward:      { gold: 80, xp: 100, items: ['greater_healing_potion'] },
     requiresQuest: 'quest_fields_001',
   },
-  quest_goblin_001: {
+    quest_goblin_001: {
     id:          'quest_goblin_001',
     title:       'Тень леса',
     description: 'Староста просит разобраться с гоблинами в Тёмном лесу.',
