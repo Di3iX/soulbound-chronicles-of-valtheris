@@ -44,7 +44,7 @@ interface CombatHUDProps {
   onToggleClassPanel: () => void;
 }
 
-/** Compact top HUD — tight avatar + thin bars + small icon row. */
+/** Top HUD — short bars like classic tile MMOs (not full-width). */
 export default function CombatHUD({
   shieldActive, playerLevel, playerHp, playerMaxHp, playerMp, playerMaxMp, playerStatusEffects,
   activeEnemy, bossId, bossIds, currentLocation, locationMeta,
@@ -79,58 +79,69 @@ export default function CombatHUD({
       </span>
     ) : null;
 
+  // Short bar track — fixed width like the reference (~90–100px)
+  const Bar = ({
+    pct, color, track,
+  }: { pct: number; color: string; track: string }) => (
+    <div className={`h-[6px] w-[92px] rounded-sm overflow-hidden border border-black/40 ${track}`}>
+      <div className={`h-full ${color} transition-all duration-300`} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+    </div>
+  );
+
   return (
     <div className="shrink-0 border-b border-[#1e1e28] bg-[#0e0e14]">
 
-      {/* Row 1 — avatar + bars + gold */}
-      <div className="flex items-center gap-1.5 px-1.5 pt-1 pb-0.5">
-        <div className="relative shrink-0 w-[32px] h-[32px] rounded-full border border-primary/60 bg-[#1a1520] flex items-center justify-center">
-          <span className="text-[15px] leading-none">{shieldActive ? '🛡️' : '⚔️'}</span>
+      {/* Row 1: avatar | name+short bars | gold */}
+      <div className="flex items-start gap-1.5 px-1.5 pt-1 pb-0.5">
+        {/* Avatar */}
+        <div className="relative shrink-0 w-[34px] h-[34px] rounded-full border border-primary/60 bg-[#1a1520] flex items-center justify-center mt-[1px]">
+          <span className="text-[16px] leading-none">{shieldActive ? '🛡️' : '⚔️'}</span>
           <span className="absolute -bottom-0.5 -right-0.5 bg-primary text-[#111] text-[8px] font-black rounded px-[2px] leading-tight">
             {playerLevel}
           </span>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-1 leading-none">
-            <span className="text-[11px] font-bold text-white truncate">Воин</span>
-            <span className="text-[9px] text-[#666] font-mono shrink-0 truncate max-w-[40%]">
+        {/* Identity + short bars */}
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-1.5 leading-none mb-[2px]">
+            <span className="text-[11px] font-bold text-white">Воин</span>
+            <span className="text-[8px] text-[#666] font-mono truncate max-w-[110px]">
               {meta?.emoji} {meta?.label}
             </span>
           </div>
-          {/* XP */}
-          <div className="h-[2px] w-full bg-[#1a1a1f] rounded-full overflow-hidden mt-[2px] mb-[2px]">
-            <div className="h-full bg-amber-400/80 transition-all duration-300" style={{ width: `${Math.round(xpPct)}%` }} />
+
+          {/* XP — thin short */}
+          <div className="h-[3px] w-[92px] bg-[#1a1a1f] rounded-full overflow-hidden mb-[2px]">
+            <div className="h-full bg-amber-400/85 transition-all duration-300" style={{ width: `${Math.round(xpPct)}%` }} />
           </div>
-          {/* HP */}
-          <div className="flex items-center gap-0.5 mb-[1px]">
-            <span className="text-[8px] leading-none w-[10px]">❤️</span>
-            <div className="flex-1 h-[5px] bg-[#1a0a0a] rounded-sm overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-red-700 to-red-500 transition-all duration-300" style={{ width: `${hpPct}%` }} />
-            </div>
-            <span className="text-[8px] font-mono text-red-300/90 tabular-nums w-[44px] text-right shrink-0">
+
+          {/* HP short */}
+          <div className="flex items-center gap-1 mb-[2px]">
+            <span className="text-[9px] leading-none">❤️</span>
+            <Bar pct={hpPct} color="bg-gradient-to-r from-red-700 to-red-500" track="bg-[#1a0a0a]" />
+            <span className="text-[8px] font-mono text-red-300/90 tabular-nums">
               {playerHp}/{playerMaxHp}
             </span>
           </div>
-          {/* MP */}
-          <div className="flex items-center gap-0.5">
-            <span className="text-[8px] leading-none w-[10px]">💙</span>
-            <div className="flex-1 h-[4px] bg-[#0a0a1a] rounded-sm overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-700 to-blue-400 transition-all duration-300" style={{ width: `${mpPct}%` }} />
-            </div>
-            <span className="text-[8px] font-mono text-blue-300/90 tabular-nums w-[44px] text-right shrink-0">
+
+          {/* MP short */}
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] leading-none">💙</span>
+            <Bar pct={mpPct} color="bg-gradient-to-r from-blue-700 to-blue-400" track="bg-[#0a0a1a]" />
+            <span className="text-[8px] font-mono text-blue-300/90 tabular-nums">
               {playerMp}/{playerMaxMp}
             </span>
           </div>
         </div>
 
-        <div className="shrink-0 flex flex-col items-end gap-0 pl-0.5">
+        {/* Right: gold + mob count */}
+        <div className="ml-auto shrink-0 flex flex-col items-end gap-0.5 pt-0.5">
           <div className="flex items-center gap-0.5 bg-[#1a1a12] border border-yellow-900/30 rounded px-1 py-[1px]">
             <span className="text-[10px]">🪙</span>
             <span className="text-[10px] font-bold text-yellow-400 font-mono tabular-nums">{playerGold}</span>
           </div>
-          <span className="text-[7px] text-[#555] font-mono leading-tight">
-            {livingEnemiesCount}/{totalEnemiesCount}
+          <span className="text-[7px] text-[#555] font-mono">
+            {livingEnemiesCount}/{totalEnemiesCount} 👾
           </span>
         </div>
       </div>
@@ -149,28 +160,26 @@ export default function CombatHUD({
         </div>
       )}
 
-      {/* Enemy — only in combat, one thin line */}
+      {/* Enemy — short bar too */}
       {activeEnemy && (
-        <div className="mx-1.5 mb-0.5 px-1.5 py-0.5 rounded bg-[#140a0a]/90 border border-red-900/30">
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] font-bold text-red-300 truncate flex-1">
-              {isBoss(activeEnemy) ? '👑 ' : ''}{activeEnemy.emoji} {activeEnemy.name}
-              {enemyLevel != null && <span className="text-[8px] text-[#777] font-mono ml-0.5">Ур.{enemyLevel}</span>}
-            </span>
-            <span className="text-[9px] font-mono text-red-200 tabular-nums shrink-0">
-              {activeEnemy.hp}/{activeEnemy.maxHp}
-            </span>
-          </div>
-          <div className="h-[4px] w-full bg-[#1a0a0a] rounded-sm overflow-hidden mt-[2px]">
+        <div className="mx-1.5 mb-0.5 px-1.5 py-0.5 rounded bg-[#140a0a]/90 border border-red-900/30 flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-red-300 truncate flex-1 min-w-0">
+            {isBoss(activeEnemy) ? '👑 ' : ''}{activeEnemy.emoji} {activeEnemy.name}
+            {enemyLevel != null && <span className="text-[8px] text-[#777] font-mono ml-0.5">Ур.{enemyLevel}</span>}
+          </span>
+          <div className="h-[5px] w-[72px] shrink-0 rounded-sm overflow-hidden bg-[#1a0a0a]">
             <div
               className={`h-full transition-all duration-300 ${isBoss(activeEnemy) ? 'bg-gradient-to-r from-red-800 to-amber-500' : 'bg-red-600'}`}
               style={{ width: `${enemyHpPct}%` }}
             />
           </div>
+          <span className="text-[8px] font-mono text-red-200 tabular-nums shrink-0">
+            {activeEnemy.hp}/{activeEnemy.maxHp}
+          </span>
         </div>
       )}
 
-      {/* Icon toolbar — single compact row */}
+      {/* Icons */}
       <div className="flex items-center justify-between gap-0.5 px-1.5 pb-1 pt-0.5">
         <button type="button" onClick={onToggleCharPanel} className={btn(showCharPanel)} title="Персонаж">
           <Badge n={statPoints} pulse />
@@ -201,7 +210,6 @@ export default function CombatHUD({
         </button>
       </div>
 
-      {/* Quests — max 1 line each, only if active */}
       {(() => {
         const active = getActiveQuests(questProgress).slice(0, 1);
         if (active.length === 0) return null;
