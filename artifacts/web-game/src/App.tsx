@@ -36,7 +36,7 @@ import {
   OpenedChests,
 } from './world/chests';
 import { renderTileContent as renderTile } from './game/ui/renderTile';
-import { QuestProgress } from './quests/quests';
+import { QuestProgress, ensureDailyQuest } from './quests/quests';
 import { NpcDialogue } from './quests/npc';
 import ClassSelectPanel from './classes/ClassSelectPanel';
 import ClassPanel from './classes/ClassPanel';
@@ -270,6 +270,11 @@ export default function App() {
   useSyncedRef(openedChestsRef, openedChests);
   useEffect(() => { skillBonusesRef.current    = calcSkillBonuses(skillProgress); }, [skillProgress]);
 
+  // ── Daily quest: ensure today's daily is registered (see STEP_DAILY_CLASS.md) ─
+  useEffect(() => {
+    setQuestProgress(prev => ensureDailyQuest(prev).progress);
+  }, []);
+
   // ── Combat timer: track fight start/end for CombatLog header (see STEP_COMBAT_LOG.md) ─
   useEffect(() => {
     setCombatStartedAt(phase === 'combat' ? Date.now() : null);
@@ -429,6 +434,7 @@ const log = useCallback((msg: string) => {
   const { handleQuestAction, handleNpcInteract } = useQuestActions({
     inventoryRef, playerGoldRef, playerHpRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerStatusEffectsRef, playerXpRef, questProgressRef, skillBonusesRef,
+    classStateRef, setClassState,
     setQuestDialogue, setNpcDialog, setShowCraft, setShowUpgrade, setShowTier, setShowEnchant, setShowTrial,
     setPlayerGold, setPlayerHp, setPlayerMp, setPlayerStatusEffects, setPlayerXp,
     setInventory, setLootNotif, setQuestProgress,
