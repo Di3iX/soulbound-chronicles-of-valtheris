@@ -595,8 +595,10 @@ const log = useCallback((msg: string) => {
           {showBossVictory && bossRewardInfo && (
             <BossVictoryPanel
               reward={bossRewardInfo}
+              bossName={bossRewardInfo.bossName}
               onContinue={() => {
                 setShowBossVictory(false);
+                setBossRewardInfo(null);
                 phaseRef.current = 'explore';
                 setPhase('explore');
               }}
