@@ -1,6 +1,6 @@
 // ─── CRAFTING (Blacksmith) ────────────────────────────────────────────────────
 import type { Item } from '../inventory';
-import { ITEM_CATALOG, makeItem, type ItemType } from '../inventory';
+import { ITEM_CATALOG, makeItem, type ItemType, countItemKey, removeFromInventoryByKey, addToInventory } from '../inventory';
 import type { QuestProgress } from '../quests/quests';
 import { isQuestCompleted } from '../quests/quests';
 
@@ -148,7 +148,7 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
 ];
 
 export function countKey(inventory: Item[], key: string): number {
-  return inventory.filter(i => i.key === key).length;
+  return countItemKey(inventory, key);
 }
 
 export function canCraft(recipe: CraftRecipe, inventory: Item[]): boolean {
@@ -197,14 +197,7 @@ export function learnRecipe(
       return { unlocked, inventory, learned: false, msg: 'Нет свитка рецепта.' };
     }
     // consume one scroll
-    let removed = false;
-    const nextInv = inventory.filter(it => {
-      if (!removed && it.key === recipe.requiresRecipeItem) {
-        removed = true;
-        return false;
-      }
-      return true;
-    });
+    const nextInv = removeFromInventoryByKey(inventory, recipe.requiresRecipeItem, 1);
     return {
       unlocked: [...unlocked, recipe.id],
       inventory: nextInv,
@@ -235,19 +228,10 @@ export function craftItem(
   }
   let next = [...inventory];
   for (const ing of recipe.ingredients) {
-    let left = ing.count;
-    const kept: Item[] = [];
-    for (const it of next) {
-      if (it.key === ing.key && left > 0) {
-        left -= 1;
-        continue;
-      }
-      kept.push(it);
-    }
-    next = kept;
+    next = removeFromInventoryByKey(next, ing.key, ing.count);
   }
   const item = makeItem(recipe.resultKey);
-  return { ok: true, inventory: [...next, item], item };
+  return { ok: true, inventory: addToInventory(next, item), item };
 }
 
 export function recipeRequirementsText(recipe: CraftRecipe): string {
