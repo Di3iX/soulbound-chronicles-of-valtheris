@@ -5,7 +5,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Item } from '../inventory';
-import { ITEM_CATALOG, makeItem } from '../inventory';
+import { ITEM_CATALOG, makeItem, addToInventory, removeFromInventoryByKey, countItemKey } from '../inventory';
 import type { StatusEffect } from '../combat';
 import type { QuestProgress } from '../quests/quests';
 import { QUEST_DEFS } from '../quests/quests';
@@ -146,7 +146,7 @@ export function useQuestActions(ctx: QuestActionsCtx) {
       const dlg = getNpcDialogue(
         'smith',
         questProgressRef.current,
-        buildDialogueFlags(result.inventory.filter(i => i.key === 'black_crystal').length),
+        buildDialogueFlags(countItemKey(result.inventory, 'black_crystal')),
       );
       if (dlg) setQuestDialogue(dlg);
       return;
@@ -171,16 +171,11 @@ export function useQuestActions(ctx: QuestActionsCtx) {
       // ── Deliver items: consume from inventory (e.g. turn-in quests) ─────────
       if (def.deliverItems) {
         const { key, count } = def.deliverItems;
-        let left = count;
-        const nextInv: Item[] = [];
-        for (const it of inventoryRef.current) {
-          if (it.key === key && left > 0) { left -= 1; continue; }
-          nextInv.push(it);
-        }
-        if (left > 0) {
+        if (countItemKey(inventoryRef.current, key) < count) {
           log('Не хватает предметов для сдачи!');
           return;
         }
+        const nextInv = removeFromInventoryByKey(inventoryRef.current, key, count);
         inventoryRef.current = nextInv;
         setInventory(nextInv);
         log(`📦 Сдано: ${count} × ${ITEM_CATALOG[key]?.name ?? key}`);
@@ -200,8 +195,8 @@ export function useQuestActions(ctx: QuestActionsCtx) {
       for (const itemKey of def.reward.items ?? []) {
         if (!inventoryRef.current.some(i => i.key === itemKey)) {
           const item = makeItem(itemKey);
-          inventoryRef.current = [...inventoryRef.current, item];
-          setInventory(prev => [...prev, item]);
+          inventoryRef.current = addToInventory(inventoryRef.current, item);
+          setInventory(prev => addToInventory(prev, item));
           log(`🎁 Получен предмет: ${item.name}!`);
         } else {
           log(`(У вас уже есть ${ITEM_CATALOG[itemKey]?.name ?? itemKey})`);
@@ -231,7 +226,7 @@ export function useQuestActions(ctx: QuestActionsCtx) {
       return;
     }
     // Quest NPCs or generic dialog
-    const crystalCount = inventoryRef.current.filter(i => i.key === 'black_crystal').length;
+    const crystalCount = countItemKey(inventoryRef.current, 'black_crystal');
     const dlg = getNpcDialogue(npc.id, questProgressRef.current, buildDialogueFlags(crystalCount));
     if (dlg) { setQuestDialogue(dlg); }
     else { setNpcDialog(`${npc.emoji} ${npc.name}: «Скоро здесь будут квесты и торговля! Следите за обновлениями.»`); }

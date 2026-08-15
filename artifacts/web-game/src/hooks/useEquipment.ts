@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import { Item, canEquipItem } from '../inventory';
+import { Item, canEquipItem, addToInventory, removeOneById } from '../inventory';
 import { Equipment, EquipBonuses, calcEquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import type { SkillBonuses } from '../skills/skillTree';
@@ -62,8 +62,8 @@ export function useEquipment(ctx: EquipmentCtx) {
 
     // Remove newly-equipped item from inventory; return displaced item if any
     setInventory(prev => {
-      let next = prev.filter(i => i.id !== item.id);
-      if (prevItem) next = [...next, prevItem];
+      let next = removeOneById(prev, item.id);
+      if (prevItem) next = addToInventory(next, prevItem);
       return next;
     });
 
@@ -116,7 +116,7 @@ export function useEquipment(ctx: EquipmentCtx) {
     setEquipment(newEquipment);
 
     // Return item to inventory
-    setInventory(prev => [...prev, item]);
+    setInventory(prev => addToInventory(prev, item));
 
     // Recalc bonuses from scratch
     const newBonuses = calcEquipBonuses(newEquipment);

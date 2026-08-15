@@ -8,7 +8,7 @@ import {
   addStatusEffect, tickStatusEffects, hasStatusEffect, slowMultiplier,
   DamageType, applyResistance, effectChanceMultiplier, DAMAGE_TYPE_LABEL,
 } from '../combat';
-import { Item, DROP_TABLES, makeItem } from '../inventory';
+import { Item, DROP_TABLES, makeItem, addToInventory } from '../inventory';
 import { EquipBonuses } from '../equipment';
 import { BaseStats, computeStats, type MasteryBonuses } from '../stats';
 import { SkillBonuses } from '../skills/skillTree';
@@ -196,7 +196,7 @@ export function useCombat(ctx: CombatCtx) {
     if (!guaranteed && Math.random() >= table.chance + itemChanceBonus / 100) return undefined;
     const key = table.pool[Math.floor(Math.random() * table.pool.length)];
     const item = makeItem(key);
-    setInventory(prev => [...prev, item]);
+    setInventory(prev => addToInventory(prev, item));
     setLootNotif(item.name);
     log(`📦 Получен лут: ${item.name}!`);
     setTimeout(() => setLootNotif(null), 2500);
@@ -358,8 +358,8 @@ export function useCombat(ctx: CombatCtx) {
     const dropPool = isRare ? [...BOSS_RARE_LOOT] : [...BOSS_COMMON_LOOT];
     const dropKey  = dropPool[Math.floor(Math.random() * dropPool.length)];
     const dropItem = makeItem(dropKey);
-    inventoryRef.current = [...inventoryRef.current, dropItem];
-    setInventory(prev => [...prev, dropItem]);
+    inventoryRef.current = addToInventory(inventoryRef.current, dropItem);
+    setInventory(prev => addToInventory(prev, dropItem));
     setLootNotif(dropItem.name);
     setTimeout(() => setLootNotif(null), 2500);
     log(`📦 Получен лут: ${dropItem.name}!`);
@@ -369,8 +369,8 @@ export function useCombat(ctx: CombatCtx) {
     let trophyItem: Item | undefined;
     if (wasFirstKill) {
       trophyItem = makeTrophyForBoss(key);
-      inventoryRef.current = [...inventoryRef.current, trophyItem];
-      setInventory(prev => [...prev, trophyItem!]);
+      inventoryRef.current = addToInventory(inventoryRef.current, trophyItem);
+      setInventory(prev => addToInventory(prev, trophyItem!));
       log(`🏆 Получен трофей: ${trophyItem.name}!`);
       if (cfg.unlockMessage) log(cfg.unlockMessage);
     }

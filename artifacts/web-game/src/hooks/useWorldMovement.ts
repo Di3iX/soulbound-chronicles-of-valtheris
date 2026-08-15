@@ -5,6 +5,7 @@
 import { useCallback, useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Item } from '../inventory';
+import { addToInventory } from '../inventory';
 import type { LocationId, Phase, Enemy } from '../combat';
 import { makeLocationEnemies } from '../combat';
 import {
@@ -151,8 +152,8 @@ export function useWorldMovement(ctx: WorldMovementCtx) {
         playerGoldRef.current += loot.gold;
         setPlayerGold(playerGoldRef.current);
         if (loot.item) {
-          inventoryRef.current = [...inventoryRef.current, loot.item];
-          setInventory(prev => [...prev, loot.item!]);
+          inventoryRef.current = addToInventory(inventoryRef.current, loot.item);
+          setInventory(prev => addToInventory(prev, loot.item!));
           setLootNotif(loot.item.name);
           setTimeout(() => setLootNotif(null), 2500);
         }

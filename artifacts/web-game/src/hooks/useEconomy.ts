@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import { Item, makeItem } from '../inventory';
+import { Item, makeItem, addToInventory, removeOneById } from '../inventory';
 import { Equipment, EquipBonuses } from '../equipment';
 import { BaseStats, computeStats } from '../stats';
 import { SHOP_BUY_PRICE, sellPrice, CONSUMABLE_HEAL, CONSUMABLE_MANA } from '../shop/shop';
@@ -74,8 +74,8 @@ export function useEconomy(ctx: EconomyCtx) {
     const item = makeItem(key);
     playerGoldRef.current -= price;
     setPlayerGold(playerGoldRef.current);
-    inventoryRef.current = [...inventoryRef.current, item];
-    setInventory(prev => [...prev, item]);
+    inventoryRef.current = addToInventory(inventoryRef.current, item);
+    setInventory(prev => addToInventory(prev, item));
     log(`🛒 Куплено: ${item.name} за ${price}💰`);
   }, [log]);
 
@@ -88,8 +88,8 @@ export function useEconomy(ctx: EconomyCtx) {
       return;
     }
     const price = sellPrice(item);
-    inventoryRef.current = inventoryRef.current.filter(i => i.id !== itemId);
-    setInventory(prev => prev.filter(i => i.id !== itemId));
+    inventoryRef.current = removeOneById(inventoryRef.current, itemId);
+    setInventory(prev => removeOneById(prev, itemId));
     playerGoldRef.current += price;
     setPlayerGold(playerGoldRef.current);
     log(`💸 Продано: ${item.name} за ${price}💰`);
@@ -123,8 +123,8 @@ export function useEconomy(ctx: EconomyCtx) {
       log(`🔷 Использовано ${item.name}: +${restored} MP!`);
     }
 
-    inventoryRef.current = inventoryRef.current.filter(i => i.id !== item.id);
-    setInventory(prev => prev.filter(i => i.id !== item.id));
+    inventoryRef.current = removeOneById(inventoryRef.current, item.id);
+    setInventory(prev => removeOneById(prev, item.id));
     setSelectedItem(null);
   }, [log, spawnFloat]);
 
