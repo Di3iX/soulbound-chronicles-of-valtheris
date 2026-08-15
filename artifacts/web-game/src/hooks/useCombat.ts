@@ -386,7 +386,10 @@ export function useCombat(ctx: CombatCtx) {
     // Show boss victory overlay
     setActiveEnemyId(null);
     activeEnemyIdRef.current = null;
-    setBossRewardInfo({ xp: xpGained, gold: goldGained, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill });
+    setBossRewardInfo({
+      xp: xpGained, gold: goldGained, dropItem, trophyItem, leveledUp, newLevel, wasFirstKill,
+      bossName: cfg.def.name,
+    });
     setShowBossVictory(true);
 
     {
