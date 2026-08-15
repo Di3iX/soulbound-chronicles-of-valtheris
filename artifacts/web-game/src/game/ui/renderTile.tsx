@@ -108,10 +108,10 @@ export function renderTileContent({
     const src = currentLocation;
     if ((src === 'village' && dest === 'forest') || (src === 'forest' && dest === 'village'))
       return emoji('tile-exit-road rounded-sm', '🛤️', 'Дорога');
-    if (src === 'forest' && dest === 'wolfcave')
+    if ((src === 'forest' || src === 'darkforest') && dest === 'wolfcave')
       return emoji('tile-exit-cave rounded-sm', '🕳️', 'Вход в пещеру');
-    if (src === 'wolfcave' && dest === 'forest')
-      return emoji('tile-exit-cave rounded-sm', '⛰️', 'Выход');
+    if (src === 'wolfcave' && (dest === 'forest' || dest === 'darkforest'))
+      return emoji('tile-exit-cave rounded-sm', '🚪', 'Выход из пещеры');
     if (src === 'wolfcave' && dest === 'ruins')
       return emoji('tile-exit-ruins rounded-sm', '🏛️', 'Врата руин');
     if (src === 'ruins' && dest === 'wolfcave')
@@ -121,7 +121,18 @@ export function renderTileContent({
     return emoji('tile-exit rounded-sm', '🚪', 'Переход');
   }
 
-  if (tileType === 1) return emoji('tile-tree', '🌲');
+  // Type 1 = solid: trees outdoors, cave walls underground
+  const isCave = currentLocation === 'wolfcave' || currentLocation === 'mine' || currentLocation === 'icefort';
+  if (tileType === 1) {
+    if (isCave) {
+      return (
+        <div className="w-full h-full tile-rock flex items-center justify-center">
+          <span className="tile-emoji text-[clamp(12px,2.8vw,18px)] opacity-70">⬛</span>
+        </div>
+      );
+    }
+    return emoji('tile-tree', '🌲');
+  }
   if (tileType === 2) return emoji('tile-rock', '🪨');
   if (tileType === 3) {
     return (
