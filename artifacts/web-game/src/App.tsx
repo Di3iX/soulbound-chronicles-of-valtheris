@@ -15,7 +15,7 @@ import { useQuestActions } from './hooks/useQuestActions';
 import { useGameView } from './hooks/useGameView';
 import {
   Item, ItemType, ItemBonuses, Rarity,
-  RARITY_STYLE,
+  RARITY_STYLE, compactInventory,
 } from './inventory';
 import {
   Equipment, EquipBonuses,
@@ -144,7 +144,7 @@ export default function App() {
 
   // ── Inventory / equipment state ────────────────────────────────────────────
   const [equipment, setEquipment]         = useState<Equipment>(sv?.equipment       ?? { ...EMPTY_EQUIPMENT });
-  const [inventory, setInventory]         = useState<Item[]>(sv?.inventory           ?? []);
+  const [inventory, setInventory]         = useState<Item[]>(() => compactInventory(sv?.inventory ?? []));
   const [equipBonuses, setEquipBonuses]   = useState<EquipBonuses>(sv?.equipBonuses ?? { ...ZERO_EQUIP_BONUSES });
   const [showInventory, setShowInventory] = useState(false);
   const [selectedItem, setSelectedItem]   = useState<Item | null>(null);
@@ -223,7 +223,7 @@ export default function App() {
   const currentLocationRef = useRef<LocationId>(sv?.currentLocation ?? 'village');
   const transitioningRef   = useRef(false);
   // These two have no paired state→ref sync in callbacks, so we track them explicitly:
-  const inventoryRef       = useRef<Item[]>(sv?.inventory        ?? []);
+  const inventoryRef       = useRef<Item[]>(compactInventory(sv?.inventory ?? []));
   const xpToNextRef        = useRef(sv?.xpToNext                 ?? xpRequired(INITIAL_PLAYER_LVL));
   const questProgressRef   = useRef<QuestProgress>(sv?.questProgress ?? {});
   const exploredTilesRef   = useRef<ExploredTiles>(sv?.exploredTiles ?? makeInitialExploredTiles());
