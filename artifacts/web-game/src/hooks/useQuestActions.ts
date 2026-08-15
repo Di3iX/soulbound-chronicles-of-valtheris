@@ -12,6 +12,7 @@ import { QUEST_DEFS } from '../quests/quests';
 import { type NpcDialogue, type DialogAction, getNpcDialogue } from '../quests/npc';
 import { CRAFT_RECIPES, craftItem } from '../items/craft';
 import type { SkillBonuses } from '../skills/skillTree';
+import type { PlayerClassState } from '../classes/playerClass';
 import { HEAL_COST, todayKey, loadHealState, getRecoverableXp } from '../game/healerState';
 
 export interface QuestActionsCtx {
@@ -25,6 +26,8 @@ export interface QuestActionsCtx {
   playerXpRef:             MutableRefObject<number>;
   questProgressRef:        MutableRefObject<QuestProgress>;
   skillBonusesRef:         MutableRefObject<SkillBonuses>;
+  classStateRef:           MutableRefObject<PlayerClassState | null>;
+  setClassState:           Dispatch<SetStateAction<PlayerClassState | null>>;
 
   setQuestDialogue:       Dispatch<SetStateAction<NpcDialogue | null>>;
   setNpcDialog:           Dispatch<SetStateAction<string | null>>;
@@ -52,6 +55,7 @@ export function useQuestActions(ctx: QuestActionsCtx) {
   const {
     inventoryRef, playerGoldRef, playerHpRef, playerMaxHpRef, playerMpRef, playerMaxMpRef,
     playerStatusEffectsRef, playerXpRef, questProgressRef, skillBonusesRef,
+    classStateRef, setClassState,
     setQuestDialogue, setNpcDialog, setShowCraft, setShowUpgrade, setShowTier, setShowEnchant, setShowTrial,
     setPlayerGold, setPlayerHp, setPlayerMp, setPlayerStatusEffects, setPlayerXp,
     setInventory, setLootNotif, setQuestProgress,
@@ -175,6 +179,17 @@ export function useQuestActions(ctx: QuestActionsCtx) {
           setInventory(prev => addToInventory(prev, item));
           log(`🎁 Получен предмет: ${item.name}!`);
         }
+
+        if (def.reward.classPoints && classStateRef.current) {
+          const cp = def.reward.classPoints;
+          const nextClass = {
+            ...classStateRef.current,
+            classPoints: classStateRef.current.classPoints + cp,
+          };
+          classStateRef.current = nextClass;
+          setClassState(nextClass);
+          log(`⚔️ +${cp} очк. класса!`);
+        }
         setQuestDialogue(null);
         return;
       }
@@ -222,6 +237,19 @@ export function useQuestActions(ctx: QuestActionsCtx) {
         inventoryRef.current = addToInventory(inventoryRef.current, item);
         setInventory(prev => addToInventory(prev, item));
         log(`🎁 Получен предмет: ${item.name}!`);
+      }
+
+
+      // ── Class points (story milestones) ─────────────────────────────────────
+      if (def.reward.classPoints && classStateRef.current) {
+        const cp = def.reward.classPoints;
+        const nextClass = {
+          ...classStateRef.current,
+          classPoints: classStateRef.current.classPoints + cp,
+        };
+        classStateRef.current = nextClass;
+        setClassState(nextClass);
+        log(`⚔️ +${cp} очк. класса!`);
       }
 
       // ── Mark completed ─────────────────────────────────────────────────────
