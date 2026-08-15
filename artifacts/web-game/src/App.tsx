@@ -42,7 +42,6 @@ import ClassSelectPanel from './classes/ClassSelectPanel';
 import ClassPanel from './classes/ClassPanel';
 import MasteryPanel from './classes/MasteryPanel';
 import TalentPanel from './classes/TalentPanel';
-import ClassSkillBar from './classes/ClassSkillBar';
 import TrialPanel from './classes/TrialPanel';
 import {
   isTrialReady,
@@ -56,13 +55,11 @@ import {
   createResourceState, tickResource,
   type ClassResourceState,
 } from './classes/classResource';
-import ResourceBar from './classes/ResourceBar';
 import {
   createLegendaryState, tickLegendary,
   legendaryForPath, applyLegendaryInstantEffects,
   type LegendaryState,
 } from './classes/legendaryTalents';
-import LegendaryButton from './classes/LegendaryButton';
 import ShopPanel from './shop/ShopPanel';
 import CraftPanel from './components/CraftPanel';
 import UpgradePanel from './components/UpgradePanel';
@@ -75,6 +72,7 @@ import QuestPanel from './components/QuestPanel';
 import WorldMapPanel from './components/WorldMapPanel';
 import GameMap from './components/GameMap';
 import ControlsPanel from './components/ControlsPanel';
+import CombatControls from './components/CombatControls';
 import CombatLog from './components/CombatLog';
 import { SkillProgress, SkillBonuses, calcSkillBonuses } from './skills/skillTree';
 import SkillPanel from './skills/SkillPanel';
@@ -528,8 +526,11 @@ const log = useCallback((msg: string) => {
       />
 
       {/* ══ 2. MAP ══ */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2">
-        <div className="relative" style={{ width: 'min(90vw, 60dvh, 360px)', height: 'min(90vw, 60dvh, 360px)' }}>
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-1.5 overflow-hidden">
+        <div
+          className="relative aspect-square max-h-full max-w-full"
+          style={{ width: 'min(100%, 360px)', height: 'min(100%, 360px)' }}
+        >
 
           {/* Tile grid, HP bars, floating numbers, boss/transition overlays */}
           <GameMap
@@ -837,58 +838,51 @@ const log = useCallback((msg: string) => {
         ) : null}
       </div>
 
-      {/* ══ CLASS SKILL BAR (combat only) ══ */}
-      {phase === 'combat' && (
-        <>
-          {classState && <ResourceBar resource={classResource} className="px-2 mt-0.5 mb-1" />}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 px-2 py-1">
-            <ClassSkillBar
-              skills={classSkills}
-              skillsCd={skillsCd}
-              playerMp={classResource.current}
-              resourceLabel={classResource.name}
-              onUse={(sk) => useClassSkill(sk)}
-            />
-            <LegendaryButton
-              classState={classState}
-              level={playerLevel}
-              legendaryState={legendaryState}
-              onLog={log}
-              disabled={phase !== 'combat'}
-              onChange={(next) => {
-                setLegendaryState(next);
-                const def = legendaryForPath(classState);
-                if (!def) return;
-                const inst = applyLegendaryInstantEffects(def);
-                inst.log.forEach(log);
-                if (inst.healToFull) {
-                  playerHpRef.current = playerMaxHpRef.current;
-                  setPlayerHp(playerMaxHpRef.current);
-                } else if (inst.healPct) {
-                  const heal = Math.floor(playerMaxHpRef.current * inst.healPct / 100);
-                  const nextHp = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
-                  playerHpRef.current = nextHp;
-                  setPlayerHp(nextHp);
-                  spawnFloat(`+${heal}`, playerPos.x, playerPos.y, 'heal');
-                }
-                if (inst.clearCc) {
-                  playerStatusEffectsRef.current = [];
-                  setPlayerStatusEffects([]);
-                }
-              }}
-            />
-          </div>
-        </>
+      {/* ══ 3-4. COMBAT CONTROLS or MOVEMENT + POTION ══ */}
+      {phase === 'combat' ? (
+        <CombatControls
+          classState={classState}
+          classResource={classResource}
+          classSkills={classSkills}
+          skillsCd={skillsCd}
+          onUseSkill={(sk) => useClassSkill(sk)}
+          playerLevel={playerLevel}
+          legendaryState={legendaryState}
+          onLegendaryChange={(next) => {
+            setLegendaryState(next);
+            const def = legendaryForPath(classState);
+            if (!def) return;
+            const inst = applyLegendaryInstantEffects(def);
+            inst.log.forEach(log);
+            if (inst.healToFull) {
+              playerHpRef.current = playerMaxHpRef.current;
+              setPlayerHp(playerMaxHpRef.current);
+            } else if (inst.healPct) {
+              const heal = Math.floor(playerMaxHpRef.current * inst.healPct / 100);
+              const nextHp = Math.min(playerMaxHpRef.current, playerHpRef.current + heal);
+              playerHpRef.current = nextHp;
+              setPlayerHp(nextHp);
+              spawnFloat(`+${heal}`, playerPos.x, playerPos.y, 'heal');
+            }
+            if (inst.clearCc) {
+              playerStatusEffectsRef.current = [];
+              setPlayerStatusEffects([]);
+            }
+          }}
+          onLog={log}
+          onUsePotion={handleQuickPotion}
+          potionCount={potionCount}
+          canUsePotion={canUsePotion}
+        />
+      ) : (
+        <ControlsPanel
+          phase={phase}
+          movePlayer={movePlayer}
+          onUsePotion={handleQuickPotion}
+          potionCount={potionCount}
+          canUsePotion={canUsePotion}
+        />
       )}
-
-      {/* ══ 3-4. MOVEMENT + POTION ══ */}
-      <ControlsPanel
-        phase={phase}
-        movePlayer={movePlayer}
-        onUsePotion={handleQuickPotion}
-        potionCount={potionCount}
-        canUsePotion={canUsePotion}
-      />
 
       {/* ══ 5. COMBAT LOG ══ */}
       <CombatLog logs={logs} />
