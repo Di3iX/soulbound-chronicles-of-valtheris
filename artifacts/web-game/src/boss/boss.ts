@@ -256,4 +256,5 @@ export function normalizeBossState(raw: Partial<BossState> | null | undefined): 
 export interface BossRewardInfo {
   xp: number; gold: number; dropItem: Item; trophyItem?: Item;
   leveledUp: boolean; newLevel: number; wasFirstKill: boolean;
+  bossName: string;
 }
