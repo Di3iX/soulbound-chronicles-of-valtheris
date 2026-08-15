@@ -153,13 +153,38 @@ export function useQuestActions(ctx: QuestActionsCtx) {
     }
 
     if (action.kind === 'accept_quest') {
+      const def = QUEST_DEFS[action.questId];
+      // Talk-quests (required === 0): accept = complete in one step
+      if (def && def.objective.required === 0) {
+        const updated: QuestProgress = {
+          ...questProgressRef.current,
+          [action.questId]: { status: 'completed' as const, current: 0 },
+        };
+        questProgressRef.current = updated;
+        setQuestProgress(updated);
+        playerGoldRef.current += def.reward.gold;
+        setPlayerGold(playerGoldRef.current);
+        log(`📜 ${def.title}`);
+        log(`💰 Награда: ${def.reward.gold} золота!`);
+        const _xp = Math.floor(def.reward.xp * (1 + skillBonusesRef.current.xpBonusPct / 100));
+        grantXp(_xp);
+        log(`✨ Награда: ${_xp} опыта!`);
+        for (const itemKey of def.reward.items ?? []) {
+          const item = makeItem(itemKey);
+          inventoryRef.current = addToInventory(inventoryRef.current, item);
+          setInventory(prev => addToInventory(prev, item));
+          log(`🎁 Получен предмет: ${item.name}!`);
+        }
+        setQuestDialogue(null);
+        return;
+      }
       const updated: QuestProgress = {
         ...questProgressRef.current,
         [action.questId]: { status: 'active' as const, current: 0 },
       };
       questProgressRef.current = updated;
       setQuestProgress(updated);
-      log(`📜 Задание принято: ${QUEST_DEFS[action.questId]?.title ?? action.questId}`);
+      log(`📜 Задание принято: ${def?.title ?? action.questId}`);
       setQuestDialogue(null);
       return;
     }
@@ -191,16 +216,12 @@ export function useQuestActions(ctx: QuestActionsCtx) {
       grantXp(_questXp);
       log(`✨ Награда: ${_questXp} опыта!`);
 
-      // ── Item rewards (only if not already owned) ───────────────────────────
+      // ── Item rewards (stackables always add) ───────────────────────────────
       for (const itemKey of def.reward.items ?? []) {
-        if (!inventoryRef.current.some(i => i.key === itemKey)) {
-          const item = makeItem(itemKey);
-          inventoryRef.current = addToInventory(inventoryRef.current, item);
-          setInventory(prev => addToInventory(prev, item));
-          log(`🎁 Получен предмет: ${item.name}!`);
-        } else {
-          log(`(У вас уже есть ${ITEM_CATALOG[itemKey]?.name ?? itemKey})`);
-        }
+        const item = makeItem(itemKey);
+        inventoryRef.current = addToInventory(inventoryRef.current, item);
+        setInventory(prev => addToInventory(prev, item));
+        log(`🎁 Получен предмет: ${item.name}!`);
       }
 
       // ── Mark completed ─────────────────────────────────────────────────────
