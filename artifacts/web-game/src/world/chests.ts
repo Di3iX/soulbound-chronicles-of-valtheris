@@ -74,10 +74,18 @@ export const CHEST_DEFS: ChestDef[] = [
   {
     id: 'wolfcave_cache',
     location: 'wolfcave',
-    x: 10, y: 8,
+    x: 12, y: 10,
     goldMin: 35, goldMax: 70,
     itemPool: ['greater_healing_potion', 'wolf_fang', 'leather_helm'],
     itemChance: 0.7,
+  },
+  {
+    id: 'wolfcave_deep',
+    location: 'wolfcave',
+    x: 22, y: 22,
+    goldMin: 45, goldMax: 90,
+    itemPool: ['greater_healing_potion', 'wolf_fang', 'iron_sword'],
+    itemChance: 0.65,
   },
   // ── Заброшенная дорога ───────────────────────────────────────────────────
   {
