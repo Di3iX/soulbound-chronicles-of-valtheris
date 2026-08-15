@@ -41,6 +41,8 @@ export interface Item {
   type:    ItemType;
   rarity:  Rarity;
   bonuses: ItemBonuses;
+  /** Stack size for consumables/materials (always 1 for gear). */
+  qty?:    number;
   /** Equipment tier T1–T6 (see ITEM_TIERS.md). */
   tier?: ItemTier;
   /** Explicit level requirement; if absent, derived from `tier`'s minimum level. */
@@ -404,6 +406,7 @@ export function makeItem(key: string, opts?: { rollAffixes?: boolean }): Item {
     id: `${key}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     bonuses,
     affixes: affixes.length ? affixes : undefined,
+    qty: tpl.type === 'consumable' ? 1 : undefined,
   };
 }
 
@@ -438,4 +441,115 @@ export function itemDisplayName(item: Item): string {
 
 export function formatAffixes(item: Item): string[] {
   return (item.affixes ?? []).map(a => a.label);
+}
+
+
+// ─── STACKING (consumables / materials only) ─────────────────────────────────
+/** Gear never stacks — each piece has unique affixes / upgrades. */
+export function isStackable(item: Pick<Item, 'type'>): boolean {
+  return item.type === 'consumable';
+}
+
+export function itemQty(item: Pick<Item, 'qty' | 'type'>): number {
+  if (!isStackable(item)) return 1;
+  return Math.max(1, item.qty ?? 1);
+}
+
+/** How many of this key are in inventory (sums stacks). */
+export function countItemKey(inventory: Item[], key: string): number {
+  return inventory.reduce((sum, it) => {
+    if (it.key !== key) return sum;
+    return sum + itemQty(it);
+  }, 0);
+}
+
+/**
+ * Add item(s) into inventory, merging into an existing stack when stackable.
+ * `amount` defaults to item.qty ?? 1.
+ */
+export function addToInventory(inventory: Item[], item: Item, amount?: number): Item[] {
+  const add = amount ?? itemQty(item);
+  if (!isStackable(item)) {
+    // Equipment: one unique entry each
+    const copies: Item[] = [];
+    for (let i = 0; i < add; i++) {
+      copies.push({
+        ...item,
+        id: i === 0 ? item.id : `${item.key}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        qty: undefined,
+      });
+    }
+    return [...inventory, ...copies];
+  }
+
+  const idx = inventory.findIndex(it => it.key === item.key && isStackable(it));
+  if (idx >= 0) {
+    const next = [...inventory];
+    const cur = next[idx];
+    next[idx] = { ...cur, qty: itemQty(cur) + add };
+    return next;
+  }
+  return [...inventory, { ...item, qty: add }];
+}
+
+/** Remove `amount` of items matching key (stack-aware). */
+export function removeFromInventoryByKey(
+  inventory: Item[],
+  key: string,
+  amount: number,
+): Item[] {
+  let left = amount;
+  const next: Item[] = [];
+  for (const it of inventory) {
+    if (left <= 0 || it.key !== key) {
+      next.push(it);
+      continue;
+    }
+    if (!isStackable(it)) {
+      // unique gear with same key (rare) — remove one instance
+      left -= 1;
+      continue;
+    }
+    const q = itemQty(it);
+    if (q > left) {
+      next.push({ ...it, qty: q - left });
+      left = 0;
+    } else {
+      left -= q;
+      // drop stack
+    }
+  }
+  return next;
+}
+
+/** Remove one unit by instance id (use potion / sell one). */
+export function removeOneById(inventory: Item[], id: string): Item[] {
+  const idx = inventory.findIndex(it => it.id === id);
+  if (idx < 0) return inventory;
+  const it = inventory[idx];
+  if (isStackable(it) && itemQty(it) > 1) {
+    const next = [...inventory];
+    next[idx] = { ...it, qty: itemQty(it) - 1 };
+    return next;
+  }
+  return inventory.filter(x => x.id !== id);
+}
+
+/** Merge legacy saves where each potion was a separate row. */
+export function compactInventory(inventory: Item[]): Item[] {
+  const gear: Item[] = [];
+  const stacks = new Map<string, Item>();
+  for (const it of inventory) {
+    if (!isStackable(it)) {
+      gear.push({ ...it, qty: undefined });
+      continue;
+    }
+    const prev = stacks.get(it.key);
+    if (prev) {
+      stacks.set(it.key, { ...prev, qty: itemQty(prev) + itemQty(it) });
+    } else {
+      stacks.set(it.key, { ...it, qty: itemQty(it) });
+    }
+  }
+  return [...gear, ...stacks.values()];
 }
