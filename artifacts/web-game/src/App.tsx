@@ -98,6 +98,7 @@ export default function App() {
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [phase, setPhase]                 = useState<Phase>('explore');
+  const [combatStartedAt, setCombatStartedAt] = useState<number | null>(null);
   const [playerPos, setPlayerPos]         = useState(sv?.playerPos        ?? LOCATION_SPAWN.village);
   const [playerHp, setPlayerHp]           = useState(sv?.playerHp         ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
   const [playerMaxHp, setPlayerMaxHp]     = useState(sv?.playerMaxHp      ?? (INITIAL_HP + INITIAL_BASE_STATS.vitality * 10));
@@ -268,6 +269,11 @@ export default function App() {
   useSyncedRef(skillPointsRef, skillPoints);
   useSyncedRef(openedChestsRef, openedChests);
   useEffect(() => { skillBonusesRef.current    = calcSkillBonuses(skillProgress); }, [skillProgress]);
+
+  // ── Combat timer: track fight start/end for CombatLog header (see STEP_COMBAT_LOG.md) ─
+  useEffect(() => {
+    setCombatStartedAt(phase === 'combat' ? Date.now() : null);
+  }, [phase]);
 
   // ── Class resource tick: 1/sec regen/decay (see STEP8_CLASS_RESOURCE.md) ───
   useEffect(() => {
@@ -887,7 +893,7 @@ const log = useCallback((msg: string) => {
       )}
 
       {/* ══ 5. COMBAT LOG ══ */}
-      <CombatLog logs={logs} />
+      <CombatLog logs={logs} phase={phase} enemyName={activeEnemy?.name ?? null} combatStartedAt={combatStartedAt} />
 
     </div>
   );
