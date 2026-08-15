@@ -1,7 +1,7 @@
 // ─── NPC DIALOGUE ─────────────────────────────────────────────────────────────
 import type { QuestProgress } from './quests';
 import {
-  getQuestEntry, QUEST_DEFS, canOfferQuest, isQuestCompleted,
+  getQuestEntry, QUEST_DEFS, canOfferQuest, isQuestCompleted, ensureDailyQuest,
 } from './quests';
 import type { Item } from '../inventory';
 import { CRAFT_RECIPES, canCraft, recipeRequirementsText } from '../items/craft';
@@ -677,6 +677,9 @@ function farmerDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialo
     }
   }
 
+  const daily = tryDailyDialogue(progress, 'farmer', base);
+  if (daily) return daily;
+
   const lines = [
     'Поля пока живы. Спасибо ещё раз.',
     'Староста копается в кристаллах — говорит, плохая примета.',
@@ -692,7 +695,14 @@ function farmerDialogue(progress: QuestProgress, flags: DialogueFlags): NpcDialo
 }
 
 function hunterDialogue(progress: QuestProgress, _flags: DialogueFlags): NpcDialogue {
+  const base = { npcId: 'hunter', name: 'Охотник', emoji: '🏹' };
+  const wolf = getQuestEntry(progress, 'quest_wolf_001');
+  if (wolf.status === 'completed') {
+    const daily = tryDailyDialogue(progress, 'hunter', base);
+    if (daily) return daily;
+  }
   return questFlow(
+
     progress,
     'quest_wolf_001',
     { npcId: 'hunter', name: 'Охотник', emoji: '🏹' },
@@ -811,6 +821,34 @@ function healerDialogue(_p: QuestProgress, flags: DialogueFlags): NpcDialogue {
       { label: 'Уйти', action: { kind: 'dismiss' } },
     ],
   };
+}
+
+
+/** If today's daily belongs to this NPC, fold it into dialogue priority. */
+function tryDailyDialogue(
+  progress: QuestProgress,
+  npcId: string,
+  base: { npcId: string; name: string; emoji: string },
+): NpcDialogue | null {
+  const { progress: p2, def } = ensureDailyQuest(progress);
+  // side-effect: ensure def registered; progress may need App sync — dialog uses passed progress for status
+  if (def.npcId !== npcId) return null;
+  const entry = getQuestEntry(progress, def.id);
+  if (entry.status === 'completed') return null;
+  if (entry.status === 'inactive' && !canOfferQuest(progress, def.id)) {
+    // daily has no requiresQuest — canOffer if inactive
+  }
+  if (entry.status === 'inactive' || entry.status === 'active') {
+    return questFlow(
+      progress,
+      def.id,
+      base,
+      [def.description, `Цель: ${def.objective.description} (×${def.objective.required}).`],
+      [`Прогресс: ${entry.current}/${def.objective.required}.`],
+      ['Готово! Вот награда за сегодняшний труд.'],
+    );
+  }
+  return null;
 }
 
 export function getNpcDialogue(

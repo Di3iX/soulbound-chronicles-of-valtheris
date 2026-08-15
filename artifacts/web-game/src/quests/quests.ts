@@ -12,7 +12,7 @@ export interface QuestDef {
   objective:   { description: string; required: number };
   /** Enemy names that count toward this quest (any of them). */
   killTargets: string[];
-  reward:      { gold: number; xp: number; items?: string[] };
+  reward:      { gold: number; xp: number; items?: string[]; classPoints?: number };
   /** Optional: another quest that must be completed before this can be offered. */
   requiresQuest?: string;
   /** Turn in these items to complete (checked at NPC). */
@@ -74,7 +74,7 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     npcId:       'elder',
     objective:   { description: 'Убить Огромного Кабана', required: 1 },
     killTargets: ['Огромный Кабан'],
-    reward:      { gold: 80, xp: 100, items: ['greater_healing_potion'] },
+    reward:      { gold: 80, xp: 100, items: ['greater_healing_potion'], classPoints: 1 },
     requiresQuest: 'quest_fields_001',
   },
     quest_goblin_001: {
@@ -84,7 +84,7 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     npcId:       'elder',
     objective:   { description: 'Убить гоблинов', required: 5 },
     killTargets: ['Гоблин'],
-    reward:      { gold: 100, xp: 150, items: ['healing_potion', 'black_crystal'] },
+    reward:      { gold: 100, xp: 150, items: ['healing_potion', 'black_crystal'], classPoints: 1 },
     requiresQuest: 'quest_crystal_001',
   },
   quest_wolf_001: {
@@ -124,7 +124,7 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     npcId:       'elder',
     objective:   { description: 'Победить Главаря гоблинов', required: 1 },
     killTargets: ['Главарь гоблинов'],
-    reward:      { gold: 200, xp: 250, items: ['greater_healing_potion', 'iron_sword'] },
+    reward:      { gold: 200, xp: 250, items: ['greater_healing_potion', 'iron_sword'], classPoints: 2 },
     requiresQuest: 'quest_cave_001',
   },
   quest_report_001: {
@@ -134,7 +134,7 @@ export const QUEST_DEFS: Record<string, QuestDef> = {
     npcId:       'elder',
     objective:   { description: 'Доложить старосте', required: 0 },
     killTargets: [],
-    reward:      { gold: 75, xp: 100, items: ['black_crystal'] },
+    reward:      { gold: 75, xp: 100, items: ['black_crystal'], classPoints: 1 },
     requiresQuest: 'quest_chief_001',
   },
   quest_shards_001: {
@@ -315,6 +315,15 @@ const DAILY_POOL = [
     reward: { gold: 40, xp: 50 },
   },
   {
+    id: 'daily_boars',
+    title: 'Ежедневно: Кабаны',
+    description: 'Фермер: молодые кабаны снова на огороде.',
+    npcId: 'farmer',
+    objective: { description: 'Убить молодых кабанов', required: 4 },
+    killTargets: ['Молодой кабан'],
+    reward: { gold: 55, xp: 70 },
+  },
+  {
     id: 'daily_wolves',
     title: 'Ежедневно: Волки',
     description: 'Охотник просит шкуры — волки у леса.',
@@ -333,12 +342,21 @@ const DAILY_POOL = [
     reward: { gold: 80, xp: 100 },
   },
   {
+    id: 'daily_bats',
+    title: 'Ежедневно: Пещера',
+    description: 'Зачисти вход в Волчью пещеру от мышей и волков.',
+    npcId: 'elder',
+    objective: { description: 'Убить тварей в пещере', required: 6 },
+    killTargets: ['Летучая мышь', 'Волк'],
+    reward: { gold: 85, xp: 110 },
+  },
+  {
     id: 'daily_bandits',
     title: 'Ежедневно: Разбойники',
-    description: 'Разведчик: очисти дорогу от разбойников.',
-    npcId: 'scout',
-    objective: { description: 'Убить разбойников', required: 5 },
-    killTargets: ['Разбойник', 'Лучник', 'Наёмник'],
+    description: 'Очисти дорогу от разбойников и бандитов.',
+    npcId: 'elder',
+    objective: { description: 'Убить разбойников или бандитов', required: 5 },
+    killTargets: ['Разбойник', 'Лучник', 'Наёмник', 'Бандит'],
     reward: { gold: 90, xp: 110 },
   },
 ] as const;
