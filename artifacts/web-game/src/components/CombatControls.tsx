@@ -1,6 +1,6 @@
 /**
- * Compact combat controls — fixed height so the map area stays stable.
- * Path: artifacts/web-game/src/components/CombatControls.tsx
+ * Compact combat footer: resource + skills + legendary + potion.
+ * Path: src/components/CombatControls.tsx
  */
 import type { CombatReadySkill } from '../classes/classCombatSkills';
 import type { ClassResourceState } from '../classes/classResource';
@@ -40,19 +40,21 @@ export default function CombatControls({
   canUsePotion,
 }: Props) {
   return (
-    <div className="shrink-0 border-t border-tile-border/50 bg-[#0c0c10] px-1.5 pt-1 pb-1.5">
+    <div className="shrink-0 border-t border-[#1e1e28] bg-gradient-to-t from-[#0a0a10] to-[#101018] px-1.5 pt-1 pb-1.5">
       {classState && (
         <ResourceBar resource={classResource} className="px-1 mb-1" />
       )}
 
-      <div className="flex items-end justify-center gap-1.5 flex-wrap">
+      <div className="flex items-end justify-center gap-1.5">
         <ClassSkillBar
           skills={classSkills}
           skillsCd={skillsCd}
           playerMp={classResource.current}
           resourceLabel={classResource.name}
           onUse={onUseSkill}
+          slots={5}
         />
+
         <LegendaryButton
           classState={classState}
           level={playerLevel}
@@ -61,16 +63,17 @@ export default function CombatControls({
           onLog={onLog}
           disabled={false}
         />
+
         <button
           type="button"
           disabled={!canUsePotion}
           onClick={onUsePotion}
-          className={`relative flex flex-col items-center justify-center w-[52px] h-[52px] shrink-0 rounded-lg bg-[#1e1e28] border
+          className={`relative flex h-[58px] w-[48px] flex-col items-center justify-center rounded-lg border-2 shrink-0
             ${canUsePotion
-              ? 'border-green-600 shadow-[0_0_8px_rgba(34,197,94,0.35)] active:scale-95'
-              : 'border-tile-border opacity-50 cursor-not-allowed'}`}
+              ? 'border-green-600/70 bg-[#122016] shadow-[0_0_8px_rgba(34,197,94,0.3)] active:scale-95'
+              : 'border-[#2a2a35] bg-[#0e0e14] opacity-45 cursor-not-allowed'}`}
         >
-          <span className="text-lg leading-none">🧪</span>
+          <span className="text-[20px] leading-none">🧪</span>
           <span className="text-[8px] font-bold text-white/80 mt-0.5">Зелье</span>
           {potionCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-0.5 rounded-full bg-green-600 text-white text-[9px] font-black flex items-center justify-center leading-none">
