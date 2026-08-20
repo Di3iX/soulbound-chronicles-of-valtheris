@@ -1,66 +1,105 @@
 /**
- * Sprite registry — PNG when present, emoji fallback otherwise.
+ * Sprite registry — matches sprites_64x64_v2 pack + emoji fallback.
  * Path: src/game/ui/sprites.ts
  *
- * Drop files into: public/assets/sprites/
- * See ASSETS_README.md for the full name list.
+ * Files live in: public/assets/sprites/units/
+ * Pack has: hero_* and goblin_* (IDLE/WALK/ATTACK/HIT/DEATH × DOWN/LEFT/RIGHT/UP)
  */
 
 export const SPRITE_BASE = '/assets/sprites';
 
-/** Terrain by tile type (0–4). Optional biome suffix later. */
+export type Dir = 'DOWN' | 'LEFT' | 'RIGHT' | 'UP';
+export type Anim = 'IDLE' | 'WALK' | 'ATTACK' | 'HIT' | 'DEATH';
+
+/** Terrain — pack has no tiles yet → emoji / CSS only */
 export const TILE_SPRITES: Record<number, { file: string; emoji: string; label: string }> = {
-  0: { file: 'tiles/grass.png', emoji: '', label: 'Трава' },
-  1: { file: 'tiles/tree.png', emoji: '🌲', label: 'Дерево' },
-  2: { file: 'tiles/rock.png', emoji: '🪨', label: 'Камень' },
-  3: { file: 'tiles/water.png', emoji: '🌊', label: 'Вода' },
-  4: { file: 'tiles/path.png', emoji: '🚪', label: 'Переход' },
+  0: { file: '', emoji: '', label: 'Трава' },
+  1: { file: '', emoji: '🌲', label: 'Дерево' },
+  2: { file: '', emoji: '🪨', label: 'Камень' },
+  3: { file: '', emoji: '🌊', label: 'Вода' },
+  4: { file: '', emoji: '🚪', label: 'Переход' },
 };
 
-/** Cave walls use rock tile visually */
 export const TILE_SPRITES_CAVE: Record<number, { file: string; emoji: string; label: string }> = {
-  0: { file: 'tiles/cave_floor.png', emoji: '', label: 'Пол' },
-  1: { file: 'tiles/cave_wall.png', emoji: '⬛', label: 'Стена' },
-  2: { file: 'tiles/rock.png', emoji: '🪨', label: 'Камень' },
-  3: { file: 'tiles/water.png', emoji: '🌊', label: 'Вода' },
-  4: { file: 'tiles/path.png', emoji: '🚪', label: 'Выход' },
+  0: { file: '', emoji: '', label: 'Пол' },
+  1: { file: '', emoji: '⬛', label: 'Стена' },
+  2: { file: '', emoji: '🪨', label: 'Камень' },
+  3: { file: '', emoji: '🌊', label: 'Вода' },
+  4: { file: '', emoji: '🚪', label: 'Выход' },
 };
 
-export const UNIT_SPRITES: Record<string, { file: string; emoji: string }> = {
-  player_warrior: { file: 'units/player_warrior.png', emoji: '⚔️' },
-  player_ranger:  { file: 'units/player_ranger.png', emoji: '🏹' },
-  player_mage:    { file: 'units/player_mage.png', emoji: '🔮' },
-  player_acolyte: { file: 'units/player_acolyte.png', emoji: '✨' },
+function unitFrame(prefix: string, anim: Anim = 'IDLE', dir: Dir = 'DOWN'): string {
+  return `units/${prefix}_${anim}_${dir}.png`;
+}
 
-  'Крыса':          { file: 'units/rat.png', emoji: '🐀' },
-  'Кролик':         { file: 'units/rabbit.png', emoji: '🐇' },
-  'Ворон':          { file: 'units/raven.png', emoji: '🐦' },
-  'Молодой кабан':  { file: 'units/boar.png', emoji: '🐗' },
-  'Полевая змея':   { file: 'units/snake.png', emoji: '🐍' },
-  'Огромный Кабан': { file: 'units/boar_boss.png', emoji: '🐗' },
-  'Волк':           { file: 'units/wolf.png', emoji: '🐺' },
-  'Гоблин':         { file: 'units/goblin.png', emoji: '👺' },
-  'Бандит':         { file: 'units/bandit.png', emoji: '🥷' },
-  'Летучая мышь':  { file: 'units/bat.png', emoji: '🦇' },
-  'Альфа-волк':     { file: 'units/wolf_alpha.png', emoji: '🐺' },
-  'Главарь гоблинов': { file: 'units/goblin_chief.png', emoji: '👺' },
-  'Скелет':         { file: 'units/skeleton.png', emoji: '💀' },
-  'Зомби':          { file: 'units/zombie.png', emoji: '🧟' },
-  'Призрак':        { file: 'units/ghost.png', emoji: '👻' },
-  'Паук':           { file: 'units/spider.png', emoji: '🕷️' },
-  'Йети':           { file: 'units/yeti.png', emoji: '👹' },
+/** Player by class id → hero frames (one sheet for now) */
+export const PLAYER_PREFIX = 'hero';
+
+export function playerSpriteFile(
+  _classId?: string | null,
+  anim: Anim = 'IDLE',
+  dir: Dir = 'DOWN',
+): string {
+  return unitFrame(PLAYER_PREFIX, anim, dir);
+}
+
+/**
+ * Enemy name → sprite prefix in pack.
+ * Only goblin is in v2; others fall back to emoji via empty file.
+ */
+export const ENEMY_PREFIX: Record<string, string> = {
+  'Гоблин': 'goblin',
+  'Главарь гоблинов': 'goblin',
+};
+
+export function enemySpriteFile(
+  enemyName: string,
+  anim: Anim = 'IDLE',
+  dir: Dir = 'DOWN',
+): string {
+  const prefix = ENEMY_PREFIX[enemyName];
+  if (!prefix) return '';
+  return unitFrame(prefix, anim, dir);
+}
+
+/** Legacy flat map used by simple render (idle down) */
+export const UNIT_SPRITES: Record<string, { file: string; emoji: string }> = {
+  player_warrior: { file: unitFrame('hero'), emoji: '⚔️' },
+  player_ranger:  { file: unitFrame('hero'), emoji: '🏹' },
+  player_mage:    { file: unitFrame('hero'), emoji: '🔮' },
+  player_acolyte: { file: unitFrame('hero'), emoji: '✨' },
+
+  'Гоблин':           { file: unitFrame('goblin'), emoji: '👺' },
+  'Главарь гоблинов': { file: unitFrame('goblin'), emoji: '👺' },
+
+  // Not in pack v2 — emoji until next assets
+  'Крыса':          { file: '', emoji: '🐀' },
+  'Кролик':         { file: '', emoji: '🐇' },
+  'Ворон':          { file: '', emoji: '🐦' },
+  'Молодой кабан':  { file: '', emoji: '🐗' },
+  'Полевая змея':   { file: '', emoji: '🐍' },
+  'Огромный Кабан': { file: '', emoji: '🐗' },
+  'Волк':           { file: '', emoji: '🐺' },
+  'Бандит':         { file: '', emoji: '🥷' },
+  'Летучая мышь':  { file: '', emoji: '🦇' },
+  'Альфа-волк':     { file: '', emoji: '🐺' },
+  'Скелет':         { file: '', emoji: '💀' },
+  'Зомби':          { file: '', emoji: '🧟' },
+  'Призрак':        { file: '', emoji: '👻' },
+  'Паук':           { file: '', emoji: '🕷️' },
+  'Йети':           { file: '', emoji: '👹' },
 };
 
 export const OBJECT_SPRITES: Record<string, { file: string; emoji: string }> = {
-  chest:        { file: 'objects/chest.png', emoji: '📦' },
-  chest_open:   { file: 'objects/chest_open.png', emoji: '📭' },
-  npc_elder:    { file: 'units/npc_elder.png', emoji: '👴' },
-  npc_farmer:   { file: 'units/npc_farmer.png', emoji: '👨' },
-  npc_hunter:   { file: 'units/npc_hunter.png', emoji: '🏹' },
-  portal:       { file: 'objects/portal.png', emoji: '🌀' },
+  chest:      { file: '', emoji: '📦' },
+  chest_open: { file: '', emoji: '📭' },
+  npc_elder:  { file: '', emoji: '👴' },
+  npc_farmer: { file: '', emoji: '👨' },
+  npc_hunter: { file: '', emoji: '🏹' },
+  portal:     { file: '', emoji: '🌀' },
 };
 
-/** Resolved URL for a relative sprite path under public/ */
 export function spriteUrl(relative: string): string {
+  if (!relative) return '';
   return `${SPRITE_BASE}/${relative.replace(/^\//, '')}`;
 }
