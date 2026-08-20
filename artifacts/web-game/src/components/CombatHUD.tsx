@@ -2,6 +2,7 @@ import React from 'react';
 import { Enemy, LocationId, StatusEffect, STATUS_EFFECT_DEFS, ENEMY_RARITY_DEFS } from '../combat';
 import { QuestProgress, getActiveQuests } from '../quests/quests';
 import { MONSTER_DEFS } from '../monsters';
+import UiIcon from '../game/ui/UiIcon';
 
 interface CombatHUDProps {
   shieldActive:   boolean;
@@ -137,7 +138,7 @@ export default function CombatHUD({
         {/* Right: gold + mob count */}
         <div className="ml-auto shrink-0 flex flex-col items-end gap-0.5 pt-0.5">
           <div className="flex items-center gap-0.5 bg-[#1a1a12] border border-yellow-900/30 rounded px-1 py-[1px]">
-            <span className="text-[10px]">🪙</span>
+            <UiIcon id="gold" emoji="🪙" size={12} />
             <span className="text-[10px] font-bold text-yellow-400 font-mono tabular-nums">{playerGold}</span>
           </div>
           <span className="text-[7px] text-[#555] font-mono">
@@ -183,30 +184,30 @@ export default function CombatHUD({
       <div className="flex items-center justify-between gap-0.5 px-1.5 pb-1 pt-0.5">
         <button type="button" onClick={onToggleCharPanel} className={btn(showCharPanel)} title="Персонаж">
           <Badge n={statPoints} pulse />
-          👤
+          <UiIcon id="character" emoji="👤" size={16} />
         </button>
         <button type="button" onClick={onToggleInventory} className={btn(showInventory)} title="Инвентарь">
           {inventoryCount > 0 && (
             <span className="absolute -bottom-0.5 -right-0.5 text-[7px] text-[#666] font-mono leading-none">{inventoryCount}</span>
           )}
-          🎒
+          <UiIcon id="inventory" emoji="🎒" size={16} />
         </button>
         <button type="button" onClick={onToggleQuestPanel} className={btn(showQuestPanel)} title="Задания">
           {hasActiveQuest && (
             <span className="absolute -top-0.5 -right-0.5 w-[10px] h-[10px] rounded-full bg-[#c89628] text-[#111] text-[7px] font-black flex items-center justify-center leading-none">!</span>
           )}
-          📜
+          <UiIcon id="quests" emoji="📜" size={16} />
         </button>
         <button type="button" onClick={onToggleWorldMap} className={btn(showWorldMap)} title="Карта">
-          🗺️
+          <UiIcon id="map" emoji="🗺️" size={16} />
         </button>
         <button type="button" onClick={onToggleSkillPanel} className={btn(showSkillPanel)} title="Умения">
           <Badge n={skillPoints} pulse />
-          ✨
+          <UiIcon id="skills" emoji="✨" size={16} />
         </button>
         <button type="button" onClick={onToggleClassPanel} className={btn(showClassPanel)} title="Класс">
           <Badge n={classPointsBadge} pulse />
-          ⚔️
+          <UiIcon id="class" emoji="⚔️" size={16} />
         </button>
       </div>
 

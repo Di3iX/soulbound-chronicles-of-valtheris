@@ -1,3 +1,4 @@
+import UiIcon from '../game/ui/UiIcon';
 /**
  * Compact combat footer: resource + skills + legendary + potion.
  * Path: src/components/CombatControls.tsx
@@ -73,7 +74,7 @@ export default function CombatControls({
               ? 'border-green-600/70 bg-[#122016] shadow-[0_0_8px_rgba(34,197,94,0.3)] active:scale-95'
               : 'border-[#2a2a35] bg-[#0e0e14] opacity-45 cursor-not-allowed'}`}
         >
-          <span className="text-[20px] leading-none">🧪</span>
+          <UiIcon id="potion" emoji="🧪" size={22} />
           <span className="text-[8px] font-bold text-white/80 mt-0.5">Зелье</span>
           {potionCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-0.5 rounded-full bg-green-600 text-white text-[9px] font-black flex items-center justify-center leading-none">
