@@ -1,8 +1,10 @@
 /**
- * Combat skill bar — reference-style icons with CD overlay.
+ * Combat skill bar with PNG icons when available.
  * Path: src/classes/ClassSkillBar.tsx
  */
 import type { CombatReadySkill } from './classCombatSkills';
+import { skillIconFile } from '../game/ui/uiIcons';
+import { ICON_BASE } from '../game/ui/uiIcons';
 
 interface Props {
   skills: CombatReadySkill[];
@@ -11,7 +13,6 @@ interface Props {
   disabled?: boolean;
   resourceLabel?: string;
   onUse: (skill: CombatReadySkill) => void;
-  /** Max slots to show (empty = locked). Default 6. */
   slots?: number;
 }
 
@@ -29,8 +30,26 @@ function glowFor(sk: CombatReadySkill): string {
   if (sk.healSelf || name.includes('исцел') || name.includes('heal')) return SLOT_GLOW.heal;
   if (name.includes('защит') || name.includes('щит') || id.includes('guard')) return SLOT_GLOW.defend;
   if (name.includes('рывок') || name.includes('ярость') || name.includes('клич')) return SLOT_GLOW.buff;
-  if (sk.kind === 'passive') return SLOT_GLOW.default;
   return SLOT_GLOW.attack;
+}
+
+function SkillIcon({ skill }: { skill: CombatReadySkill }) {
+  const file = skillIconFile(skill.id, skill.name);
+  const src = `${ICON_BASE}/${file}`;
+  return (
+    <img
+      src={src}
+      alt={skill.name}
+      className="w-7 h-7 object-contain"
+      draggable={false}
+      onError={e => {
+        const el = e.currentTarget;
+        el.style.display = 'none';
+        const sib = el.nextElementSibling as HTMLElement | null;
+        if (sib) sib.style.display = 'block';
+      }}
+    />
+  );
 }
 
 export default function ClassSkillBar({
@@ -40,7 +59,7 @@ export default function ClassSkillBar({
   disabled,
   resourceLabel = 'MP',
   onUse,
-  slots = 6,
+  slots = 5,
 }: Props) {
   const actives = skills.filter(s => s.kind !== 'passive').slice(0, slots);
   const empty = Math.max(0, slots - actives.length);
@@ -67,25 +86,23 @@ export default function ClassSkillBar({
                 : `bg-[#1a1520] ${glow} active:scale-95`
               }`}
           >
-            {/* icon */}
-            <span className="text-[20px] leading-none mb-0.5">{sk.emoji}</span>
-            {/* name */}
+            <div className="flex items-center justify-center h-7 mb-0.5">
+              <SkillIcon skill={sk} />
+              <span className="text-[18px] leading-none" style={{ display: 'none' }}>{sk.emoji}</span>
+            </div>
             <span className="max-w-full truncate px-0.5 text-[8px] font-bold leading-tight text-white/85">
               {sk.name}
             </span>
-            {/* cost */}
             {need > 0 && cd <= 0 && (
               <span className="text-[8px] font-mono text-sky-300/90 leading-none mt-[1px]">
                 {need}
               </span>
             )}
-            {/* CD overlay */}
             {cd > 0 && (
               <span className="absolute inset-0 flex items-center justify-center rounded-[6px] bg-black/65 text-lg font-black text-white tabular-nums">
                 {cd}
               </span>
             )}
-            {/* not enough resource tint */}
             {noRes && cd <= 0 && (
               <span className="absolute inset-0 rounded-[6px] bg-blue-950/40 pointer-events-none" />
             )}
@@ -93,14 +110,18 @@ export default function ClassSkillBar({
         );
       })}
 
-      {/* locked empty slots */}
       {Array.from({ length: empty }).map((_, i) => (
         <div
           key={`lock-${i}`}
           className="flex h-[58px] w-[52px] flex-col items-center justify-center rounded-lg border-2 border-[#2a2a35] bg-[#0e0e14] opacity-60"
           title="Слот закрыт"
         >
-          <span className="text-[18px] text-[#444]">🔒</span>
+          <img
+            src={`${ICON_BASE}/icon_015_combat_r2_c0.png`}
+            alt="lock"
+            className="w-6 h-6 object-contain opacity-70"
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
         </div>
       ))}
     </div>
